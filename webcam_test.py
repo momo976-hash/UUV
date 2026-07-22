@@ -7,7 +7,7 @@ import numpy as np
 TAILLE_TAG = 0.10  # cote du tag en metres (mesure ton tag imprime et change ici)
 
 # --- Webcam ---
-cam = cv2.VideoCapture(0)
+cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # CAP_DSHOW : evite l'erreur MSMF sous Windows
 if not cam.isOpened():
     print("ERREUR : impossible d'ouvrir la webcam.")
     raise SystemExit
