@@ -1,6 +1,12 @@
-# Dépendances pour la localisation par AprilTag (Tâche 1 - Python pur, sans ROS 2)
-pyrealsense2      # Flux et paramètres intrinsèques de la caméra Intel RealSense
-opencv-python     # solvePnP, dessin des axes, affichage temps réel
+# Dépendances de BASE (test webcam) - installe celles-ci en premier.
 numpy             # Algèbre linéaire
-pupil-apriltags   # Détecteur AprilTag 3 (meilleur compromis vitesse/précision - cf. Kallwies 2020)
+opencv-python     # solvePnP, dessin des axes, affichage temps réel
+pupil-apriltags   # Détecteur AprilTag 3 (cf. Kallwies 2020)
 scipy             # Conversions de rotations (matrice <-> Euler <-> quaternion)
+
+# --------------------------------------------------------------------------
+# Dépendance de la caméra Intel RealSense : NE PAS installer maintenant.
+# Elle s'installe mal sur certaines versions de Windows/Python et n'est PAS
+# nécessaire pour le test avec la webcam. Quand tu auras la RealSense en main :
+#     venv\Scripts\python -m pip install pyrealsense2
+# --------------------------------------------------------------------------
