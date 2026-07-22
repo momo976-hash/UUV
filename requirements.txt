@@ -1,0 +1,6 @@
+# Dépendances pour la localisation par AprilTag (Tâche 1 - Python pur, sans ROS 2)
+pyrealsense2      # Flux et paramètres intrinsèques de la caméra Intel RealSense
+opencv-python     # solvePnP, dessin des axes, affichage temps réel
+numpy             # Algèbre linéaire
+pupil-apriltags   # Détecteur AprilTag 3 (meilleur compromis vitesse/précision - cf. Kallwies 2020)
+scipy             # Conversions de rotations (matrice <-> Euler <-> quaternion)
