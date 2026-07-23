@@ -1,0 +1,128 @@
+# localisation_orientation.py
+# Localisation de la camera/UUV dans la piscine, avec des tags ORIENTES
+# DIFFEREMMENT (sur des murs differents). Chaque tag a une position (x,y,z)
+# ET un cap "yaw" = rotation autour de la verticale.
+#
+# Transformations homogenes :
+#   T_piscine_camera = T_piscine_tag @ inverse(T_camera_tag)
+# ou T_piscine_tag inclut maintenant la ROTATION du tag (plus seulement sa position).
+import cv2
+import numpy as np
+
+TAILLE_TAG = 0.10
+FACTEUR_FOCALE = 0.95
+
+# CARTE DES TAGS : ID -> (x, y, z, yaw_deg)
+#   x, y, z   = position du centre du tag dans la piscine (metres)
+#   yaw_deg   = cap du tag autour de la verticale (degres)
+#               mur du fond=0, gauche=90, droite=-90, face=180
+CARTE_DES_TAGS = {
+    3: (0.15, 0.40, 0.0,   0.0),   # ex. mur du fond
+    8: (0.60, 0.40, 0.0,   0.0),   # ex. mur du fond
+    # 5: (0.00, 0.40, 0.50,  90.0), # ex. mur de gauche
+}
+
+
+def rotation_y(deg):
+    """Rotation autour de l'axe vertical Y (le 'cap' du tag)."""
+    a = np.radians(deg)
+    c, s = np.cos(a), np.sin(a)
+    return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]], dtype=np.float64)
+
+
+def transformation(R, t):
+    """Matrice homogene 4x4 a partir d'une rotation R (3x3) et translation t (3,)."""
+    T = np.eye(4)
+    T[:3, :3] = R
+    T[:3, 3] = np.asarray(t, dtype=np.float64).flatten()
+    return T
+
+
+def inverse(T):
+    """Inverse d'une transformation homogene : [R^T, -R^T t]."""
+    R, t = T[:3, :3], T[:3, 3]
+    Ti = np.eye(4)
+    Ti[:3, :3] = R.T
+    Ti[:3, 3] = -R.T @ t
+    return Ti
+
+
+def ouvrir_camera():
+    backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
+    for index in range(4):
+        for backend, nom in backends:
+            cap = cv2.VideoCapture(index, backend) if backend else cv2.VideoCapture(index)
+            if cap.isOpened():
+                ok, img = cap.read()
+                if ok and img is not None:
+                    hh, ww = img.shape[:2]
+                    print(f"Camera trouvee : index={index}, backend={nom}, {ww}x{hh}")
+                    return cap, ww, hh
+            cap.release()
+    return None, 0, 0
+
+
+cam, L, H = ouvrir_camera()
+if cam is None:
+    print("ERREUR : aucune camera ouverte.")
+    raise SystemExit
+
+FOCALE = L * FACTEUR_FOCALE
+K = np.array([[FOCALE, 0, L / 2], [0, FOCALE, H / 2], [0, 0, 1]], dtype=np.float64)
+dist = np.zeros(5)
+h = TAILLE_TAG / 2
+coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
+
+dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
+detecteur = cv2.aruco.ArucoDetector(dictionnaire, cv2.aruco.DetectorParameters())
+
+print("En direct. Montre un tag connu de la carte. 'q' pour quitter.")
+
+while True:
+    ok, image = cam.read()
+    if not ok:
+        continue
+    gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    coins, ids, _ = detecteur.detectMarkers(gris)
+
+    positions_camera = []
+    if ids is not None:
+        cv2.aruco.drawDetectedMarkers(image, coins, ids)
+        for c, tag_id in zip(coins, ids.flatten()):
+            if tag_id not in CARTE_DES_TAGS:
+                continue
+            pts = c.reshape(4, 2).astype(np.float64)
+            ok2, rvec, tvec = cv2.solvePnP(coins_3d, pts, K, dist,
+                                           flags=cv2.SOLVEPNP_IPPE_SQUARE)
+            if not ok2:
+                continue
+            cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAILLE_TAG / 2, 2)
+
+            # Tag vu depuis la camera
+            R_cam, _ = cv2.Rodrigues(rvec)
+            T_camera_tag = transformation(R_cam, tvec)
+
+            # Tag dans la piscine : position + ORIENTATION (yaw)
+            x, y, z, yaw = CARTE_DES_TAGS[tag_id]
+            T_piscine_tag = transformation(rotation_y(yaw), (x, y, z))
+
+            # Camera dans la piscine
+            T_piscine_camera = T_piscine_tag @ inverse(T_camera_tag)
+            positions_camera.append(T_piscine_camera[:3, 3])
+
+    if positions_camera:
+        X, Y, Z = np.mean(positions_camera, axis=0)
+        cv2.putText(image, f"CAMERA dans piscine : X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m",
+                    (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        cv2.putText(image, f"(calcule avec {len(positions_camera)} tag(s) connu(s))",
+                    (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+    else:
+        cv2.putText(image, "Aucun tag de la carte visible", (10, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+    cv2.imshow("Localisation piscine + orientation (q pour quitter)", image)
+    if cv2.waitKey(1) & 0xFF == ord("q"):
+        break
+
+cam.release()
+cv2.destroyAllWindows()
