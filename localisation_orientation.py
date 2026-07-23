@@ -86,6 +86,7 @@ while True:
     coins, ids, _ = detecteur.detectMarkers(gris)
 
     positions_camera = []
+    orientations_camera = []
     if ids is not None:
         cv2.aruco.drawDetectedMarkers(image, coins, ids)
         for c, tag_id in zip(coins, ids.flatten()):
@@ -110,12 +111,20 @@ while True:
             T_piscine_camera = T_piscine_tag @ inverse(T_camera_tag)
             positions_camera.append(T_piscine_camera[:3, 3])
 
+            # ORIENTATION de la camera dans la piscine (partie rotation de la matrice)
+            R_cam_piscine = T_piscine_camera[:3, :3]
+            roll, pitch, yaw = cv2.RQDecomp3x3(R_cam_piscine)[0]
+            orientations_camera.append((roll, pitch, yaw))
+
     if positions_camera:
         X, Y, Z = np.mean(positions_camera, axis=0)
-        cv2.putText(image, f"CAMERA dans piscine : X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m",
+        roll, pitch, yaw = np.mean(orientations_camera, axis=0)
+        cv2.putText(image, f"CAMERA pos : X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m",
                     (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        cv2.putText(image, f"(calcule avec {len(positions_camera)} tag(s) connu(s))",
-                    (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        cv2.putText(image, f"CAMERA rot : roll={roll:+.0f} pitch={pitch:+.0f} yaw={yaw:+.0f} deg",
+                    (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
+        cv2.putText(image, f"({len(positions_camera)} tag(s) connu(s))",
+                    (10, 88), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1)
     else:
         cv2.putText(image, "Aucun tag de la carte visible", (10, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
