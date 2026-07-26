@@ -9,13 +9,18 @@
 #     remplit toute seule. Aucun metre ruban.
 #
 # Touches :  's' = sauver la carte dans carte_enregistree.py   |   'q' = quitter
+from collections import deque
+
 import cv2
 import numpy as np
 
 TAILLE_TAG = 0.223       # cote du carre noir, en metres (22,3 cm)
 FACTEUR_FOCALE = 0.95
 CARTE_PX = 500
-ECHELLE = 150
+ECHELLE = 150            # pixels par metre ; reglable en direct avec '+' et '-'
+LONGUEUR_TRACE = 300     # nombre de positions gardees pour la trajectoire
+
+trajectoire = deque(maxlen=LONGUEUR_TRACE)
 
 
 def transformation(R, t):
@@ -56,12 +61,22 @@ def dessiner_carte(cam_xyz):
 
     cv2.line(m, (ox, 0), (ox, CARTE_PX), (70, 70, 70), 1)
     cv2.line(m, (0, oy), (CARTE_PX, oy), (70, 70, 70), 1)
-    # (les tags ne sont plus dessines : seule la camera apparait)
+
+    # TRAJECTOIRE : les anciennes positions, de plus en plus sombres
+    pts = [to_px(p[0], p[2]) for p in trajectoire]
+    for i in range(1, len(pts)):
+        intensite = int(60 + 195 * i / len(pts))   # ancien = sombre, recent = clair
+        cv2.line(m, pts[i - 1], pts[i], (0, intensite, intensite // 2), 2)
+
+    # Position actuelle de la camera
     if cam_xyz is not None:
         px, py = to_px(cam_xyz[0], cam_xyz[2])
         cv2.circle(m, (px, py), 7, (0, 255, 0), -1)
         cv2.putText(m, "CAM", (px + 9, py - 6),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
+
+    cv2.putText(m, f"echelle: {ECHELLE} px/m  ('+'/'-' zoom, 'c' effacer trace)",
+                (10, CARTE_PX - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (140, 140, 140), 1)
     return m
 
 
@@ -147,6 +162,8 @@ while True:
             T_monde_cam = carte[tid] @ inverse(T_cam_tag)
             positions.append(T_monde_cam[:3, 3])
     cam_xyz = np.mean(positions, axis=0) if positions else None
+    if cam_xyz is not None:
+        trajectoire.append(cam_xyz)   # memorise le passage pour tracer la trajectoire
 
     # 5) Affichage
     cv2.putText(image, f"Tags enregistres : {sorted(carte)}", (10, 30),
@@ -155,8 +172,8 @@ while True:
         X, Y, Z = cam_xyz
         cv2.putText(image, f"CAMERA : X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m", (10, 55),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-    cv2.putText(image, "'s'=sauver  'q'=quitter", (10, H - 15),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+    cv2.putText(image, "'s'=sauver  '+/-'=zoom carte  'c'=effacer trace  'q'=quitter",
+                (10, H - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
     cv2.imshow("Auto-enregistrement (q pour quitter)", image)
     cv2.imshow("Carte 2D", dessiner_carte(cam_xyz))
@@ -165,6 +182,12 @@ while True:
         break
     if touche == ord("s") and carte:
         sauver_carte(carte)
+    if touche in (ord("+"), ord("=")):        # zoom avant
+        ECHELLE = min(int(ECHELLE * 1.3), 2000)
+    if touche in (ord("-"), ord("_")):        # zoom arriere
+        ECHELLE = max(int(ECHELLE / 1.3), 5)
+    if touche == ord("c"):                    # effacer la trajectoire
+        trajectoire.clear()
 
 cam.release()
 cv2.destroyAllWindows()
