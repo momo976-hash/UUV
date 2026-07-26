@@ -12,7 +12,7 @@
 import cv2
 import numpy as np
 
-TAILLE_TAG = 0.10
+TAILLE_TAG = 0.223       # cote du carre noir, en metres (22,3 cm)
 FACTEUR_FOCALE = 0.95
 CARTE_PX = 500
 ECHELLE = 150
@@ -47,7 +47,7 @@ def sauver_carte(carte):
     print("\n".join(lignes))
 
 
-def dessiner_carte(carte, cam_xyz):
+def dessiner_carte(cam_xyz):
     m = np.full((CARTE_PX, CARTE_PX, 3), 30, dtype=np.uint8)
     ox, oy = CARTE_PX // 2, CARTE_PX // 2
 
@@ -56,12 +56,7 @@ def dessiner_carte(carte, cam_xyz):
 
     cv2.line(m, (ox, 0), (ox, CARTE_PX), (70, 70, 70), 1)
     cv2.line(m, (0, oy), (CARTE_PX, oy), (70, 70, 70), 1)
-    for tid, T in carte.items():
-        x, y, z = T[:3, 3]
-        px, py = to_px(x, z)
-        cv2.rectangle(m, (px - 6, py - 6), (px + 6, py + 6), (255, 150, 0), -1)
-        cv2.putText(m, f"tag {tid}", (px + 9, py + 4),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 150, 0), 1)
+    # (les tags ne sont plus dessines : seule la camera apparait)
     if cam_xyz is not None:
         px, py = to_px(cam_xyz[0], cam_xyz[2])
         cv2.circle(m, (px, py), 7, (0, 255, 0), -1)
@@ -164,7 +159,7 @@ while True:
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
     cv2.imshow("Auto-enregistrement (q pour quitter)", image)
-    cv2.imshow("Carte 2D", dessiner_carte(carte, cam_xyz))
+    cv2.imshow("Carte 2D", dessiner_carte(cam_xyz))
     touche = cv2.waitKey(1) & 0xFF
     if touche == ord("q"):
         break
