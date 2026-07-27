@@ -4,7 +4,7 @@
 import cv2
 import numpy as np
 
-TAILLE_TAG = 0.10  # cote reel de ton tag imprime, en metres. MESURE-LE et ajuste !
+TAILLE_TAG = 0.223   # cote reel du carre noir, en metres (22,3 cm)
 
 
 def ouvrir_camera():
@@ -29,13 +29,16 @@ if cam is None:
     raise SystemExit
 
 # Parametres approx de la camera (a calibrer plus tard pour plus de precision)
-K = np.array([[L, 0, L / 2], [0, L, H / 2], [0, 0, 1]], dtype=np.float64)
+FOCALE = L * 0.95    # correction de focale issue de la validation (~1% d'erreur)
+K = np.array([[FOCALE, 0, L / 2], [0, FOCALE, H / 2], [0, 0, 1]], dtype=np.float64)
 dist = np.zeros(5)
 h = TAILLE_TAG / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
-detecteur = cv2.aruco.ArucoDetector(dictionnaire, cv2.aruco.DetectorParameters())
+params = cv2.aruco.DetectorParameters()
+params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX  # coins sub-pixel
+detecteur = cv2.aruco.ArucoDetector(dictionnaire, params)
 
 print("En direct. Montre un tag. Appuie sur 'q' pour quitter.")
 
