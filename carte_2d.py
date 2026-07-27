@@ -20,6 +20,13 @@ LISSAGE = 9                 # positions moyennees (anti-tremblement)
 CARTE_PX = 500              # taille de la fenetre carte (l'echelle est auto)
 rayon_max = 0.5             # etendue memorisee, pour une echelle stable
 
+# Repere MONDE (convention robotique / marine) construit sur le 1er tag :
+#   X = lateral (gauche/droite)   Y = distance horizontale au tag   Z = vers le bas
+# Le plan de deplacement est donc bien X-Y, c'est lui qu'on affiche sur la carte.
+R_MONDE = np.array([[1, 0, 0],
+                    [0, 0, 1],
+                    [0, -1, 0]], dtype=np.float64)
+
 
 def transformation(R, t):
     T = np.eye(4)
@@ -54,27 +61,27 @@ def dessiner_carte(cam_xyz, cam_R):
     ox, oy = CARTE_PX // 2, CARTE_PX // 2   # origine au centre
     echelle = (CARTE_PX * 0.42) / rayon_max
 
-    def to_px(X, Z):
-        return int(ox + X * echelle), int(oy - Z * echelle)
+    def to_px(X, Y):
+        return int(ox + X * echelle), int(oy - Y * echelle)
 
     cv2.line(m, (ox, 0), (ox, CARTE_PX), (70, 70, 70), 1)
     cv2.line(m, (0, oy), (CARTE_PX, oy), (70, 70, 70), 1)
     cv2.putText(m, "X", (CARTE_PX - 20, oy - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                 (120, 120, 120), 1)
-    cv2.putText(m, "Z", (ox + 8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+    cv2.putText(m, "Y", (ox + 8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                 (120, 120, 120), 1)
 
     if cam_xyz is not None:
-        px, py = to_px(cam_xyz[0], cam_xyz[2])
+        px, py = to_px(cam_xyz[0], cam_xyz[1])
         cv2.circle(m, (px, py), 8, (0, 255, 0), -1)
         cv2.putText(m, "CAM", (px + 11, py - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
                     (0, 255, 0), 1)
         if cam_R is not None:
-            fwd = cam_R[:, 2]
-            ex, ez = fwd[0], fwd[2]
-            n = np.hypot(ex, ez) or 1.0
+            fwd = cam_R[:, 2]              # axe optique de la camera
+            ex, ey = fwd[0], fwd[1]
+            n = np.hypot(ex, ey) or 1.0
             cv2.arrowedLine(m, (px, py),
-                            (int(px + ex / n * 34), int(py - ez / n * 34)),
+                            (int(px + ex / n * 34), int(py - ey / n * 34)),
                             (0, 255, 0), 2, tipLength=0.3)
 
     # barre d'echelle de 1 m
@@ -151,7 +158,7 @@ while True:
     # --- le premier tag vu devient l'origine ---
     if not carte and poses:
         ancre = max(poses, key=lambda i: surfaces[i])
-        carte[ancre] = np.eye(4)
+        carte[ancre] = transformation(R_MONDE, (0, 0, 0))
         print(f"ANCRE (origine) = tag {ancre}")
 
     # --- enregistrement automatique des tags inconnus (par paires) ---
@@ -183,7 +190,7 @@ while True:
             cam_xyz = np.mean(lissage, axis=0)
             cam_R = T_monde_cam[:3, :3]
             derniere_pos = cam_xyz
-            rayon_max = max(rayon_max, abs(cam_xyz[0]), abs(cam_xyz[2]))
+            rayon_max = max(rayon_max, abs(cam_xyz[0]), abs(cam_xyz[1]))
         else:
             lissage.clear()
             derniere_pos = mesure
