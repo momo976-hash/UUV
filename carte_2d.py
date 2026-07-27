@@ -1,27 +1,24 @@
-# carte_2d.py — Localisation + CARTE 2D vue de dessus (top-down).
-# Fenetre 1 : la video avec la detection.
-# Fenetre 2 : une carte vue de dessus (plan XZ) avec les tags fixes et la
-#             camera qui se deplace en temps reel (point + fleche = direction).
+# carte_2d.py — Localisation + CARTE 2D vue de dessus.
+# Tout est automatique : aucun ID ni position de tag a saisir.
+#   - Le 1er tag vu devient l'origine du repere.
+#   - Les tags suivants s'enregistrent seuls quand ils sont vus en meme temps
+#     qu'un tag deja connu (methode de Thein), apres N observations.
+# Touches : c = effacer la trace | s = sauver la carte | r = reset | q = quitter
+from collections import defaultdict, deque
+
 import cv2
 import numpy as np
 
-TAILLE_TAG = 0.10
-FACTEUR_FOCALE = 0.95
+TAILLE_TAG = 0.223          # cote du carre noir, en metres (22,3 cm)
+FACTEUR_FOCALE = 0.95       # correction de focale issue de la validation
 
-# CARTE DES TAGS : ID -> (x, y, z, yaw_deg)
-CARTE_DES_TAGS = {
-    7: (0.0, 0.0, 0.0, 0.0),
-}
+ECHANTILLONS_REQUIS = 25    # observations avant d'enregistrer un tag
+SAUT_MAX = 0.40             # metres : au-dela, mesure jugee aberrante
+LISSAGE = 9                 # positions moyennees (anti-tremblement)
+PAS_MIN = 0.04              # deplacement minimal pour ajouter un point a la trace
+LONGUEUR_TRACE = 800
 
-# Reglages de la carte 2D
-CARTE_PX = 500      # taille de la fenetre carte (pixels)
-ECHELLE = 150       # pixels par metre (zoom). Baisse la valeur si ca sort du cadre.
-
-
-def rotation_y(deg):
-    a = np.radians(deg)
-    c, s = np.cos(a), np.sin(a)
-    return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]], dtype=np.float64)
+CARTE_PX = 500              # taille de la fenetre carte (l'echelle est auto)
 
 
 def transformation(R, t):
@@ -39,40 +36,65 @@ def inverse(T):
     return Ti
 
 
-def dessiner_carte(cam_xyz, cam_R):
-    """Dessine la vue de dessus : axe horizontal = X, axe vertical = Z (profondeur)."""
+def sauver_carte(carte):
+    lignes = ["CARTE_DES_TAGS = {"]
+    for tid, T in sorted(carte.items()):
+        x, y, z = T[:3, 3]
+        _, _, yaw = cv2.RQDecomp3x3(T[:3, :3])[0]
+        lignes.append(f"    {tid}: ({x:.3f}, {y:.3f}, {z:.3f}, {yaw:.1f}),")
+    lignes.append("}")
+    with open("carte_enregistree.py", "w") as f:
+        f.write("\n".join(lignes) + "\n")
+    print("Carte sauvegardee :\n" + "\n".join(lignes))
+
+
+def dessiner_carte(carte, cam_xyz, cam_R, trace):
     m = np.full((CARTE_PX, CARTE_PX, 3), 30, dtype=np.uint8)
-    ox, oy = CARTE_PX // 2, CARTE_PX // 2  # origine du repere au centre
+    ox, oy = CARTE_PX // 2, CARTE_PX // 2   # origine au centre
+
+    # --- echelle automatique : tout tient dans le cadre, sans rien regler ---
+    pts = list(trace) + [T[:3, 3] for T in carte.values()]
+    if cam_xyz is not None:
+        pts.append(cam_xyz)
+    rayon = max([max(abs(p[0]), abs(p[2])) for p in pts], default=0.5)
+    echelle = (CARTE_PX * 0.42) / max(rayon, 0.4)
 
     def to_px(X, Z):
-        return int(ox + X * ECHELLE), int(oy - Z * ECHELLE)
+        return int(ox + X * echelle), int(oy - Z * echelle)
 
-    # Axes du repere
     cv2.line(m, (ox, 0), (ox, CARTE_PX), (70, 70, 70), 1)
     cv2.line(m, (0, oy), (CARTE_PX, oy), (70, 70, 70), 1)
     cv2.putText(m, "X", (CARTE_PX - 20, oy - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (120, 120, 120), 1)
     cv2.putText(m, "Z", (ox + 8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (120, 120, 120), 1)
-    cv2.putText(m, "vue de dessus (1 carreau ignore, echelle en m)", (10, CARTE_PX - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (120, 120, 120), 1)
 
-    # Tags (carres bleus)
-    for tid, (x, y, z, yaw) in CARTE_DES_TAGS.items():
-        px, py = to_px(x, z)
+    # tags : carres bleus, SANS etiquette
+    for T in carte.values():
+        px, py = to_px(T[0, 3], T[2, 3])
         cv2.rectangle(m, (px - 6, py - 6), (px + 6, py + 6), (255, 150, 0), -1)
-        cv2.putText(m, f"tag {tid}", (px + 9, py + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 150, 0), 1)
 
-    # Camera (point vert + fleche de direction)
+    # trajectoire (degrade : ancien sombre -> recent clair)
+    pxs = [to_px(p[0], p[2]) for p in trace]
+    for i in range(1, len(pxs)):
+        v = int(70 + 185 * i / len(pxs))
+        cv2.line(m, pxs[i - 1], pxs[i], (0, v, v // 3), 2)
+
     if cam_xyz is not None:
         px, py = to_px(cam_xyz[0], cam_xyz[2])
         cv2.circle(m, (px, py), 7, (0, 255, 0), -1)
         cv2.putText(m, "CAM", (px + 9, py - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
         if cam_R is not None:
-            fwd = cam_R[:, 2]  # axe optique de la camera exprime dans le repere monde
+            fwd = cam_R[:, 2]
             ex, ez = fwd[0], fwd[2]
             n = np.hypot(ex, ez) or 1.0
-            cv2.arrowedLine(m, (px, py),
-                            (int(px + ex / n * 32), int(py - ez / n * 32)),
+            cv2.arrowedLine(m, (px, py), (int(px + ex / n * 32), int(py - ez / n * 32)),
                             (0, 255, 0), 2, tipLength=0.3)
+
+    # barre d'echelle de 1 m
+    lg = int(echelle)
+    if 20 < lg < CARTE_PX - 60:
+        y = CARTE_PX - 20
+        cv2.line(m, (20, y), (20 + lg, y), (200, 200, 200), 2)
+        cv2.putText(m, "1 m", (20, y - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
     return m
 
 
@@ -103,9 +125,19 @@ h = TAILLE_TAG / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
-detecteur = cv2.aruco.ArucoDetector(dictionnaire, cv2.aruco.DetectorParameters())
+params = cv2.aruco.DetectorParameters()
+params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+detecteur = cv2.aruco.ArucoDetector(dictionnaire, params)
 
-print("En direct. Deux fenetres : video + carte 2D. 'q' pour quitter.")
+carte = {}                       # id -> T_monde_tag (rempli automatiquement)
+candidats = defaultdict(list)    # id -> observations en attente
+trace = deque(maxlen=LONGUEUR_TRACE)
+lissage = deque(maxlen=LISSAGE)
+derniere_pos = dernier_point = None
+
+print("Deux fenetres : video + carte 2D.")
+print("Cadre DEUX tags ensemble pour enregistrer les suivants automatiquement.")
+print("Touches : c=effacer trace  s=sauver carte  r=reset  q=quitter")
 
 while True:
     ok, image = cam.read()
@@ -114,40 +146,98 @@ while True:
     gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     coins, ids, _ = detecteur.detectMarkers(gris)
 
-    positions_camera = []
-    derniere_R = None
+    # --- pose de chaque tag visible ---
+    poses, surfaces = {}, {}
     if ids is not None:
         cv2.aruco.drawDetectedMarkers(image, coins, ids)
         for c, tag_id in zip(coins, ids.flatten()):
-            if tag_id not in CARTE_DES_TAGS:
-                continue
             pts = c.reshape(4, 2).astype(np.float64)
             ok2, rvec, tvec = cv2.solvePnP(coins_3d, pts, K, dist,
                                            flags=cv2.SOLVEPNP_IPPE_SQUARE)
             if not ok2:
                 continue
             cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAILLE_TAG / 2, 2)
-            R_cam, _ = cv2.Rodrigues(rvec)
-            T_camera_tag = transformation(R_cam, tvec)
-            x, y, z, yaw = CARTE_DES_TAGS[tag_id]
-            T_piscine_tag = transformation(rotation_y(yaw), (x, y, z))
-            T_piscine_camera = T_piscine_tag @ inverse(T_camera_tag)
-            positions_camera.append(T_piscine_camera[:3, 3])
-            derniere_R = T_piscine_camera[:3, :3]
+            poses[int(tag_id)] = transformation(cv2.Rodrigues(rvec)[0], tvec)
+            surfaces[int(tag_id)] = cv2.contourArea(pts.astype(np.float32))
 
-    cam_xyz = np.mean(positions_camera, axis=0) if positions_camera else None
+    # --- le premier tag vu devient l'origine ---
+    if not carte and poses:
+        ancre = max(poses, key=lambda i: surfaces[i])
+        carte[ancre] = np.eye(4)
+        print(f"ANCRE (origine) = tag {ancre}")
+
+    # --- enregistrement automatique des tags inconnus (par paires) ---
+    for B in list(poses):
+        if B in carte:
+            continue
+        connus = [A for A in poses if A in carte]
+        if not connus:
+            continue
+        A = max(connus, key=lambda i: surfaces[i])
+        candidats[B].append(carte[A] @ inverse(poses[A]) @ poses[B])
+        if len(candidats[B]) >= ECHANTILLONS_REQUIS:
+            obs = np.array(candidats[B])
+            T = np.median(obs, axis=0)
+            T[:3, :3] = obs[len(obs) // 2][:3, :3]
+            carte[B] = T
+            candidats.pop(B)
+            print(f"Tag {B} enregistre automatiquement. Carte : {sorted(carte)}")
+
+    # --- localisation avec le meilleur tag connu visible ---
+    connus_vus = [i for i in poses if i in carte]
+    cam_xyz, cam_R = None, None
+    if connus_vus:
+        ref = max(connus_vus, key=lambda i: surfaces[i])
+        T_monde_cam = carte[ref] @ inverse(poses[ref])
+        mesure = T_monde_cam[:3, 3]
+        if derniere_pos is None or np.linalg.norm(mesure - derniere_pos) < SAUT_MAX:
+            lissage.append(mesure)
+            cam_xyz = np.mean(lissage, axis=0)
+            cam_R = T_monde_cam[:3, :3]
+            derniere_pos = cam_xyz
+            if dernier_point is None or np.linalg.norm(cam_xyz - dernier_point) > PAS_MIN:
+                trace.append(cam_xyz)
+                dernier_point = cam_xyz
+        else:
+            lissage.clear()
+            derniere_pos = mesure
+
+    # --- affichage video ---
+    y = 40
     if cam_xyz is not None:
         X, Y, Z = cam_xyz
-        cv2.putText(image, f"CAMERA : X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m", (10, 40),
+        cv2.putText(image, f"CAMERA : X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
     else:
-        cv2.putText(image, "Aucun tag de la carte visible", (10, 40),
+        cv2.putText(image, "Aucun tag connu visible", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+    y += 26
+    cv2.putText(image, f"Tags enregistres : {sorted(carte)}", (10, y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
+    y += 24
+    for B, obs in candidats.items():
+        pct = int(100 * len(obs) / ECHANTILLONS_REQUIS)
+        cv2.putText(image, f"enregistrement tag {B} : {pct}%", (10, y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 170, 255), 2)
+        y += 22
+    cv2.putText(image, "c=trace  s=sauver  r=reset  q=quitter", (10, H - 14),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
     cv2.imshow("Video (q pour quitter)", image)
-    cv2.imshow("Carte 2D - vue de dessus", dessiner_carte(cam_xyz, derniere_R))
-    if cv2.waitKey(1) & 0xFF == ord("q"):
+    cv2.imshow("Carte 2D - vue de dessus", dessiner_carte(carte, cam_xyz, cam_R, trace))
+
+    touche = cv2.waitKey(1) & 0xFF
+    if touche == ord("q"):
         break
+    if touche == ord("c"):
+        trace.clear()
+        dernier_point = None
+    if touche == ord("s") and carte:
+        sauver_carte(carte)
+    if touche == ord("r"):
+        carte.clear(); candidats.clear(); trace.clear(); lissage.clear()
+        derniere_pos = dernier_point = None
+        print("Reinitialise.")
 
 cam.release()
 cv2.destroyAllWindows()
