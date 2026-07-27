@@ -1,16 +1,16 @@
 # demo_trajectoire.py — Version ROBUSTE pour demonstration.
 #
-# Ameliorations par rapport a auto_enregistrement.py :
-#   1. Un tag n'est enregistre qu'apres N observations concordantes (mediane)
-#      -> la carte ne part plus en vrille sur une seule mesure bruitee.
-#   2. La localisation utilise le MEILLEUR tag visible (le plus gros dans
-#      l'image = le plus proche/fiable) au lieu de moyenner des tags douteux.
-#   3. Rejet des sauts aberrants + lissage de la position.
-#   4. La carte 2D se CADRE TOUTE SEULE sur la trajectoire (plus de reglage
-#      d'echelle a la main) et affiche une barre d'echelle de 1 m.
+#   1. Un tag n'est enregistre qu'apres N observations concordantes (mediane).
+#   2. Localisation via le MEILLEUR tag visible (le plus gros = le plus proche).
+#   3. Rejet des sauts aberrants + lissage + pas minimal (anti-tremblement).
+#   4. Carte 2D auto-cadree, grille de 1 m, distance parcourue.
+#   5. La trajectoire est COLOREE selon le tag de reference utilise : si la
+#      couleur change au milieu d'un saut, c'est la carte qui est imprecise.
+#   6. Verification de la carte : les distances entre tags sont affichees,
+#      a comparer au metre ruban AVANT de presenter.
 #
-# Touches :  's' = sauver la carte | 'c' = effacer la trace
-#            't' = afficher/cacher les tags | 'r' = tout reinitialiser | 'q' = quitter
+# Touches : s=sauver carte | c=effacer trace | t=tags | v=verifier carte
+#           r=reset | q=quitter
 from collections import defaultdict, deque
 
 import cv2
@@ -20,10 +20,18 @@ TAILLE_TAG = 0.223          # cote du carre noir, en metres
 FACTEUR_FOCALE = 0.95       # correction de focale (calibration)
 
 ECHANTILLONS_REQUIS = 25    # observations avant d'enregistrer un tag
-SAUT_MAX = 1.0              # metres : au-dela, la mesure est jugee aberrante
-LISSAGE = 5                 # nombre de positions moyennees
-LONGUEUR_TRACE = 600        # points gardes pour la trajectoire
+SAUT_MAX = 0.40             # metres : au-dela, la mesure est jugee aberrante
+LISSAGE = 9                 # positions moyennees (anti-tremblement)
+PAS_MIN = 0.04              # metres : deplacement minimal pour ajouter un point
+LONGUEUR_TRACE = 800
 CARTE_PX = 560
+
+COULEURS = [(0, 255, 0), (0, 200, 255), (255, 200, 0), (255, 0, 200),
+            (0, 255, 255), (200, 120, 255)]
+
+
+def couleur_tag(tid):
+    return COULEURS[tid % len(COULEURS)]
 
 
 def transformation(R, t):
@@ -53,12 +61,21 @@ def sauver_carte(carte):
     print("Carte sauvegardee dans carte_enregistree.py :\n" + "\n".join(lignes))
 
 
-def dessiner_carte(carte, cam_xyz, cam_R, trace, montrer_tags):
-    """Carte vue de dessus, cadree automatiquement sur les donnees."""
+def verifier_carte(carte):
+    """Affiche les distances entre tags : a comparer au metre ruban."""
+    ids = sorted(carte)
+    print("\n--- VERIFICATION DE LA CARTE (compare au metre ruban) ---")
+    for i, a in enumerate(ids):
+        for b in ids[i + 1:]:
+            d = np.linalg.norm(carte[a][:3, 3] - carte[b][:3, 3])
+            print(f"  distance tag {a} <-> tag {b} : {d:.3f} m")
+    print("Si ces distances sont fausses, appuie sur 'r' et refais la carte.\n")
+
+
+def dessiner_carte(carte, cam_xyz, cam_R, trace, montrer_tags, distance):
     m = np.full((CARTE_PX, CARTE_PX, 3), 28, dtype=np.uint8)
 
-    # --- cadrage automatique : on englobe la trace (+ les tags si affiches) ---
-    pts_monde = list(trace)
+    pts_monde = [p for p, _ in trace]
     if montrer_tags:
         pts_monde += [T[:3, 3] for T in carte.values()]
     if cam_xyz is not None:
@@ -69,45 +86,66 @@ def dessiner_carte(carte, cam_xyz, cam_R, trace, montrer_tags):
     xs = [p[0] for p in pts_monde]
     zs = [p[2] for p in pts_monde]
     cx, cz = (min(xs) + max(xs)) / 2, (min(zs) + max(zs)) / 2
-    etendue = max(max(xs) - min(xs), max(zs) - min(zs), 0.6)  # min 60 cm de champ
+    etendue = max(max(xs) - min(xs), max(zs) - min(zs), 0.6)
     echelle = (CARTE_PX * 0.78) / etendue
 
     def to_px(X, Z):
         return (int(CARTE_PX / 2 + (X - cx) * echelle),
                 int(CARTE_PX / 2 - (Z - cz) * echelle))
 
-    # --- tags (optionnel) ---
+    # --- grille de 1 m ---
+    if echelle > 12:
+        k = 0
+        while True:
+            dx = k * echelle
+            if dx > CARTE_PX:
+                break
+            for sx in ({int(CARTE_PX / 2 - cx * echelle + dx),
+                        int(CARTE_PX / 2 - cx * echelle - dx)}):
+                if 0 <= sx < CARTE_PX:
+                    cv2.line(m, (sx, 0), (sx, CARTE_PX), (45, 45, 45), 1)
+            for sy in ({int(CARTE_PX / 2 + cz * echelle + dx),
+                        int(CARTE_PX / 2 + cz * echelle - dx)}):
+                if 0 <= sy < CARTE_PX:
+                    cv2.line(m, (0, sy), (CARTE_PX, sy), (45, 45, 45), 1)
+            k += 1
+
+    # --- tags ---
     if montrer_tags:
         for tid, T in carte.items():
             px, py = to_px(T[0, 3], T[2, 3])
-            cv2.rectangle(m, (px - 5, py - 5), (px + 5, py + 5), (180, 140, 40), -1)
-            cv2.putText(m, str(tid), (px + 8, py + 4),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (180, 140, 40), 1)
+            c = couleur_tag(tid)
+            cv2.rectangle(m, (px - 6, py - 6), (px + 6, py + 6), c, -1)
+            cv2.putText(m, f"tag {tid}", (px + 9, py + 4),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.42, c, 1)
 
-    # --- trajectoire (degrade : ancien sombre -> recent clair) ---
-    pts = [to_px(p[0], p[2]) for p in trace]
-    for i in range(1, len(pts)):
-        v = int(70 + 185 * i / len(pts))
-        cv2.line(m, pts[i - 1], pts[i], (0, v, v // 3), 2)
+    # --- trajectoire, coloree par tag de reference ---
+    for i in range(1, len(trace)):
+        p0, _ = trace[i - 1]
+        p1, tid = trace[i]
+        cv2.line(m, to_px(p0[0], p0[2]), to_px(p1[0], p1[2]), couleur_tag(tid), 2)
 
-    # --- position actuelle + direction de visee ---
+    # --- position actuelle ---
     if cam_xyz is not None:
         px, py = to_px(cam_xyz[0], cam_xyz[2])
-        cv2.circle(m, (px, py), 7, (0, 255, 0), -1)
+        cv2.circle(m, (px, py), 8, (255, 255, 255), -1)
+        cv2.circle(m, (px, py), 5, (0, 255, 0), -1)
         if cam_R is not None:
             ex, ez = cam_R[0, 2], cam_R[2, 2]
             n = np.hypot(ex, ez) or 1.0
             cv2.arrowedLine(m, (px, py),
-                            (int(px + ex / n * 30), int(py - ez / n * 30)),
-                            (0, 255, 0), 2, tipLength=0.35)
+                            (int(px + ex / n * 32), int(py - ez / n * 32)),
+                            (255, 255, 255), 2, tipLength=0.35)
 
-    # --- barre d'echelle de 1 m ---
+    # --- barre d'echelle + distance parcourue ---
     lg = int(echelle)
     if 20 < lg < CARTE_PX - 60:
-        y = CARTE_PX - 26
-        cv2.line(m, (20, y), (20 + lg, y), (200, 200, 200), 2)
+        y = CARTE_PX - 24
+        cv2.line(m, (20, y), (20 + lg, y), (220, 220, 220), 2)
         cv2.putText(m, "1 m", (20, y - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
-                    (200, 200, 200), 1)
+                    (220, 220, 220), 1)
+    cv2.putText(m, f"parcouru : {distance:.2f} m", (CARTE_PX - 175, 24),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (220, 220, 220), 1)
     return m
 
 
@@ -139,22 +177,24 @@ coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.f
 
 dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
 params = cv2.aruco.DetectorParameters()
-params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX  # coins sub-pixel
+params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
 detecteur = cv2.aruco.ArucoDetector(dictionnaire, params)
 
-carte = {}                          # id -> T_monde_tag (enregistre)
-candidats = defaultdict(list)       # id -> observations en attente
-trace = deque(maxlen=LONGUEUR_TRACE)
+carte = {}
+candidats = defaultdict(list)
+trace = deque(maxlen=LONGUEUR_TRACE)     # (position, id du tag de reference)
 lissage = deque(maxlen=LISSAGE)
 derniere_pos = None
-montrer_tags = False
+dernier_point = None
+distance_totale = 0.0
+montrer_tags = True
 
-print("=" * 62)
-print("1) Cadre DEUX tags ensemble  -> le 2e s'enregistre (barre de progression)")
-print("2) Repete pour le 3e tag")
-print("3) Deplace-toi : la trajectoire se dessine")
-print("Touches : s=sauver  c=effacer trace  t=tags  r=reset  q=quitter")
-print("=" * 62)
+print("=" * 64)
+print("1) Cadre DEUX tags ensemble -> le 2e s'enregistre (progression en %)")
+print("2) Repete pour le 3e tag, puis appuie sur 'v' pour VERIFIER la carte")
+print("3) Appuie sur 'c' puis deplace-toi : la trajectoire se dessine")
+print("Touches : s=sauver  c=trace  t=tags  v=verifier  r=reset  q=quitter")
+print("=" * 64)
 
 while True:
     ok, image = cam.read()
@@ -163,9 +203,7 @@ while True:
     gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     coins, ids, _ = detecteur.detectMarkers(gris)
 
-    # --- 1) pose + surface apparente de chaque tag visible ---
-    poses = {}      # id -> T_camera_tag
-    surfaces = {}   # id -> aire en pixels (plus grand = plus proche = plus fiable)
+    poses, surfaces = {}, {}
     if ids is not None:
         cv2.aruco.drawDetectedMarkers(image, coins, ids)
         for c, tag_id in zip(coins, ids.flatten()):
@@ -177,48 +215,57 @@ while True:
                 poses[int(tag_id)] = transformation(cv2.Rodrigues(rvec)[0], tvec)
                 surfaces[int(tag_id)] = cv2.contourArea(pts.astype(np.float32))
 
-    # --- 2) ancre = premier tag vu ---
+    # ancre = premier tag vu
     if not carte and poses:
-        ancre = max(poses, key=lambda i: surfaces[i])   # le plus gros = le plus sur
+        ancre = max(poses, key=lambda i: surfaces[i])
         carte[ancre] = np.eye(4)
         print(f"ANCRE (origine) = tag {ancre}")
 
-    # --- 3) accumuler des observations pour les tags inconnus ---
+    # enregistrement progressif des tags inconnus
     for B in poses:
         if B in carte:
             continue
         connus = [A for A in poses if A in carte]
         if not connus:
             continue
-        A = max(connus, key=lambda i: surfaces[i])      # reference la plus fiable
+        A = max(connus, key=lambda i: surfaces[i])
         candidats[B].append(carte[A] @ inverse(poses[A]) @ poses[B])
         if len(candidats[B]) >= ECHANTILLONS_REQUIS:
             obs = np.array(candidats[B])
-            T = np.median(obs, axis=0)                  # mediane = robuste au bruit
-            T[:3, :3] = obs[len(obs) // 2][:3, :3]      # rotation d'un echantillon median
+            T = np.median(obs, axis=0)
+            T[:3, :3] = obs[len(obs) // 2][:3, :3]
             carte[B] = T
             candidats.pop(B)
             print(f"Tag {B} ENREGISTRE. Carte : {sorted(carte)}")
+            verifier_carte(carte)
 
-    # --- 4) localiser avec le MEILLEUR tag connu visible ---
+    # localisation avec le meilleur tag connu visible
     connus_vus = [i for i in poses if i in carte]
-    cam_xyz, cam_R = None, None
+    cam_xyz, cam_R, ref = None, None, None
     if connus_vus:
-        best = max(connus_vus, key=lambda i: surfaces[i])
-        T_monde_cam = carte[best] @ inverse(poses[best])
+        ref = max(connus_vus, key=lambda i: surfaces[i])
+        T_monde_cam = carte[ref] @ inverse(poses[ref])
         mesure = T_monde_cam[:3, 3]
-        # rejet des sauts aberrants
         if derniere_pos is None or np.linalg.norm(mesure - derniere_pos) < SAUT_MAX:
             lissage.append(mesure)
             cam_xyz = np.mean(lissage, axis=0)
             cam_R = T_monde_cam[:3, :3]
             derniere_pos = cam_xyz
-            trace.append(cam_xyz)
+            # n'ajoute un point que si on a vraiment bouge (anti-tremblement)
+            if dernier_point is None:
+                trace.append((cam_xyz, ref))
+                dernier_point = cam_xyz
+            else:
+                pas = np.linalg.norm(cam_xyz - dernier_point)
+                if pas > PAS_MIN:
+                    trace.append((cam_xyz, ref))
+                    distance_totale += pas
+                    dernier_point = cam_xyz
         else:
             lissage.clear()
             derniere_pos = mesure
 
-    # --- 5) affichage video ---
+    # --- affichage video ---
     cv2.putText(image, f"Carte : {sorted(carte)}", (10, 28),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
     y = 52
@@ -229,30 +276,36 @@ while True:
         y += 22
     if cam_xyz is not None:
         X, Y, Z = cam_xyz
-        cv2.putText(image, f"CAMERA : X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m", (10, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        cv2.putText(image, f"CAMERA : X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m (ref tag {ref})",
+                    (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, couleur_tag(ref), 2)
     elif not connus_vus:
         cv2.putText(image, "Aucun tag connu visible", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-    cv2.putText(image, "s=sauver  c=trace  t=tags  r=reset  q=quitter",
-                (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+    cv2.putText(image, "s=sauver c=trace t=tags v=verifier r=reset q=quitter",
+                (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1)
 
     cv2.imshow("Video (q pour quitter)", image)
     cv2.imshow("Trajectoire - vue de dessus",
-               dessiner_carte(carte, cam_xyz, cam_R, trace, montrer_tags))
+               dessiner_carte(carte, cam_xyz, cam_R, trace, montrer_tags,
+                              distance_totale))
 
     touche = cv2.waitKey(1) & 0xFF
     if touche == ord("q"):
         break
     if touche == ord("s") and carte:
         sauver_carte(carte)
+    if touche == ord("v") and carte:
+        verifier_carte(carte)
     if touche == ord("c"):
         trace.clear()
+        dernier_point = None
+        distance_totale = 0.0
     if touche == ord("t"):
         montrer_tags = not montrer_tags
     if touche == ord("r"):
         carte.clear(); candidats.clear(); trace.clear(); lissage.clear()
-        derniere_pos = None
+        derniere_pos = dernier_point = None
+        distance_totale = 0.0
         print("Reinitialise.")
 
 cam.release()
