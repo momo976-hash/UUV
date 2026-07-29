@@ -119,8 +119,8 @@ CSV = os.path.abspath("comparaison_calibration.csv")
 if not os.path.exists(CSV):
     with open(CSV, "w", newline="") as fic:
         csv.writer(fic).writerow(
-            ["mode", "mesure_ruban_m", "approx_m", "erreur_approx_m", "erreur_approx_pct",
-             "calib_m", "erreur_calib_m", "erreur_calib_pct"])
+            ["mode", "reference", "approx", "erreur_approx", "erreur_approx_pct",
+             "calib", "erreur_calib", "erreur_calib_pct"])
 
 print("=" * 64)
 print("MODE 1 (defaut) : ecart entre DEUX tags -> montre les 2 tags ensemble")
@@ -201,15 +201,17 @@ while True:
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
                     cv2.putText(image, f"ecart B : {eb:+.2f} deg", (10, 136),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
-                else:
+                elif ref:
                     cv2.putText(image, f"ecart A : {ea*100:+.1f} cm ({ea/ref*100:+.1f} %)",
                                 (10, 112), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
                     cv2.putText(image, f"ecart B : {eb*100:+.1f} cm ({eb/ref*100:+.1f} %)",
                                 (10, 136), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
-                    cv2.putText(image,
-                                f"TAILLE_TAG deduite : {TAILLE_TAG*ref/d_b*100:.1f} cm"
-                                f"  (declaree {TAILLE_TAG*100:.1f} cm)",
-                                (10, 162), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 0), 2)
+                    if d_b:
+                        cv2.putText(image,
+                                    f"TAILLE_TAG deduite : {TAILLE_TAG*ref/d_b*100:.1f} cm"
+                                    f"  (declaree {TAILLE_TAG*100:.1f} cm)",
+                                    (10, 162), cv2.FONT_HERSHEY_SIMPLEX, 0.52,
+                                    (255, 255, 0), 2)
             except ValueError:
                 pass
 
@@ -238,12 +240,20 @@ while True:
             print("Mesure saisie invalide.")
             continue
         ea, eb = d_a - ref, d_b - ref
+        # Le pourcentage n'a pas de sens si la reference est nulle
+        # (cas du mode angle, ou l'angle attendu entre tags coplanaires est 0).
+        pct_a = f"{ea / ref * 100:+.2f}" if ref else ""
+        pct_b = f"{eb / ref * 100:+.2f}" if ref else ""
         with open(CSV, "a", newline="") as fic:
             csv.writer(fic).writerow([
-                MODES[mode], f"{ref:.3f}", f"{d_a:.3f}", f"{ea:+.3f}",
-                f"{ea/ref*100:+.2f}", f"{d_b:.3f}", f"{eb:+.3f}", f"{eb/ref*100:+.2f}"])
-        print(f"[{MODES[mode]}] ruban {ref:.3f} m | approx {d_a:.3f} ({ea*100:+.1f} cm) "
-              f"| calib {d_b:.3f} ({eb*100:+.1f} cm)")
+                MODES[mode], f"{ref:.3f}", f"{d_a:.3f}", f"{ea:+.3f}", pct_a,
+                f"{d_b:.3f}", f"{eb:+.3f}", pct_b])
+        if mode == 2:
+            print(f"[{MODES[mode]}] reference {ref:.2f} deg | "
+                  f"approx {d_a:.2f} ({ea:+.2f} deg) | calib {d_b:.2f} ({eb:+.2f} deg)")
+        else:
+            print(f"[{MODES[mode]}] ruban {ref:.3f} m | approx {d_a:.3f} ({ea*100:+.1f} cm) "
+                  f"| calib {d_b:.3f} ({eb*100:+.1f} cm)")
 
 cam.release()
 cv2.destroyAllWindows()
