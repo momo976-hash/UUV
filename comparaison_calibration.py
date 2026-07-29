@@ -5,6 +5,9 @@
 #           -> facile a mesurer au ruban, independant de la position camera
 #   MODE 2  distance CAMERA -> TAG  (profondeur ; le point de reference cote
 #           camera est le centre optique, difficile a reperer physiquement)
+#   MODE 3  ANGLE entre DEUX TAGS   (orientation relative, en degres)
+#           -> si les 2 tags sont a plat sur la meme surface, la valeur exacte
+#              est 0 deg : tout ecart mesure est de l'erreur, sans rapporteur
 #
 # Les deux sont calculees avec les DEUX jeux de parametres en meme temps :
 #   A) approximation : focale = largeur x 0.95, sans distorsion
@@ -57,14 +60,21 @@ def ouvrir_camera():
 
 
 def positions(pts_par_tag, K, dist):
-    """Position 3D du centre de chaque tag dans le repere camera."""
+    """Pose (position, rotation) de chaque tag dans le repere camera."""
     resultat = {}
     for tag_id, pts in pts_par_tag.items():
-        ok, _, tvec = cv2.solvePnP(coins_3d, pts, K, dist,
-                                   flags=cv2.SOLVEPNP_IPPE_SQUARE)
+        ok, rvec, tvec = cv2.solvePnP(coins_3d, pts, K, dist,
+                                      flags=cv2.SOLVEPNP_IPPE_SQUARE)
         if ok:
-            resultat[tag_id] = tvec.flatten()
+            resultat[tag_id] = (tvec.flatten(), cv2.Rodrigues(rvec)[0])
     return resultat
+
+
+def angle_entre(R1, R2):
+    """Angle (degres) de la rotation qui amene le repere 1 sur le repere 2."""
+    R_rel = R1.T @ R2
+    cos = (np.trace(R_rel) - 1.0) / 2.0
+    return float(np.degrees(np.arccos(np.clip(cos, -1.0, 1.0))))
 
 
 cam, L, H = ouvrir_camera()
@@ -100,7 +110,8 @@ params = cv2.aruco.DetectorParameters()
 params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
 detecteur = cv2.aruco.ArucoDetector(dictionnaire, params)
 
-MODES = ["ecart entre 2 tags", "distance camera -> tag"]
+MODES = ["ecart entre 2 tags", "distance camera -> tag",
+         "angle entre 2 tags (deg)"]
 mode = 0
 hist_a, hist_b = deque(maxlen=LISSAGE), deque(maxlen=LISSAGE)
 saisie = ""
@@ -114,6 +125,7 @@ if not os.path.exists(CSV):
 print("=" * 64)
 print("MODE 1 (defaut) : ecart entre DEUX tags -> montre les 2 tags ensemble")
 print("MODE 2          : distance camera -> tag")
+print("MODE 3          : angle entre 2 tags coplanaires -> reference = 0 deg")
 print("'m' change de mode | tape la mesure au ruban | 's' enregistre | 'q' quitte")
 print(f"Resultats dans : {CSV}")
 print("=" * 64)
@@ -136,23 +148,31 @@ while True:
 
     mesure_a = mesure_b = None
     detail = ""
+    communs = sorted(set(pos_a) & set(pos_b))
     if mode == 0:                                   # ecart entre deux tags
-        communs = sorted(set(pos_a) & set(pos_b))
         if len(communs) >= 2:
             t1, t2 = communs[0], communs[1]
-            mesure_a = float(np.linalg.norm(pos_a[t1] - pos_a[t2]))
-            mesure_b = float(np.linalg.norm(pos_b[t1] - pos_b[t2]))
+            mesure_a = float(np.linalg.norm(pos_a[t1][0] - pos_a[t2][0]))
+            mesure_b = float(np.linalg.norm(pos_b[t1][0] - pos_b[t2][0]))
             detail = f"tags {t1} et {t2}"
         else:
             detail = "montre DEUX tags en meme temps"
-    else:                                           # distance camera -> tag
-        if pos_a and pos_b:
-            t1 = sorted(pos_a)[0]
-            mesure_a = float(np.linalg.norm(pos_a[t1]))
-            mesure_b = float(np.linalg.norm(pos_b[t1]))
+    elif mode == 1:                                 # distance camera -> tag
+        if communs:
+            t1 = communs[0]
+            mesure_a = float(np.linalg.norm(pos_a[t1][0]))
+            mesure_b = float(np.linalg.norm(pos_b[t1][0]))
             detail = f"tag {t1}"
         else:
             detail = "aucun tag detecte"
+    else:                                           # angle entre deux tags
+        if len(communs) >= 2:
+            t1, t2 = communs[0], communs[1]
+            mesure_a = angle_entre(pos_a[t1][1], pos_a[t2][1])
+            mesure_b = angle_entre(pos_b[t1][1], pos_b[t2][1])
+            detail = f"tags {t1} et {t2} (coplanaires -> attendu 0 deg)"
+        else:
+            detail = "montre DEUX tags en meme temps"
 
     if mesure_a is not None:
         hist_a.append(mesure_a)
@@ -167,26 +187,33 @@ while True:
     cv2.putText(image, f"MODE : {MODES[mode]}  ({detail})", (10, 26),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
     if d_a is not None:
-        cv2.putText(image, f"A) approximation : {d_a:.3f} m", (10, 56),
+        unite = "deg" if mode == 2 else "m"
+        cv2.putText(image, f"A) approximation : {d_a:.3f} {unite}", (10, 56),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
-        cv2.putText(image, f"B) calibration   : {d_b:.3f} m", (10, 82),
+        cv2.putText(image, f"B) calibration   : {d_b:.3f} {unite}", (10, 82),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
         if saisie:
             try:
                 ref = float(saisie)
                 ea, eb = d_a - ref, d_b - ref
-                cv2.putText(image, f"ecart A : {ea*100:+.1f} cm ({ea/ref*100:+.1f} %)",
-                            (10, 112), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
-                cv2.putText(image, f"ecart B : {eb*100:+.1f} cm ({eb/ref*100:+.1f} %)",
-                            (10, 136), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
-                cv2.putText(image,
-                            f"TAILLE_TAG deduite : {TAILLE_TAG*ref/d_b*100:.1f} cm"
-                            f"  (declaree {TAILLE_TAG*100:.1f} cm)",
-                            (10, 162), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 0), 2)
+                if mode == 2:
+                    cv2.putText(image, f"ecart A : {ea:+.2f} deg", (10, 112),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
+                    cv2.putText(image, f"ecart B : {eb:+.2f} deg", (10, 136),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
+                else:
+                    cv2.putText(image, f"ecart A : {ea*100:+.1f} cm ({ea/ref*100:+.1f} %)",
+                                (10, 112), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
+                    cv2.putText(image, f"ecart B : {eb*100:+.1f} cm ({eb/ref*100:+.1f} %)",
+                                (10, 136), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
+                    cv2.putText(image,
+                                f"TAILLE_TAG deduite : {TAILLE_TAG*ref/d_b*100:.1f} cm"
+                                f"  (declaree {TAILLE_TAG*100:.1f} cm)",
+                                (10, 162), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 0), 2)
             except ValueError:
                 pass
 
-    cv2.putText(image, f"mesure au ruban : {saisie or '...'} m", (10, H - 38),
+    cv2.putText(image, f"reference ({'deg' if mode == 2 else 'm'}) : {saisie or '...'}", (10, H - 38),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
     cv2.putText(image, "m=mode  chiffres=saisir  s=enregistrer  q=quitter",
                 (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1)
@@ -197,7 +224,7 @@ while True:
     if touche == ord("q"):
         break
     if touche == ord("m"):
-        mode = 1 - mode
+        mode = (mode + 1) % len(MODES)
         hist_a.clear(); hist_b.clear()
         print(f"Mode : {MODES[mode]}")
     if ord("0") <= touche <= ord("9") or touche == ord("."):
