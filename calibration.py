@@ -20,6 +20,11 @@
 import cv2
 import numpy as np
 
+# Index de la camera a utiliser. None = detection automatique.
+# Mets ici l'index vu avec lister_cameras.py pour etre SUR d'utiliser
+# la meme camera pour la calibration et pour les mesures.
+CAMERA_INDEX = None
+
 TAILLE_CARREAU = 0.050      # cote d'un carreau, en metres (50 mm)
 COINS = (6, 4)              # coins interieurs : 5x7 carreaux -> 4x6 (teste aussi 4x6)
 CAPTURES_MINI = 15          # nombre de vues recommande avant de calibrer
@@ -49,15 +54,19 @@ def trouver_damier(gris):
 
 
 def ouvrir_camera():
+    """Ouvre la camera. Si CAMERA_INDEX est defini, ouvre CELLE-LA uniquement.
+    Indispensable quand plusieurs cameras sont branchees : calibrer une camera
+    et mesurer avec une autre fausse completement les distances."""
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
-    for index in range(4):
+    indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
+    for index in indices:
         for backend, nom in backends:
             cap = cv2.VideoCapture(index, backend) if backend else cv2.VideoCapture(index)
             if cap.isOpened():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera trouvee : index={index}, backend={nom}, {ww}x{hh}")
+                    print(f"Camera utilisee : index={index}, backend={nom}, {ww}x{hh}")
                     return cap, ww, hh
             cap.release()
     return None, 0, 0

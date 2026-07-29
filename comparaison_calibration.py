@@ -17,6 +17,11 @@ from collections import deque
 import cv2
 import numpy as np
 
+# Index de la camera a utiliser. None = detection automatique.
+# Mets ici l'index vu avec lister_cameras.py pour etre SUR d'utiliser
+# la meme camera pour la calibration et pour les mesures.
+CAMERA_INDEX = None
+
 TAILLE_TAG = 0.223
 FACTEUR_APPROX = 0.95        # ancienne approximation
 LISSAGE = 30                 # images moyennees pour stabiliser l'affichage
@@ -33,15 +38,19 @@ LARGEUR_CALIB = 640
 
 
 def ouvrir_camera():
+    """Ouvre la camera. Si CAMERA_INDEX est defini, ouvre CELLE-LA uniquement.
+    Indispensable quand plusieurs cameras sont branchees : calibrer une camera
+    et mesurer avec une autre fausse completement les distances."""
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
-    for index in range(4):
+    indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
+    for index in indices:
         for backend, nom in backends:
             cap = cv2.VideoCapture(index, backend) if backend else cv2.VideoCapture(index)
             if cap.isOpened():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera trouvee : index={index}, backend={nom}, {ww}x{hh}")
+                    print(f"Camera utilisee : index={index}, backend={nom}, {ww}x{hh}")
                     return cap, ww, hh
             cap.release()
     return None, 0, 0
