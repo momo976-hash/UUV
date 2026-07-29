@@ -136,6 +136,13 @@ while True:
                             (10, 96), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
                 cv2.putText(image, f"ecart B : {ec*100:+.1f} cm ({ec/reelle*100:+.1f} %)",
                             (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
+                # Taille de tag qui rendrait la mesure exacte : la distance est
+                # proportionnelle a TAILLE_TAG, donc taille_reelle = taille x reelle/mesuree
+                taille_deduite = TAILLE_TAG * reelle / d_calib
+                cv2.putText(image,
+                            f"TAILLE_TAG deduite : {taille_deduite*100:.1f} cm"
+                            f"  (declaree : {TAILLE_TAG*100:.1f} cm)",
+                            (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 0), 2)
             except ValueError:
                 pass
     else:
@@ -168,7 +175,8 @@ while True:
                 f"{reelle:.3f}", f"{d_approx:.3f}", f"{ea:+.3f}", f"{ea/reelle*100:+.2f}",
                 f"{d_calib:.3f}", f"{ec:+.3f}", f"{ec/reelle*100:+.2f}"])
         print(f"reelle {reelle:.3f} m | approx {d_approx:.3f} ({ea*100:+.1f} cm) "
-              f"| calib {d_calib:.3f} ({ec*100:+.1f} cm)")
+              f"| calib {d_calib:.3f} ({ec*100:+.1f} cm) "
+              f"| TAILLE_TAG deduite {TAILLE_TAG * reelle / d_calib * 100:.1f} cm")
 
 cam.release()
 cv2.destroyAllWindows()
