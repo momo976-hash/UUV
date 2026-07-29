@@ -123,6 +123,37 @@ def calibrer(points_3d, points_2d, taille_image):
 
     print("\nParametres sauves dans calibration_camera.npz")
 
+    # Export au format YAML standard ROS (camera_calibration_parsers).
+    # Ce fichier est directement utilisable par un node ROS pour publier
+    # sensor_msgs/CameraInfo : aucune recalibration sous ROS n'est necessaire.
+    largeur_img, hauteur_img = taille_image
+    lignes_yaml = [
+        f"image_width: {largeur_img}",
+        f"image_height: {hauteur_img}",
+        "camera_name: realsense_color",
+        "camera_matrix:",
+        "  rows: 3",
+        "  cols: 3",
+        "  data: [" + ", ".join(f"{v:.8f}" for v in K.flatten()) + "]",
+        "distortion_model: plumb_bob",
+        "distortion_coefficients:",
+        "  rows: 1",
+        f"  cols: {dist.size}",
+        "  data: [" + ", ".join(f"{v:.8f}" for v in dist.ravel()) + "]",
+        "rectification_matrix:",
+        "  rows: 3",
+        "  cols: 3",
+        "  data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]",
+        "projection_matrix:",
+        "  rows: 3",
+        "  cols: 4",
+        "  data: [" + ", ".join(
+            f"{v:.8f}" for v in np.hstack([K, np.zeros((3, 1))]).flatten()) + "]",
+    ]
+    with open("camera_calibration_ros.yaml", "w") as f:
+        f.write("\n".join(lignes_yaml) + "\n")
+    print("Fichier ROS ecrit : camera_calibration_ros.yaml")
+
     # Version copiable directement dans les autres programmes
     print("\n--- A copier dans tes programmes ---")
     print("K = np.array([")
