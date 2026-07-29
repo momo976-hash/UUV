@@ -10,6 +10,11 @@ from collections import defaultdict, deque
 import cv2
 import numpy as np
 
+# Index de la camera (None = detection automatique).
+CAMERA_INDEX = None
+# Resolution FIGEE : doit etre identique pour la calibration et les mesures.
+RESOLUTION = (640, 480)
+
 TAILLE_TAG = 0.223          # cote du carre noir, en metres (22,3 cm)
 
 ECHANTILLONS_REQUIS = 25    # observations avant d'enregistrer un tag
@@ -121,15 +126,30 @@ def dessiner_carte(cam_xyz, cam_R):
 
 
 def ouvrir_camera():
+    """Ouvre la camera en forcant TOUJOURS la meme resolution.
+
+    Important : le champ de vision d'une RealSense depend du format demande
+    (640x480 en 4:3 est recadre, 1280x720 en 16:9 utilise tout le capteur).
+    Une calibration faite a une resolution n'est donc PAS transposable a une
+    autre par simple mise a l'echelle. On fige la resolution pour que la
+    calibration et les mesures portent sur exactement la meme optique.
+    """
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
-    for index in range(4):
+    indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
+    for index in indices:
         for backend, nom in backends:
             cap = cv2.VideoCapture(index, backend) if backend else cv2.VideoCapture(index)
             if cap.isOpened():
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, RESOLUTION[0])
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, RESOLUTION[1])
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera trouvee : index={index}, backend={nom}, {ww}x{hh}")
+                    print(f"Camera utilisee : index={index}, backend={nom}, {ww}x{hh}")
+                    if (ww, hh) != RESOLUTION:
+                        print(f"  ATTENTION : resolution obtenue {ww}x{hh} au lieu de "
+                              f"{RESOLUTION[0]}x{RESOLUTION[1]}. La calibration ne sera "
+                              f"valable que si elle a ete faite dans ce meme format.")
                     return cap, ww, hh
             cap.release()
     return None, 0, 0
