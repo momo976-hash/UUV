@@ -7,6 +7,33 @@ import numpy as np
 TAILLE_TAG = 0.223   # cote reel du carre noir, en metres (22,3 cm)
 
 
+# --- Calibration reelle de la camera (damier 5x7, 22 vues, RMS 0.169 px) ---
+# Si le fichier calibration_camera.npz est a cote du script, il est utilise.
+K_CALIB = np.array([
+    [604.1876, 0.0000, 326.1973],
+    [0.0000, 602.3668, 242.8850],
+    [0.0000, 0.0000, 1.0000],
+], dtype=np.float64)
+DIST_CALIB = np.array([0.013835, 0.733706, -0.002333, 0.001136, -2.707687],
+                      dtype=np.float64)
+LARGEUR_CALIB = 640          # resolution utilisee lors de la calibration
+
+
+def charger_calibration(largeur, hauteur):
+    """Renvoie (K, dist). Adapte K si la camera tourne a une autre resolution."""
+    K, d, Lc = K_CALIB.copy(), DIST_CALIB.copy(), LARGEUR_CALIB
+    try:
+        f = np.load("calibration_camera.npz")
+        K, d, Lc = f["K"].astype(np.float64), f["dist"].ravel(), int(f["largeur"])
+        print("Calibration chargee depuis calibration_camera.npz")
+    except Exception:
+        print("Calibration integree au script utilisee")
+    if largeur != Lc:                      # mise a l'echelle si resolution differente
+        K = K.copy()
+        K[:2] *= largeur / Lc
+    return K, d
+
+
 def ouvrir_camera():
     """Cherche une camera qui renvoie vraiment une image ; renvoie (cap, w, h)."""
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
@@ -28,10 +55,7 @@ if cam is None:
     print("ERREUR : aucune camera ouverte (index 0 a 3).")
     raise SystemExit
 
-# Parametres approx de la camera (a calibrer plus tard pour plus de precision)
-FOCALE = L * 0.95    # correction de focale issue de la validation (~1% d'erreur)
-K = np.array([[FOCALE, 0, L / 2], [0, FOCALE, H / 2], [0, 0, 1]], dtype=np.float64)
-dist = np.zeros(5)
+K, dist = charger_calibration(L, H)
 h = TAILLE_TAG / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
