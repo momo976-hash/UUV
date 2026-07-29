@@ -68,11 +68,19 @@ def calibrer(points_3d, points_2d, taille_image):
     erreur_rms, K, dist, rvecs, tvecs = cv2.calibrateCamera(
         points_3d, points_2d, taille_image, None, None)
 
-    # Erreur de reprojection moyenne, vue par vue (controle qualite)
+    # Sauvegarde immediate : on ne veut pas perdre le resultat en cas de souci
+    np.savez("calibration_camera.npz", K=K, dist=dist,
+             largeur=taille_image[0], hauteur=taille_image[1])
+
+    # Erreur de reprojection moyenne, vue par vue (controle qualite).
+    # On compare avec numpy : les formes renvoyees par projectPoints varient
+    # selon les versions d'OpenCV, donc on aplatit tout en (N, 2).
     total = 0.0
     for i in range(len(points_3d)):
         proj, _ = cv2.projectPoints(points_3d[i], rvecs[i], tvecs[i], K, dist)
-        total += cv2.norm(points_2d[i], proj, cv2.NORM_L2) / len(proj)
+        mesure = np.asarray(points_2d[i], dtype=np.float64).reshape(-1, 2)
+        attendu = np.asarray(proj, dtype=np.float64).reshape(-1, 2)
+        total += np.linalg.norm(mesure - attendu) / len(attendu)
     erreur_moyenne = total / len(points_3d)
 
     print("\n" + "=" * 58)
@@ -92,8 +100,6 @@ def calibrer(points_3d, points_2d, taille_image):
     print(f"  fx reel / largeur = {K[0,0] / largeur:.4f}"
           f"   (le facteur 0.95 utilise jusqu'ici)")
 
-    np.savez("calibration_camera.npz", K=K, dist=dist,
-             largeur=taille_image[0], hauteur=taille_image[1])
     print("\nParametres sauves dans calibration_camera.npz")
 
     # Version copiable directement dans les autres programmes
