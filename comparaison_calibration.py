@@ -78,20 +78,27 @@ f = L * FACTEUR_APPROX
 K_approx = np.array([[f, 0, L / 2], [0, f, H / 2], [0, 0, 1]], dtype=np.float64)
 dist_approx = np.zeros(5)
 
-# B) calibration (mise a l'echelle si la resolution differe)
+# B) calibration par damier
 K_calib, dist_calib = K_CALIB.copy(), DIST_CALIB.copy()
+Hc = 480
 try:
     fichier = np.load("calibration_camera.npz")
     K_calib = fichier["K"].astype(np.float64)
     dist_calib = fichier["dist"].ravel()
-    Lc = int(fichier["largeur"])
+    Lc, Hc = int(fichier["largeur"]), int(fichier["hauteur"])
     print("Calibration chargee depuis calibration_camera.npz")
 except Exception:
     Lc = LARGEUR_CALIB
     print("Calibration integree au script utilisee")
-if L != Lc:
-    K_calib = K_calib.copy()
-    K_calib[:2] *= L / Lc
+
+print(f"  calibration faite en : {Lc}x{Hc}   (fx = {K_calib[0, 0]:.1f})")
+print(f"  capture actuelle en  : {L}x{H}")
+if (L, H) != (Lc, Hc):
+    print("  >>> ATTENTION : les formats different. Le champ de vision n'est pas")
+    print("      le meme, la calibration N'EST PAS valable ici. Refais la")
+    print("      calibration dans le format utilise pour les mesures.")
+else:
+    print("  >>> Formats identiques : la calibration est valable.")
 
 h = TAILLE_TAG / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
