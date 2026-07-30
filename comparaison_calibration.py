@@ -14,6 +14,7 @@
 #   B) calibration par damier : fx, fy, cx, cy + distorsion
 #
 # Touches : m = changer de mode | 0-9 et '.' = saisir la mesure au ruban
+#           o = fixer la reference d'orientation (mode 4)
 #           RET. ARRIERE = effacer | s = enregistrer | q = quitter
 import csv
 import os
@@ -111,8 +112,9 @@ params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
 detecteur = cv2.aruco.ArucoDetector(dictionnaire, params)
 
 MODES = ["ecart entre 2 tags", "distance camera -> tag",
-         "angle entre 2 tags (deg)"]
+         "angle entre 2 tags (deg)", "rotation d'UN tag (deg)"]
 mode = 0
+ref_Ra = ref_Rb = None      # orientation de reference du mode 4
 hist_a, hist_b = deque(maxlen=LISSAGE), deque(maxlen=LISSAGE)
 saisie = ""
 CSV = os.path.abspath("comparaison_calibration.csv")
@@ -126,6 +128,8 @@ print("=" * 64)
 print("MODE 1 (defaut) : ecart entre DEUX tags -> montre les 2 tags ensemble")
 print("MODE 2          : distance camera -> tag")
 print("MODE 3          : angle entre 2 tags coplanaires -> reference = 0 deg")
+print("MODE 4          : rotation d'UN tag -> 'o' fixe la reference, puis")
+print("                  fais tourner le tag d'un angle connu (ex. 90 deg)")
 print("'m' change de mode | tape la mesure au ruban | 's' enregistre | 'q' quitte")
 print(f"Resultats dans : {CSV}")
 print("=" * 64)
@@ -165,7 +169,7 @@ while True:
             detail = f"tag {t1}"
         else:
             detail = "aucun tag detecte"
-    else:                                           # angle entre deux tags
+    elif mode == 2:                                 # angle entre deux tags
         if len(communs) >= 2:
             t1, t2 = communs[0], communs[1]
             mesure_a = angle_entre(pos_a[t1][1], pos_a[t2][1])
@@ -173,6 +177,16 @@ while True:
             detail = f"tags {t1} et {t2} (coplanaires -> attendu 0 deg)"
         else:
             detail = "montre DEUX tags en meme temps"
+    else:                          # rotation d'UN SEUL tag depuis une reference
+        if not communs:
+            detail = "aucun tag detecte"
+        elif ref_Ra is None:
+            detail = "place le tag, puis 'o' pour fixer la reference"
+        else:
+            t1 = communs[0]
+            mesure_a = angle_entre(ref_Ra, pos_a[t1][1])
+            mesure_b = angle_entre(ref_Rb, pos_b[t1][1])
+            detail = f"tag {t1} : rotation depuis la reference"
 
     if mesure_a is not None:
         hist_a.append(mesure_a)
@@ -187,7 +201,7 @@ while True:
     cv2.putText(image, f"MODE : {MODES[mode]}  ({detail})", (10, 26),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
     if d_a is not None:
-        unite = "deg" if mode == 2 else "m"
+        unite = "deg" if mode >= 2 else "m"
         cv2.putText(image, f"A) approximation : {d_a:.3f} {unite}", (10, 56),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
         cv2.putText(image, f"B) calibration   : {d_b:.3f} {unite}", (10, 82),
@@ -196,7 +210,7 @@ while True:
             try:
                 ref = float(saisie)
                 ea, eb = d_a - ref, d_b - ref
-                if mode == 2:
+                if mode >= 2:
                     cv2.putText(image, f"ecart A : {ea:+.2f} deg", (10, 112),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
                     cv2.putText(image, f"ecart B : {eb:+.2f} deg", (10, 136),
@@ -215,9 +229,9 @@ while True:
             except ValueError:
                 pass
 
-    cv2.putText(image, f"reference ({'deg' if mode == 2 else 'm'}) : {saisie or '...'}", (10, H - 38),
+    cv2.putText(image, f"reference ({'deg' if mode >= 2 else 'm'}) : {saisie or '...'}", (10, H - 38),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
-    cv2.putText(image, "m=mode  chiffres=saisir  s=enregistrer  q=quitter",
+    cv2.putText(image, "m=mode  o=ref.orientation  chiffres=saisir  s=enregistrer  q=quitter",
                 (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1)
 
     cv2.imshow("Comparaison des calibrations (q pour quitter)", image)
@@ -229,6 +243,16 @@ while True:
         mode = (mode + 1) % len(MODES)
         hist_a.clear(); hist_b.clear()
         print(f"Mode : {MODES[mode]}")
+    if touche == ord("o"):
+        if communs:
+            t1 = communs[0]
+            ref_Ra = pos_a[t1][1].copy()
+            ref_Rb = pos_b[t1][1].copy()
+            hist_a.clear(); hist_b.clear()
+            print(f"Reference d'orientation fixee sur le tag {t1}. "
+                  f"Fais maintenant tourner le tag d'un angle connu.")
+        else:
+            print("Aucun tag visible : impossible de fixer la reference.")
     if ord("0") <= touche <= ord("9") or touche == ord("."):
         saisie += chr(touche)
     if touche == 8 and saisie:
@@ -248,7 +272,7 @@ while True:
             csv.writer(fic).writerow([
                 MODES[mode], f"{ref:.3f}", f"{d_a:.3f}", f"{ea:+.3f}", pct_a,
                 f"{d_b:.3f}", f"{eb:+.3f}", pct_b])
-        if mode == 2:
+        if mode >= 2:
             print(f"[{MODES[mode]}] reference {ref:.2f} deg | "
                   f"approx {d_a:.2f} ({ea:+.2f} deg) | calib {d_b:.2f} ({eb:+.2f} deg)")
         else:
