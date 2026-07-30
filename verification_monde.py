@@ -5,15 +5,15 @@
 # Thein : un tag est vu en meme temps qu'un tag deja connu), puis la pose de la
 # camera est calculee dans ce repere commun, quel que soit le tag regarde.
 #
-# DEROULE
-#   1. LIAISON : montre les tags 2 par 2 pour les relier (barre de progression).
-#      Le 1er tag vu est l'origine du monde.
-#   2. 'o' : fixe la pose de reference de la camera (regarde le tag de depart).
-#   3. Deplace la camera (mode DEPLACEMENT) ou fais-la pivoter (mode ROTATION)
-#      d'une valeur connue -- tu peux changer de tag librement.
-#   4. Tape la valeur reelle, 's' pour enregistrer.
+# DEROULE (pas d'etape de liaison separee)
+#   1. 'o' : regarde le tag de reference -> il devient l'origine du monde.
+#   2. Deplace la camera vers le 2e tag (mode DEPLACEMENT) ou fais-la pivoter
+#      (mode ROTATION). La liaison des tags se fait TOUTE SEULE en chemin : il
+#      suffit que les deux tags soient un instant visibles ensemble. Ensuite le
+#      tag de reference peut sortir du champ, la mesure continue.
+#   3. Tape la valeur reelle, 's' pour enregistrer.
 #
-# Touches : m = deplacement/rotation | o = reference | r = refaire la liaison
+# Touches : m = deplacement/rotation | o = reference (origine) | r = tout remettre a zero
 #           0-9 et '.' = valeur reelle | RET.ARRIERE = effacer | s = save | q = quit
 import csv
 import os
@@ -26,7 +26,8 @@ CAMERA_INDEX = None
 RESOLUTION = (640, 480)
 
 TAILLE_TAG = 0.223
-ECHANTILLONS_REQUIS = 20     # observations avant de relier un tag
+MIN_LIAISON = 6      # co-visibilites avant d'utiliser un tag (liaison rapide)
+MAX_LIAISON = 60     # on garde ce nombre d'observations pour affiner la liaison
 LISSAGE = 15
 
 K_CALIB = np.array([
@@ -103,9 +104,10 @@ params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
 detecteur = cv2.aruco.ArucoDetector(dictionnaire, params)
 
 carte = {}                       # id -> T_monde_tag (repere commun)
-candidats = defaultdict(list)
+candidats = defaultdict(lambda: deque(maxlen=MAX_LIAISON))
 MODES = ["deplacement camera (m)", "rotation camera (deg)"]
 mode = 0
+origine = None                   # tag choisi comme origine du monde (au 'o')
 ref_p = ref_R = None
 lissage = deque(maxlen=LISSAGE)
 saisie = ""
@@ -117,9 +119,10 @@ if not os.path.exists(CSV):
 
 print("=" * 66)
 print("VERIFICATION DANS UN REPERE MONDE (deplacement libre entre tags)")
-print("  1. montre les tags 2 par 2 pour les relier")
-print("  2. 'o' fixe la reference, puis bouge la camera d'une valeur connue")
-print("  'm' mode | 'r' refaire la liaison | 's' enregistrer | 'q' quitter")
+print("  1. regarde le tag de reference, appuie sur 'o'")
+print("  2. bouge vers le 2e tag : la liaison se fait TOUTE SEULE en chemin")
+print("     (il suffit que les 2 tags soient un instant visibles ensemble)")
+print("  'm' mode | 'r' repartir a zero | 's' enregistrer | 'q' quitter")
 print("=" * 66)
 
 while True:
@@ -141,28 +144,25 @@ while True:
                 poses[int(tid)] = transformation(cv2.Rodrigues(rvec)[0], tvec)
                 surfaces[int(tid)] = cv2.contourArea(pts.astype(np.float32))
 
-    # 1er tag = origine du monde
-    if not carte and poses:
-        ancre = max(poses, key=lambda i: surfaces[i])
-        carte[ancre] = np.eye(4)
-        print(f"ORIGINE du monde = tag {ancre}")
-
-    # liaison automatique des tags (par paires)
-    for B in list(poses):
-        if B in carte:
-            continue
-        connus = [A for A in poses if A in carte]
-        if not connus:
-            continue
-        A = max(connus, key=lambda i: surfaces[i])
-        candidats[B].append(carte[A] @ inverse(poses[A]) @ poses[B])
-        if len(candidats[B]) >= ECHANTILLONS_REQUIS:
-            obs = np.array(candidats[B])
-            T = np.median(obs, axis=0)
-            T[:3, :3] = obs[len(obs) // 2][:3, :3]
-            carte[B] = T
-            candidats.pop(B)
-            print(f"Tag {B} relie. Repere monde : {sorted(carte)}")
+    # liaison automatique et continue des tags (par paires).
+    # Des qu'un tag inconnu B est vu en meme temps qu'un tag connu A, on
+    # accumule sa pose dans le repere monde et on l'utilise tres vite
+    # (>= MIN_LIAISON co-visibilites), tout en continuant a l'affiner.
+    if origine is not None:
+        for B in list(poses):
+            connus = [A for A in poses if A in carte and A != B]
+            if not connus:
+                continue
+            A = max(connus, key=lambda i: surfaces[i])
+            candidats[B].append(carte[A] @ inverse(poses[A]) @ poses[B])
+            if len(candidats[B]) >= MIN_LIAISON:
+                obs = np.array(candidats[B])
+                T = np.median(obs, axis=0)
+                T[:3, :3] = obs[len(obs) // 2][:3, :3]
+                nouveau = B not in carte
+                carte[B] = T
+                if nouveau:
+                    print(f"Tag {B} relie automatiquement. Monde : {sorted(carte)}")
 
     # pose de la camera dans le repere monde (meilleur tag connu visible)
     cam_p = cam_R = None
@@ -191,8 +191,10 @@ while True:
     cv2.putText(image, f"MODE : {MODES[mode]}   monde : {sorted(carte)}", (10, 26),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
     y = 52
-    for B, obs in candidats.items():
-        pct = int(100 * len(obs) / ECHANTILLONS_REQUIS)
+    for B in list(candidats):
+        if B in carte:
+            continue
+        pct = min(100, int(100 * len(candidats[B]) / MIN_LIAISON))
         cv2.putText(image, f"liaison tag {B} : {pct}%", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 170, 255), 2)
         y += 22
@@ -207,7 +209,7 @@ while True:
         y += 24
 
     if ref_p is None:
-        cv2.putText(image, "Appuie sur 'o' pour fixer la reference", (10, y),
+        cv2.putText(image, "Regarde le tag de reference et appuie sur 'o'", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 170, 255), 2)
     elif d is not None:
         cv2.putText(image, f"mouvement mesure : {d:.3f} {unite}", (10, y),
@@ -225,7 +227,7 @@ while True:
 
     cv2.putText(image, f"valeur reelle ({unite}) : {saisie or '...'}", (10, H - 38),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
-    cv2.putText(image, "m=mode o=ref r=reset-liaison s=save q=quit", (10, H - 14),
+    cv2.putText(image, "m=mode o=reference r=zero s=save q=quit", (10, H - 14),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
     cv2.imshow("Verification repere monde (q pour quitter)", image)
@@ -238,18 +240,24 @@ while True:
         lissage.clear(); saisie = ""
         print(f"Mode : {MODES[mode]}")
     if touche == ord("o"):
-        if cam_p is not None:
-            ref_p, ref_R = cam_p.copy(), cam_R.copy()
+        if poses:
+            # le tag regarde devient l'origine du monde ET la reference.
+            origine = max(poses, key=lambda i: surfaces[i])
+            carte.clear(); candidats.clear()
+            carte[origine] = np.eye(4)
+            T_monde_cam = carte[origine] @ inverse(poses[origine])
+            ref_p, ref_R = T_monde_cam[:3, 3].copy(), T_monde_cam[:3, :3].copy()
             lissage.clear()
-            print("Reference fixee. Bouge la camera d'une valeur connue "
-                  "(tu peux changer de tag).")
+            print(f"Reference = tag {origine}. Bouge vers le 2e tag : la "
+                  "liaison se fait toute seule quand les 2 tags se croisent.")
         else:
-            print("Aucun tag connu visible : impossible de fixer la reference.")
+            print("Aucun tag visible : impossible de fixer la reference.")
     if touche == ord("r"):
         carte.clear(); candidats.clear()
+        origine = None
         ref_p = ref_R = None
         lissage.clear()
-        print("Liaison reinitialisee : refais la liaison des tags.")
+        print("Remis a zero : regarde le tag de reference et appuie sur 'o'.")
     if ord("0") <= touche <= ord("9") or touche == ord("."):
         saisie += chr(touche)
     if touche == 8 and saisie:
