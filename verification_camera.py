@@ -123,6 +123,7 @@ detecteur = cv2.aruco.ArucoDetector(dictionnaire, params)
 MODES = ["deplacement camera (m)", "rotation camera (deg)"]
 mode = 0
 ref_pa = ref_Ra = ref_pb = ref_Rb = None     # pose de reference de la camera
+ref_tag = None              # tag sur lequel la reference a ete fixee
 hist_a, hist_b = deque(maxlen=LISSAGE), deque(maxlen=LISSAGE)
 saisie = ""
 
@@ -153,13 +154,22 @@ while True:
     tag_vu = None
     if ids is not None and len(ids) > 0:
         cv2.aruco.drawDetectedMarkers(image, coins, ids)
-        # On utilise le tag le plus gros dans l'image (le plus fiable)
-        aires = [cv2.contourArea(c.reshape(4, 2).astype(np.float32)) for c in coins]
-        i = int(np.argmax(aires))
-        pts = coins[i].reshape(4, 2).astype(np.float64)
-        tag_vu = int(ids.flatten()[i])
-        pa, Ra = pose_camera(pts, K_approx, dist_approx)
-        pb, Rb = pose_camera(pts, K_calib, dist_calib)
+        liste = ids.flatten().tolist()
+        # Une fois la reference posee, on DOIT rester sur le meme tag : les
+        # positions sont exprimees dans le repere du tag, donc comparer des
+        # poses vues via deux tags differents n'aurait aucun sens.
+        if ref_tag is not None and ref_tag in liste:
+            i = liste.index(ref_tag)
+        elif ref_tag is not None:
+            i = None                       # tag de reference absent de l'image
+        else:
+            aires = [cv2.contourArea(c.reshape(4, 2).astype(np.float32)) for c in coins]
+            i = int(np.argmax(aires))      # avant la reference : le plus gros
+        if i is not None:
+            pts = coins[i].reshape(4, 2).astype(np.float64)
+            tag_vu = int(liste[i])
+            pa, Ra = pose_camera(pts, K_approx, dist_approx)
+            pb, Rb = pose_camera(pts, K_calib, dist_calib)
 
     # --- mesure du mouvement depuis la reference ---
     mesure_a = mesure_b = None
@@ -182,8 +192,11 @@ while True:
 
     # --- affichage ---
     unite = "m" if mode == 0 else "deg"
-    cv2.putText(image, f"MODE : {MODES[mode]}", (10, 26),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    titre = f"MODE : {MODES[mode]}"
+    if ref_tag is not None:
+        titre += f"   [reference : tag {ref_tag}]"
+    cv2.putText(image, titre, (10, 26),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
 
     if pb is not None:
         # pose absolue de la camera dans le repere du tag (calibration damier)
@@ -193,6 +206,9 @@ while True:
                     (10, 52), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (0, 255, 255), 2)
         cv2.putText(image, f"   orientation : r={roll:+.0f} p={pitch:+.0f} y={yaw:+.0f} deg",
                     (10, 74), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1)
+    elif ref_tag is not None:
+        cv2.putText(image, f"Tag de reference {ref_tag} hors du champ", (10, 52),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
     else:
         cv2.putText(image, "Aucun tag detecte", (10, 52),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
@@ -230,16 +246,24 @@ while True:
         break
     if touche == ord("m"):
         mode = 1 - mode
+        ref_pa = ref_Ra = ref_pb = ref_Rb = ref_tag = None
         hist_a.clear(); hist_b.clear()
         saisie = ""
-        print(f"Mode : {MODES[mode]}")
+        print(f"Mode : {MODES[mode]} (reference remise a zero, appuie sur 'o')")
     if touche == ord("o"):
         if pa is not None:
             ref_pa, ref_Ra = pa.copy(), Ra.copy()
             ref_pb, ref_Rb = pb.copy(), Rb.copy()
+            ref_tag = tag_vu
             hist_a.clear(); hist_b.clear()
-            print(f"Pose de reference fixee (tag {tag_vu}). "
-                  f"Deplace ou fais pivoter la CAMERA d'une valeur connue.")
+            print(f"Reference fixee sur le tag {ref_tag} : garde CE tag visible "
+                  f"pendant toute la mesure.")
+            if mode == 0:
+                print("  Deplace la CAMERA d'une distance connue (metre ruban),")
+                print("  puis tape cette distance et appuie sur 's'.")
+            else:
+                print("  Fais pivoter la CAMERA d'un angle connu (ex. 90),")
+                print("  puis tape cet angle et appuie sur 's'.")
         else:
             print("Aucun tag visible : impossible de fixer la reference.")
     if ord("0") <= touche <= ord("9") or touche == ord("."):
