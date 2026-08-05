@@ -13,14 +13,24 @@
 #      tag de reference peut sortir du champ, la mesure continue.
 #   3. Tape la valeur reelle, 's' pour enregistrer.
 #
+# FILTRE DE KALMAN (touche 'f')
+#   A chaque image, TOUS les tags connus visibles nourrissent le filtre
+#   (filtre_kalman.py) : leurs estimations se fusionnent et se lissent dans le
+#   temps. L'ecran affiche la position brute ET la position filtree l'une sous
+#   l'autre, avec l'incertitude annoncee par le filtre, pour comparer en direct.
+#
 # Touches : m = deplacement/rotation | o = reference (origine) | r = tout remettre a zero
-#           0-9 et '.' = valeur reelle | RET.ARRIERE = effacer | s = save | q = quit
+#           f = filtre on/off | 0-9 et '.' = valeur reelle | RET.ARRIERE = effacer
+#           s = save | q = quit
 import csv
 import os
+import time
 from collections import defaultdict, deque
 
 import cv2
 import numpy as np
+
+from filtre_kalman import FiltrePose
 
 CAMERA_INDEX = None
 RESOLUTION = (640, 480)
@@ -112,6 +122,27 @@ ref_p = ref_R = None
 lissage = deque(maxlen=LISSAGE)
 saisie = ""
 
+# --- filtre de Kalman (touche 'f' pour l'activer / le couper) --------------
+filtre = FiltrePose(sigma_acceleration=0.4, derive_gyro_deg_s=10.0)
+filtre_actif = True
+dernier_temps = None
+ref_p_filtre = ref_R_filtre = None
+lissage_filtre = deque(maxlen=LISSAGE)
+
+
+def incidence_du_tag(pose_camera_tag):
+    """Angle en degres sous lequel la camera voit ce tag (0 = pile en face).
+
+    La normale du tag dans le repere camera est sa 3e colonne ; le tag est vu
+    d'autant plus de biais que cette normale s'ecarte de l'axe camera->tag."""
+    normale = pose_camera_tag[:3, 2]
+    vers_tag = pose_camera_tag[:3, 3]
+    distance = np.linalg.norm(vers_tag)
+    if distance < 1e-6:
+        return 0.0
+    cos = abs(float(normale @ vers_tag) / distance)
+    return float(np.degrees(np.arccos(np.clip(cos, 0.0, 1.0))))
+
 CSV = os.path.abspath("verification_monde.csv")
 if not os.path.exists(CSV):
     with open(CSV, "w", newline="") as fic:
@@ -173,22 +204,58 @@ while True:
         cam_p = T_monde_cam[:3, 3]
         cam_R = T_monde_cam[:3, :3]
 
-    # mesure du mouvement depuis la reference
+    # --- filtre de Kalman : nourri par TOUS les tags connus visibles --------
+    # Chaque tag donne sa propre estimation de la pose camera dans le monde ;
+    # le filtre les fusionne (les incertitudes s'additionnent) et lisse dans
+    # le temps. La touche 'f' permet de comparer avec/sans en direct.
+    cam_p_filtre = cam_R_filtre = None
+    maintenant = time.time()
+    dt = 0.0 if dernier_temps is None else maintenant - dernier_temps
+    dernier_temps = maintenant
+    if filtre_actif and connus_vus:
+        filtre.predire(dt)
+        for i in connus_vus:
+            T_i = carte[i] @ inverse(poses[i])           # pose camera vue par le tag i
+            filtre.ajouter_tag(T_i[:3, 3], carte[i][:3, 3],
+                               incidence_du_tag(poses[i]),
+                               rotation_mesuree=T_i[:3, :3],
+                               distance=float(np.linalg.norm(poses[i][:3, 3])),
+                               identifiant=i)
+        filtre.appliquer()
+        if filtre.position.demarre:
+            cam_p_filtre = filtre.position.position
+            cam_R_filtre = filtre.orientation.matrice
+            # la reference filtree est la 1ere pose stable apres un 'o'.
+            if ref_p is not None and ref_p_filtre is None:
+                ref_p_filtre = cam_p_filtre.copy()
+                ref_R_filtre = cam_R_filtre.copy()
+
+    # mesure du mouvement depuis la reference (brute, puis filtree)
     mesure = None
     if cam_p is not None and ref_p is not None:
-        if mode == 0:
-            mesure = float(np.linalg.norm(cam_p - ref_p))
-        else:
-            mesure = angle_entre(ref_R, cam_R)
+        mesure = (float(np.linalg.norm(cam_p - ref_p)) if mode == 0
+                  else angle_entre(ref_R, cam_R))
     if mesure is not None:
         lissage.append(mesure)
     else:
         lissage.clear()
     d = sum(lissage) / len(lissage) if lissage else None
 
+    mesure_filtre = None
+    if cam_p_filtre is not None and ref_p_filtre is not None:
+        mesure_filtre = (float(np.linalg.norm(cam_p_filtre - ref_p_filtre)) if mode == 0
+                         else angle_entre(ref_R_filtre, cam_R_filtre))
+    if mesure_filtre is not None:
+        lissage_filtre.append(mesure_filtre)
+    else:
+        lissage_filtre.clear()
+    d_filtre = sum(lissage_filtre) / len(lissage_filtre) if lissage_filtre else None
+
     # --- affichage ---
     unite = "m" if mode == 0 else "deg"
-    cv2.putText(image, f"MODE : {MODES[mode]}   monde : {sorted(carte)}", (10, 26),
+    etat_filtre = "ON" if filtre_actif else "OFF"
+    cv2.putText(image, f"MODE : {MODES[mode]}   monde : {sorted(carte)}   "
+                       f"filtre(f) : {etat_filtre}", (10, 26),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
     y = 52
     for B in list(candidats):
@@ -199,13 +266,20 @@ while True:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 170, 255), 2)
         y += 22
     if cam_p is not None:
-        cv2.putText(image, f"CAMERA monde : x={cam_p[0]:+.2f} y={cam_p[1]:+.2f} "
-                           f"z={cam_p[2]:+.2f} m", (10, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
+        cv2.putText(image, f"CAMERA brute  : x={cam_p[0]:+.2f} y={cam_p[1]:+.2f} "
+                           f"z={cam_p[2]:+.2f} m  ({len(connus_vus)} tag)", (10, y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
         y += 24
     elif not connus_vus:
         cv2.putText(image, "Aucun tag connu visible", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        y += 24
+    if cam_p_filtre is not None:
+        sigma = filtre.position.incertitude_position
+        cv2.putText(image, f"CAMERA filtre : x={cam_p_filtre[0]:+.2f} "
+                           f"y={cam_p_filtre[1]:+.2f} z={cam_p_filtre[2]:+.2f} m  "
+                           f"(+/- {sigma*1000:.0f} mm)", (10, y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 120), 2)
         y += 24
 
     if ref_p is None:
@@ -215,19 +289,28 @@ while True:
         cv2.putText(image, f"mouvement mesure : {d:.3f} {unite}", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
         y += 26
+        if d_filtre is not None:
+            cv2.putText(image, f"      (filtre)   : {d_filtre:.3f} {unite}", (10, y),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 120), 2)
+            y += 26
         if saisie:
             try:
                 reel = float(saisie)
                 e = d - reel
                 fe = f"{e*100:+.1f} cm" if mode == 0 else f"{e:+.2f} deg"
-                cv2.putText(image, f"ecart : {fe}", (10, y),
+                ligne = f"ecart brut : {fe}"
+                if d_filtre is not None:
+                    ef = d_filtre - reel
+                    fef = f"{ef*100:+.1f} cm" if mode == 0 else f"{ef:+.2f} deg"
+                    ligne += f"   filtre : {fef}"
+                cv2.putText(image, ligne, (10, y),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
             except ValueError:
                 pass
 
     cv2.putText(image, f"valeur reelle ({unite}) : {saisie or '...'}", (10, H - 38),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
-    cv2.putText(image, "m=mode o=reference r=zero s=save q=quit", (10, H - 14),
+    cv2.putText(image, "m=mode o=reference r=zero f=filtre s=save q=quit", (10, H - 14),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
     cv2.imshow("Verification repere monde (q pour quitter)", image)
@@ -237,8 +320,12 @@ while True:
         break
     if touche == ord("m"):
         mode = 1 - mode
-        lissage.clear(); saisie = ""
+        lissage.clear(); lissage_filtre.clear(); saisie = ""
         print(f"Mode : {MODES[mode]}")
+    if touche == ord("f"):
+        filtre_actif = not filtre_actif
+        lissage_filtre.clear()
+        print(f"Filtre de Kalman : {'ON' if filtre_actif else 'OFF'}")
     if touche == ord("o"):
         if poses:
             # le tag regarde devient l'origine du monde ET la reference.
@@ -248,6 +335,10 @@ while True:
             T_monde_cam = carte[origine] @ inverse(poses[origine])
             ref_p, ref_R = T_monde_cam[:3, 3].copy(), T_monde_cam[:3, :3].copy()
             lissage.clear()
+            # on repart aussi le filtre depuis cette reference.
+            filtre = FiltrePose(sigma_acceleration=0.4, derive_gyro_deg_s=10.0)
+            ref_p_filtre = ref_R_filtre = None
+            lissage_filtre.clear()
             print(f"Reference = tag {origine}. Bouge vers le 2e tag : la "
                   "liaison se fait toute seule quand les 2 tags se croisent.")
         else:
@@ -257,6 +348,9 @@ while True:
         origine = None
         ref_p = ref_R = None
         lissage.clear()
+        filtre = FiltrePose(sigma_acceleration=0.4, derive_gyro_deg_s=10.0)
+        ref_p_filtre = ref_R_filtre = None
+        lissage_filtre.clear()
         print("Remis a zero : regarde le tag de reference et appuie sur 'o'.")
     if ord("0") <= touche <= ord("9") or touche == ord("."):
         saisie += chr(touche)
