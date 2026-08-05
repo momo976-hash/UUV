@@ -19,10 +19,15 @@
 # Lancement :  python plan_piscine_3d.py
 #              python plan_piscine_3d.py --png   (pas de fenetre, exporte 3 vues)
 import sys
+from pathlib import Path
 
 import numpy as np
 
 EXPORT = "--png" in sys.argv
+
+# L'image part toujours a cote de ce fichier, jamais dans le dossier courant :
+# lance depuis PowerShell, le dossier courant est souvent celui de VS Code.
+IMAGE = Path(__file__).resolve().with_name("plan_piscine_3d.png")
 
 import matplotlib
 if EXPORT:
@@ -345,8 +350,8 @@ def main():
         fig.suptitle("Implantation des 10 AprilTags — bassin 3.80 x 1.67 x 1.00 m",
                      fontsize=12, weight="bold")
         fig.tight_layout()
-        fig.savefig("plan_piscine_3d.png", dpi=160)
-        print("Image enregistree : plan_piscine_3d.png")
+        fig.savefig(IMAGE, dpi=160)
+        print(f"Image enregistree : {IMAGE}")
         return
 
     for cle in list(plt.rcParams):
@@ -407,8 +412,8 @@ def main():
         elif touche == "d":
             camera["azimut"] -= pas_angle
         elif touche == "p":
-            fig.savefig("plan_piscine_3d.png", dpi=200)
-            print("Image enregistree : plan_piscine_3d.png")
+            fig.savefig(IMAGE, dpi=200)
+            print(f"Image enregistree : {IMAGE}")
             return
         elif touche == "h":
             print(AIDE)
