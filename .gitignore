@@ -10,8 +10,9 @@ __pycache__/
 *.csv
 logs/
 
-# Images produites par les scripts (plan_piscine_3d.py --png, etc.)
+# Images produites par les scripts (--png), regenerables a la demande
 plan_piscine_3d.png
+demo_kalman.png
 
 # Fichiers IDE
 .vscode/
