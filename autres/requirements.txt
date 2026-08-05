@@ -3,6 +3,7 @@ numpy             # Algèbre linéaire
 opencv-python     # solvePnP, dessin des axes, affichage temps réel
 pupil-apriltags   # Détecteur AprilTag 3 (cf. Kallwies 2020)
 scipy             # Conversions de rotations (matrice <-> Euler <-> quaternion)
+matplotlib        # Vue 3D manipulable du plan de pose (plan_piscine_3d.py)
 
 # --------------------------------------------------------------------------
 # Dépendance de la caméra Intel RealSense : NE PAS installer maintenant.
