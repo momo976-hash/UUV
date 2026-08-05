@@ -10,6 +10,9 @@ __pycache__/
 *.csv
 logs/
 
+# Images produites par les scripts (plan_piscine_3d.py --png, etc.)
+plan_piscine_3d.png
+
 # Fichiers IDE
 .vscode/
 .idea/
