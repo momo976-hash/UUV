@@ -118,6 +118,37 @@
 # la conclusion qui s'impose n'est pas "toutes les mesures sont fausses"
 # mais "mon etat est faux". Le filtre se recale alors sur la mesure et
 # reouvre son incertitude. C'est ce que fait `max_rejets_consecutifs`.
+#
+# ---------------------------------------------------------------------------
+# 7. LA LIMITE QUE LE FILTRE NE PEUT PAS FRANCHIR : UN TAG QUI BOUGE
+# ---------------------------------------------------------------------------
+# Tout ce qui precede suppose les tags a des positions FIXES et CONNUES.
+# Montes sur des boites en acrylique lestees posees au fond, et non scelles
+# dans du beton, ils ne le sont qu'a peu pres : le souffle des propulseurs,
+# un cable qui accroche, et une boite se decale.
+#
+# Or si un tag se deplace de delta, la position de camera qu'on en deduit
+# se decale de delta AUSSI, exactement, et dans la meme direction. C'est un
+# BIAIS, pas un bruit. Un filtre de Kalman ne sait traiter que du bruit
+# centre : il moyenne le bruit, mais il SUIT le biais.
+#
+# L'ordre de grandeur est brutal. L'erreur mediane apres filtrage vaut
+# 2.1 mm ; une boite decalee de 1 cm produit a elle seule cinq fois tout le
+# reste du budget d'erreur. Autrement dit, des lors que les tags sont sur
+# des supports libres, LA PRECISION DU SYSTEME N'EST PLUS LIMITEE PAR
+# L'OPTIQUE NI PAR LE FILTRE, MAIS PAR LA STABILITE MECANIQUE DES SUPPORTS.
+#
+# La parade est SurveillanceTags, plus bas. Un tag bien enregistre produit
+# une innovation centree sur zero. Un tag qui a bouge produit une
+# innovation dont la MOYENNE derive vers une constante, qui est justement
+# son deplacement. On surveille donc la moyenne glissante, tag par tag.
+#
+# Limite d'observabilite a annoncer honnetement : si un seul tag est
+# visible, rien ne distingue "la camera a bouge" de "le tag a bouge". La
+# detection exige que le tag suspect soit vu, au moins par moments, en meme
+# temps que d'autres.
+from collections import defaultdict, deque
+
 import numpy as np
 
 # Valeurs par defaut calees sur la D435i a 640x480 derriere un hublot plat.
@@ -414,6 +445,160 @@ class FiltreOrientation:
 
 
 # ===========================================================================
+# Surveillance des tags : detecter une boite qui a bouge
+# ===========================================================================
+class SurveillanceTags:
+    """Suit, tag par tag, la moyenne glissante de l'ecart entre la position
+    que CE tag annonce et celle qu'annoncent les autres.
+
+    Tag bien enregistre  -> moyenne qui tend vers zero.
+    Tag qui a bouge      -> moyenne qui tend vers son deplacement.
+
+    Le module donne donc non seulement QUEL support a bouge, mais DE
+    COMBIEN et DANS QUELLE DIRECTION : de quoi corriger la carte sans tout
+    reenregistrer.
+
+    Un tag est confronte aux AUTRES TAGS DE LA MEME IMAGE, jamais a la
+    sortie du filtre. La raison est subtile mais decisive : la sortie du
+    filtre retarde sur le mouvement reel, et ce retard depend de quel tag
+    est visible. Le confronter au filtre fabrique donc de faux coupables.
+    Deux mesures prises au meme instant, elles, n'ont aucun retard relatif.
+
+    Consequence assumee : un tag vu SEUL n'est jamais mis en defaut. C'est
+    la limite d'observabilite, pas un defaut d'implementation -- rien ne
+    distingue alors "la camera a bouge" de "le tag a bouge".
+    """
+
+    def __init__(self, fenetre=60, seuil_mm=8.0, minimum_observations=25):
+        # Fenetre courte volontairement : elle doit se vider de l'ancien
+        # regime en quelques secondes de co-visibilite, sinon un deplacement
+        # recent reste dilue par les observations d'avant et l'amplitude
+        # annoncee est sous-estimee. Le bruit residuel apres moyenne sur 60
+        # vaut environ 1 mm, tres en dessous du seuil de 8 mm.
+        self.fenetre = int(fenetre)
+        self.seuil = float(seuil_mm) / 1000.0
+        self.minimum = int(minimum_observations)
+        self.ecarts = defaultdict(lambda: deque(maxlen=self.fenetre))
+
+    def observer_groupe(self, mesures):
+        """`mesures` : [(identifiant, position, covariance)] d'une meme image.
+
+        On enregistre l'ecart PAR PAIRE. Dans ce bassin on ne voit jamais
+        plus de deux tags a la fois : un ecart de paire dit qu'un des deux a
+        bouge, sans dire lequel. C'est en recoupant plusieurs partenaires
+        qu'on tranche.
+        """
+        valides = [(i, p, C) for i, p, C in mesures if i is not None]
+        for rang_a in range(len(valides)):
+            for rang_b in range(rang_a + 1, len(valides)):
+                ia, pa, Ca = valides[rang_a]
+                ib, pb, Cb = valides[rang_b]
+                pa, pb = np.asarray(pa, dtype=float), np.asarray(pb, dtype=float)
+                # Poids inverse de la variance de la difference : une paire
+                # vue de tres loin ou tres de biais ne doit pas peser autant
+                # qu'une paire vue de pres et de face.
+                poids = 1.0 / max(np.trace(np.asarray(Ca) + np.asarray(Cb)), 1e-12)
+                if ia < ib:
+                    self.ecarts[(ia, ib)].append((pa - pb, poids))
+                else:
+                    self.ecarts[(ib, ia)].append((pb - pa, poids))
+
+    def _moyenne_ponderee(self, observations):
+        vecteurs = np.array([v for v, _ in observations])
+        poids = np.array([w for _, w in observations])
+        return (vecteurs * poids[:, None]).sum(axis=0) / poids.sum()
+
+    def _ecarts_par_partenaire(self):
+        """{tag: {partenaire: ecart moyen de la position deduite de tag}}."""
+        resultat = defaultdict(dict)
+        for (i, j), observations in self.ecarts.items():
+            if len(observations) < self.minimum:
+                continue
+            moyenne = self._moyenne_ponderee(observations)
+            resultat[i][j] = moyenne
+            resultat[j][i] = -moyenne
+        return resultat
+
+    def suspects(self):
+        """Tags convaincus : {identifiant: (norme, vecteur_deplacement)}.
+
+        Un tag est retenu s'il contredit AU MOINS DEUX partenaires distincts,
+        et toujours dans le meme sens. Contredire un seul voisin ne suffit
+        pas : c'est peut-etre le voisin qui a bouge.
+
+        Si la boite a bouge de d, la position deduite de ce tag se decale de
+        -d : on part de la position supposee du tag, restee celle d'avant.
+        Le deplacement est donc l'oppose de l'ecart moyen.
+        """
+        convaincus = {}
+        for tag, partenaires in self._ecarts_par_partenaire().items():
+            grands = [v for v in partenaires.values() if np.linalg.norm(v) > self.seuil]
+            if len(grands) < 2:
+                continue
+            coherent = all(
+                float(a @ b) / (np.linalg.norm(a) * np.linalg.norm(b)) > 0.5
+                for k, a in enumerate(grands) for b in grands[k + 1:])
+            if coherent:
+                moyen = np.mean(np.array(grands), axis=0)
+                convaincus[tag] = (float(np.linalg.norm(moyen)), -moyen)
+        return convaincus
+
+    def paires_douteuses(self):
+        """Paires en desaccord dont aucun membre n'est formellement convaincu."""
+        convaincus = set(self.suspects())
+        douteuses = {}
+        for (i, j), observations in self.ecarts.items():
+            if len(observations) < self.minimum:
+                continue
+            norme = float(np.linalg.norm(self._moyenne_ponderee(observations)))
+            if norme > self.seuil and i not in convaincus and j not in convaincus:
+                douteuses[(i, j)] = norme
+        return douteuses
+
+    def suspect_principal(self):
+        """Tag commun a plusieurs paires en desaccord.
+
+        Indice plus faible qu'une conviction, mais souvent suffisant : si
+        toutes les paires qui se disputent contiennent le meme tag, c'est
+        le denominateur commun qu'il faut aller regarder. Utile quand les
+        donnees manquent pour trancher par coherence de direction.
+        """
+        douteuses = self.paires_douteuses()
+        if len(douteuses) < 2:
+            return None
+        # On cumule l'AMPLITUDE des desaccords plutot que leur nombre : une
+        # paire qui se dispute de 21 mm accuse davantage qu'une paire a 8 mm.
+        scores = defaultdict(float)
+        paires = defaultdict(int)
+        for (i, j), norme in douteuses.items():
+            for tag in (i, j):
+                scores[tag] += norme
+                paires[tag] += 1
+        ordre = sorted(scores.items(), key=lambda couple: -couple[1])
+        meilleur = ordre[0][0]
+        if paires[meilleur] < 2:
+            return None
+        if len(ordre) > 1 and ordre[0][1] < 1.3 * ordre[1][1]:
+            return None            # trop serre pour designer qui que ce soit
+        return meilleur
+
+    def rapport(self):
+        lignes = []
+        for identifiant, (norme, vecteur) in sorted(self.suspects().items()):
+            lignes.append(f"  tag {identifiant} : boite deplacee de {norme*1000:.0f} mm "
+                          f"({vecteur[0]*1000:+.0f}, {vecteur[1]*1000:+.0f}, "
+                          f"{vecteur[2]*1000:+.0f}) mm  [confirme par plusieurs voisins]")
+        for (i, j), norme in sorted(self.paires_douteuses().items()):
+            lignes.append(f"  paire {i}-{j} : desaccord de {norme*1000:.0f} mm, "
+                          "aucun des deux n'est formellement en cause")
+        principal = self.suspect_principal()
+        if principal is not None:
+            lignes.append(f"  -> tag {principal} present dans toutes les paires en "
+                          "desaccord : c'est la boite a verifier en premier")
+        return "\n".join(lignes) if lignes else "  aucun tag suspect"
+
+
+# ===========================================================================
 # Facade : les deux filtres cote a cote
 # ===========================================================================
 class FiltrePose:
@@ -426,9 +611,11 @@ class FiltrePose:
         filtre.appliquer()
     """
 
-    def __init__(self, sigma_acceleration=0.5, derive_gyro_deg_s=2.0):
+    def __init__(self, sigma_acceleration=0.5, derive_gyro_deg_s=2.0,
+                 seuil_deplacement_mm=8.0):
         self.position = FiltreKalmanPosition(sigma_acceleration)
         self.orientation = FiltreOrientation(derive_gyro_deg_s)
+        self.surveillance = SurveillanceTags(seuil_mm=seuil_deplacement_mm)
         self._mesures = []
         self._orientations = []
 
@@ -437,11 +624,12 @@ class FiltrePose:
         self.orientation.predire(dt)
 
     def ajouter_tag(self, position_camera_estimee, position_tag, incidence_deg,
-                    rotation_mesuree=None, distance=None):
+                    rotation_mesuree=None, distance=None, identifiant=None):
         """Empile la contribution d'un tag pour l'image courante."""
         covariance = covariance_position_tag(position_camera_estimee, position_tag,
                                              incidence_deg)
-        self._mesures.append((np.asarray(position_camera_estimee, dtype=float), covariance))
+        self._mesures.append((np.asarray(position_camera_estimee, dtype=float),
+                              covariance, identifiant))
         if rotation_mesuree is not None:
             if distance is None:
                 distance = float(np.linalg.norm(np.asarray(position_tag, dtype=float)
@@ -454,8 +642,12 @@ class FiltrePose:
         nombre = len(self._mesures)
         acceptee = False
         if nombre:
-            z, R = fusionner_positions(self._mesures)
+            z, R = fusionner_positions([(p, C) for p, C, _ in self._mesures])
             acceptee, _ = self.position.corriger(z, R)
+            # chaque tag est confronte aux autres tags de la MEME image :
+            # celui qui s'en ecarte systematiquement a bouge.
+            self.surveillance.observer_groupe(
+                [(identifiant, p, C) for p, C, identifiant in self._mesures])
         # l'orientation la mieux informee est celle du tag au plus petit sigma
         if self._orientations:
             rotation, sigma = min(self._orientations, key=lambda couple: couple[1])
@@ -547,6 +739,30 @@ def _auto_test():
     print(f"orientation : bruit tag {np.degrees(sigma):.2f} deg -> "
           f"apres filtrage {np.mean(ecarts[-100:]):.2f} deg")
     assert np.mean(ecarts[-100:]) < np.degrees(sigma)
+
+    # -- detection d'une boite deplacee -------------------------------------
+    surveillance = SurveillanceTags(seuil_mm=5.0, minimum_observations=20)
+    supports = {10: np.array([1.5, 0.0, 0.35]),
+                11: np.array([2.4, 0.0, 0.65]),
+                12: np.array([0.0, 0.8, 0.50])}
+    pousse = np.array([0.018, -0.006, 0.0])       # 19 mm sur la boite 11
+    camera = np.array([1.2, 1.4, 0.5])
+    for _ in range(150):
+        groupe = []
+        for tid, endroit in supports.items():
+            C = covariance_position_tag(camera, endroit, 20.0)
+            biais = -pousse if tid == 11 else np.zeros(3)
+            z = camera + biais + generateur.multivariate_normal(np.zeros(3), C)
+            groupe.append((tid, z, C))
+        surveillance.observer_groupe(groupe)
+    convaincus = surveillance.suspects()
+    assert 11 in convaincus, f"la boite 11 doit etre detectee, obtenu {sorted(convaincus)}"
+    assert set(convaincus) == {11}, f"aucune autre ne doit l'etre : {sorted(convaincus)}"
+    estime = convaincus[11][1]
+    erreur = float(np.linalg.norm(estime - pousse))
+    print(f"boite deplacee de {1000*np.linalg.norm(pousse):.0f} mm -> detectee a "
+          f"{1000*convaincus[11][0]:.0f} mm (erreur {1000*erreur:.1f} mm)")
+    assert erreur < 0.004, "le deplacement estime doit etre juste a 4 mm pres"
 
     print("=" * 68)
     print("TOUS LES TESTS PASSENT")

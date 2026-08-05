@@ -35,7 +35,7 @@ from plan_piscine_3d import TAGS, LONGUEUR, LARGEUR, visibles_depuis
 IMAGE = Path(__file__).resolve().with_name("demo_kalman.png")
 
 FREQUENCE = 30.0
-DUREE = 40.0
+DUREE = 60.0                   # un vrai essai en bassin dure des minutes
 BULLES = (18.0, 21.0)          # rideau de bulles des propulseurs
 PROBA_ABERRATION = 0.015
 
@@ -46,7 +46,26 @@ PROBA_ABERRATION = 0.015
 SIGMA_ACCELERATION = 0.4       # m/s^2
 DERIVE_GYRO = 10.0             # deg/s
 
+# Les tags sont montes sur des boites en acrylique lestees, pas scellees.
+# On simule le souffle des propulseurs qui pousse une boite de 2 cm en
+# cours de route : le filtre continue de croire la carte d'origine.
+BOITE_DEPLACEE = 2
+INSTANT_DEPLACEMENT = 24.0     # s
+DEPLACEMENT = np.array([0.020, -0.008, 0.0])   # m
+
 POSITION_TAG = {tid: np.array([x, y, z]) for tid, _, x, y, z, _ in TAGS}
+
+
+def decalage_carte(tid, t):
+    """Ecart entre la carte (ce que le filtre croit) et la realite.
+
+    Un tag deplace de delta decale d'autant la position de camera qu'on en
+    deduit, puisque celle-ci se calcule EN PARTANT de la position supposee
+    du tag. C'est un biais pur, et un filtre de Kalman suit les biais.
+    """
+    if tid == BOITE_DEPLACEE and t >= INSTANT_DEPLACEMENT:
+        return -DEPLACEMENT
+    return np.zeros(3)
 
 
 def rotation_camera(azimut, roulis, tangage):
@@ -98,7 +117,8 @@ def simuler(graine=7):
         mesure_brute, angle_brut = None, None
         for tid, distance, incidence, _ in vus:
             C = covariance_position_tag(position_vraie, POSITION_TAG[tid], incidence)
-            position_mesuree = position_vraie + generateur.multivariate_normal(np.zeros(3), C)
+            position_mesuree = (position_vraie + decalage_carte(tid, t)
+                                + generateur.multivariate_normal(np.zeros(3), C))
 
             sigma_angle = ecart_type_angle_tag(distance, incidence)
             perturbation = generateur.normal(0.0, sigma_angle, 3)
@@ -114,7 +134,8 @@ def simuler(graine=7):
                 q_mesure = np.roll(q_mesure, 2)
 
             filtre.ajouter_tag(position_mesuree, POSITION_TAG[tid], incidence,
-                               rotation_mesuree=q_mesure, distance=distance)
+                               rotation_mesuree=q_mesure, distance=distance,
+                               identifiant=tid)
             if mesure_brute is None:
                 mesure_brute, angle_brut = position_mesuree, angle_quaternions(q_mesure, q_vrai)
 
@@ -144,6 +165,7 @@ def simuler(graine=7):
     journal["rejets_total"] = filtre.position.rejets
     journal["rejets_angle"] = filtre.orientation.rejets
     journal["reprises"] = filtre.position.reprises + filtre.orientation.reprises
+    journal["surveillance"] = filtre.surveillance
     return journal
 
 
@@ -206,6 +228,19 @@ def resume(journal):
     print(f"   aberrations rejetees : {journal['rejets_total']} en position, "
           f"{journal['rejets_angle']} en orientation")
     print(f"   reprises apres verrouillage : {journal['reprises']}")
+    print("-" * 72)
+    print(f"D. SURVEILLANCE DES SUPPORTS")
+    print(f"   boite {BOITE_DEPLACEE} reellement poussee de "
+          f"{1000*np.linalg.norm(DEPLACEMENT):.0f} mm "
+          f"({1000*DEPLACEMENT[0]:+.0f}, {1000*DEPLACEMENT[1]:+.0f}, "
+          f"{1000*DEPLACEMENT[2]:+.0f}) a t = {INSTANT_DEPLACEMENT:.0f} s")
+    print("   ce que la surveillance en dit :")
+    print(journal["surveillance"].rapport())
+    print("")
+    print("   A noter dans le tableau A : apres t = 24 s le filtre SUIT ce biais,")
+    print("   il ne peut pas le corriger. C'est pour cela que le 95e centile filtre")
+    print("   finit par depasser le brut. Un Kalman moyenne le bruit, jamais un")
+    print("   biais : la stabilite mecanique des supports n'est pas negociable.")
     print("=" * 72)
 
 
