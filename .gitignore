@@ -17,3 +17,4 @@ demo_kalman.png
 # Fichiers IDE
 .vscode/
 .idea/
+bruit_tag.csv
