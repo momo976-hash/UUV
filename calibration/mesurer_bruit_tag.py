@@ -44,6 +44,12 @@ CAMERA_INDEX = None
 RESOLUTION = (640, 480)
 TAILLE_TAG = 0.223
 IMAGES_PAR_CAPTURE = 300
+FREQUENCE_SUPPOSEE = 30.0
+
+# Au-dela de cette vitesse, l'image bouge de plus d'un pixel pendant le temps
+# de pose : le flou de bouge deforme les coins et la mesure ne veut plus rien
+# dire. Repere : v_limite ~ d / (focale x temps_de_pose).
+VITESSE_MAX_CONSEILLEE = 0.15    # m/s
 
 # Calibration EN AIR (ce script se fait en air ; sous l'eau, multiplier par 1.33)
 K_CALIB = np.array([
@@ -174,29 +180,57 @@ def tableau(lignes):
     sortie.append("-" * 96)
 
     # --- les deux regimes se resument separement ---------------------------
+    # On prend la MEDIANE et non la moyenne : une seule capture ratee (geste
+    # trop brusque, tag mal eclaire) suffirait sinon a tirer le resultat.
     poses = [l for l in lignes if l.get("mode", "pose") == "pose"]
     bouges = [l for l in lignes if l.get("mode") == "bouge"]
-    moyenne = lambda ens: np.mean([float(l["sigma_pixel"]) for l in ens])
+    sigmas = lambda ens: np.array([float(l["sigma_pixel"]) for l in ens])
     if poses:
-        sortie.append(f"sigma_pixel camera POSEE  : {moyenne(poses):.3f} px"
+        sortie.append(f"sigma_pixel camera POSEE     : "
+                      f"{np.median(sigmas(poses)):.3f} px (mediane)"
                       "   <- plancher, meilleur cas absolu")
     if bouges:
-        sortie.append(f"sigma_pixel camera QUI BOUGE : {moyenne(bouges):.3f} px"
+        med = float(np.median(sigmas(bouges)))
+        sortie.append(f"sigma_pixel camera QUI BOUGE : {med:.3f} px (mediane)"
                       "   <- LA valeur a mettre dans filtre_kalman.py")
         if poses:
-            sortie.append(f"                       le mouvement degrade d'un facteur "
-                          f"{moyenne(bouges)/max(moyenne(poses), 1e-9):.1f}")
+            sortie.append(f"                               le mouvement degrade d'un "
+                          f"facteur {med/max(np.median(sigmas(poses)), 1e-9):.1f}")
     else:
         sortie.append("Aucune capture en mouvement ('d'). Le filtre a besoin du bruit")
         sortie.append("EN CONDITIONS : camera posee, c'est le meilleur cas, pas l'usage.")
 
-    # --- verification des lois en d et d^2 ---------------------------------
-    for nom_regime, ensemble in (("camera posee", poses), ("camera qui bouge", bouges)):
+    # --- captures suspectes ------------------------------------------------
+    for nom_regime, ensemble in (("posee", poses), ("bouge", bouges)):
         if len(ensemble) < 3:
             continue
-        d = np.array([float(l["distance_m"]) for l in ensemble])
+        valeurs = sigmas(ensemble)
+        med = float(np.median(valeurs))
+        for ligne, valeur in zip(ensemble, valeurs):
+            if valeur > 3 * med:
+                sortie.append(f"  !! capture '{nom_regime}' a "
+                              f"{float(ligne['distance_m']):.2f} m : "
+                              f"{valeur:.3f} px, soit {valeur/med:.0f}x la mediane. "
+                              "Geste trop brusque ? A refaire.")
+
+    # --- verification des lois en d et d^2 ---------------------------------
+    for nom_regime, ensemble in (("camera posee", poses), ("camera qui bouge", bouges)):
         sortie.append("")
+        if len(ensemble) < 3:
+            sortie.append(f"VERIFICATION DU MODELE — {nom_regime} : "
+                          f"{len(ensemble)} capture(s), il en faut 3.")
+            continue
+        d = np.array([float(l["distance_m"]) for l in ensemble])
+        etendue = float(d.max() / max(d.min(), 1e-9))
         sortie.append(f"VERIFICATION DU MODELE — {nom_regime} (pente en log-log)")
+        if etendue < 2.0:
+            # Ajuster une loi de puissance demande un bras de levier suffisant :
+            # sur une plage trop courte, le bruit domine la pente.
+            sortie.append(f"  distances de {d.min():.2f} a {d.max():.2f} m, soit un "
+                          f"rapport de {etendue:.1f}x seulement.")
+            sortie.append("  TROP ETROIT pour conclure : il faut au moins un rapport "
+                          "de 3x (ex. 0.6 m a 2 m).")
+            continue
         for nom, cle, attendu in (("lateral", "sigma_lateral_mm", 1.0),
                                   ("profondeur", "sigma_profondeur_mm", 2.0)):
             valeurs = np.array([float(l[cle]) for l in ensemble])
@@ -206,10 +240,6 @@ def tableau(lignes):
                 verdict = "conforme" if abs(pente - attendu) < 0.5 else "NON CONFORME"
                 sortie.append(f"  {nom:<11} erreur ~ d^{pente:.2f}  "
                               f"(le modele predit d^{attendu:.0f})  -> {verdict}")
-    if len(poses) < 3 and len(bouges) < 3:
-        sortie.append("")
-        sortie.append("Fais au moins 3 captures a des distances differentes "
-                      "pour verifier les lois en d et d^2.")
     sortie.append("=" * 96)
     return "\n".join(sortie)
 
@@ -282,6 +312,9 @@ def main():
             capture["coins"].append(vu[1])
             capture["positions"].append(vu[3].flatten())
             capture["incidences"].append(incidence(vu[2], vu[3]))
+            if len(capture["positions"]) >= 2:
+                pas = np.linalg.norm(capture["positions"][-1] - capture["positions"][-2])
+                capture["vitesses"].append(pas * FREQUENCE_SUPPOSEE)
             if len(capture["positions"]) >= IMAGES_PAR_CAPTURE:
                 dynamique = capture["mode"] == "bouge"
                 resultat = analyser(capture["coins"], capture["positions"],
@@ -303,6 +336,13 @@ def main():
                       f"(modele : {resultat['lateral_theorique_mm']:.2f} mm)")
                 print(f"  bruit profondeur = {resultat['sigma_profondeur_mm']:.2f} mm "
                       f"(modele : {resultat['profondeur_theorique_mm']:.2f} mm)")
+                if capture["vitesses"]:
+                    rapide = float(np.mean(capture["vitesses"]))
+                    if rapide > VITESSE_MAX_CONSEILLEE:
+                        print(f"  !! vitesse moyenne {rapide*100:.0f} cm/s, au-dessus "
+                              f"des {VITESSE_MAX_CONSEILLEE*100:.0f} cm/s conseilles.")
+                        print("     Le flou de bouge gonfle la mesure : capture a refaire "
+                              "plus lentement.")
                 capture = None
 
         # --- affichage ---------------------------------------------------
@@ -314,6 +354,14 @@ def main():
                         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
             cv2.rectangle(image, (10, 44), (10 + int(400 * fait / IMAGES_PAR_CAPTURE), 56),
                           (0, 0, 255), -1)
+            if capture["vitesses"]:
+                recentes = capture["vitesses"][-10:]
+                vitesse = float(np.mean(recentes))
+                trop = vitesse > VITESSE_MAX_CONSEILLEE
+                cv2.putText(image, f"vitesse {vitesse*100:5.1f} cm/s   "
+                                   f"{'>>> TROP VITE <<<' if trop else 'ok'}",
+                            (10, 82), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                            (0, 0, 255) if trop else (0, 220, 0), 2)
         elif vu is not None:
             distance = float(np.linalg.norm(vu[3]))
             cv2.putText(image, f"tag {vu[0]} a {distance:.2f} m, "
@@ -338,7 +386,7 @@ def main():
             else:
                 mode = "pose" if touche == ord("c") else "bouge"
                 capture = {"coins": [], "positions": [], "incidences": [],
-                           "mode": mode}
+                           "vitesses": [], "mode": mode}
                 if mode == "pose":
                     print(f"Capture IMMOBILE... ne touche a rien "
                           f"({IMAGES_PAR_CAPTURE} images)")
