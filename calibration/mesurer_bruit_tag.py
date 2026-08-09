@@ -26,9 +26,14 @@
 #   2. Place un tag devant, bien visible, a environ 50 cm.
 #   3. Appuie sur 'c'. Ne touche plus a rien pendant la capture.
 #   4. Recommence a 1 m, 1.5 m, 2 m... (touche 'c' a chaque fois)
-#   5. 't' affiche le tableau recapitulatif et la verification des lois.
+#   5. REFAIS LA MEME CHOSE AVEC 'd', camera EN MAIN, en la deplacant
+#      lentement. Camera posee, on mesure le meilleur cas absolu ; or dans
+#      la piscine elle bougera, avec du flou de bouge. C'est cette
+#      deuxieme valeur, plus grande, qu'il faut donner au filtre.
+#   6. 't' affiche le tableau recapitulatif et la verification des lois.
 #
-# Touches : c = capturer | t = tableau | e = effacer les mesures | q = quitter
+# Touches : c = capture camera posee | d = capture camera qui bouge
+#           t = tableau | e = effacer les mesures | q = quitter
 import csv
 from pathlib import Path
 
@@ -50,38 +55,86 @@ DIST_CALIB = np.array([0.013835, 0.733706, -0.002333, 0.001136, -2.707687],
                       dtype=np.float64)
 
 CSV = Path(__file__).resolve().with_name("bruit_tag.csv")
-COLONNES = ["distance_m", "incidence_deg", "images", "sigma_pixel",
+COLONNES = ["mode", "distance_m", "incidence_deg", "images", "sigma_pixel",
             "sigma_lateral_mm", "sigma_profondeur_mm",
             "lateral_theorique_mm", "profondeur_theorique_mm"]
 
 
-def analyser(coins, positions, focale, taille_tag):
+def _poids_lissage(demi_fenetre, degre):
+    """Poids d'un lissage polynomial local (Savitzky-Golay) et son biais.
+
+    Renvoie aussi le facteur par lequel la variance des residus sous-estime
+    la vraie variance du bruit : le lissage absorbe une part du bruit.
+    """
+    x = np.arange(-demi_fenetre, demi_fenetre + 1, dtype=float)
+    A = np.vander(x, degre + 1, increasing=True)
+    # la valeur lissee au centre est le terme constant de l'ajustement local
+    w = np.linalg.pinv(A)[0]
+    correction = 1.0 - 2.0 * w[demi_fenetre] + float(w @ w)
+    return w, correction
+
+
+def separer_bruit(valeurs, demi_fenetre=7, degre=2):
+    """Separe un mouvement LISSE d'un bruit rapide.
+
+    Camera immobile, tout est bruit. Camera qui bouge, il faut d'abord
+    retirer le mouvement reel : on l'ajuste localement par un polynome et
+    on ne garde que ce qui ne s'y ajuste pas.
+
+    Renvoie (partie_lisse, bruit) avec le bruit deja corrige du biais
+    d'absorption du lissage.
+    """
+    valeurs = np.asarray(valeurs, dtype=float)
+    forme = valeurs.shape
+    plat = valeurs.reshape(forme[0], -1)
+    w, correction = _poids_lissage(demi_fenetre, degre)
+
+    lisse = np.empty((plat.shape[0] - 2 * demi_fenetre, plat.shape[1]))
+    for colonne in range(plat.shape[1]):
+        lisse[:, colonne] = np.convolve(plat[:, colonne], w[::-1], mode="valid")
+    utile = plat[demi_fenetre:plat.shape[0] - demi_fenetre]
+    bruit = (utile - lisse) / np.sqrt(correction)
+
+    nouvelle_forme = (lisse.shape[0],) + forme[1:]
+    return lisse.reshape(nouvelle_forme), bruit.reshape(nouvelle_forme)
+
+
+def analyser(coins, positions, focale, taille_tag, dynamique=False):
     """Coeur du calcul, isole de la camera pour pouvoir etre teste.
 
     coins     : (N, 4, 2) positions des 4 coins en pixels, sur N images
     positions : (N, 3) position du tag dans le repere camera, sur N images
+    dynamique : True si la camera bougeait pendant la capture.
     """
     coins = np.asarray(coins, dtype=float)
     positions = np.asarray(positions, dtype=float)
 
+    if dynamique:
+        _, bruit_coins = separer_bruit(coins)
+        lisse, bruit_positions = separer_bruit(positions)
+        reference = lisse                      # la trajectoire, sans le bruit
+    else:
+        bruit_coins = coins - coins.mean(axis=0)
+        bruit_positions = positions - positions.mean(axis=0)
+        reference = np.repeat(positions.mean(axis=0)[None], len(positions), axis=0)
+
     # --- bruit des coins, en pixels ---------------------------------------
-    # ecart-type de chaque coordonnee de chaque coin, puis moyenne quadratique
-    sigma_pixel = float(np.sqrt(np.mean(np.var(coins, axis=0))))
+    sigma_pixel = float(np.sqrt(np.mean(np.square(bruit_coins))))
 
     # --- bruit de position, decompose lateral / profondeur -----------------
-    centre = positions.mean(axis=0)
-    distance = float(np.linalg.norm(centre))
-    u = centre / distance                      # axe camera -> tag
-    residus = positions - centre
-    le_long = residus @ u                      # composante en profondeur
-    en_travers = residus - np.outer(le_long, u)
-    sigma_profondeur = float(np.std(le_long))
+    # l'axe de visee change quand la camera bouge : on le reprend a chaque image
+    distances = np.linalg.norm(reference, axis=1)
+    distance = float(np.mean(distances))
+    u = reference / distances[:, None]
+    le_long = np.einsum("ij,ij->i", bruit_positions, u)
+    en_travers = bruit_positions - le_long[:, None] * u
+    sigma_profondeur = float(np.sqrt(np.mean(le_long ** 2)))
     # deux degres de liberte lateraux : on ramene a un ecart-type par axe
     sigma_lateral = float(np.sqrt(np.mean(np.sum(en_travers ** 2, axis=1)) / 2.0))
 
     return {
         "distance_m": distance,
-        "images": len(positions),
+        "images": len(bruit_positions),
         "sigma_pixel": sigma_pixel,
         "sigma_lateral_mm": 1000 * sigma_lateral,
         "sigma_profondeur_mm": 1000 * sigma_profondeur,
@@ -106,42 +159,58 @@ def incidence(rvec, tvec):
 def tableau(lignes):
     if not lignes:
         return "Aucune mesure. Appuie sur 'c' devant un tag."
-    sortie = ["", "=" * 92,
-              "MESURES DE BRUIT — camera immobile, tag immobile", "=" * 92,
-              f"{'dist':>6} {'incid':>6} {'img':>5} {'sigma_px':>9} "
+    sortie = ["", "=" * 96, "MESURES DE BRUIT DE DETECTION", "=" * 96,
+              f"{'mode':>7} {'dist':>6} {'incid':>6} {'img':>5} {'sigma_px':>9} "
               f"{'lat_mes':>9} {'lat_th':>8} {'prof_mes':>9} {'prof_th':>8}   unites",
-              "-" * 92]
+              "-" * 96]
     for l in lignes:
         sortie.append(
+            f"{l.get('mode', 'pose'):>7} "
             f"{float(l['distance_m']):6.2f} {float(l['incidence_deg']):6.1f} "
             f"{int(float(l['images'])):5d} {float(l['sigma_pixel']):9.3f} "
             f"{float(l['sigma_lateral_mm']):9.2f} {float(l['lateral_theorique_mm']):8.2f} "
             f"{float(l['sigma_profondeur_mm']):9.2f} "
             f"{float(l['profondeur_theorique_mm']):8.2f}   m/deg/px/mm")
-    sortie.append("-" * 92)
-    sortie.append(f"sigma_pixel MOYEN : "
-                  f"{np.mean([float(l['sigma_pixel']) for l in lignes]):.3f} px"
-                  "     <-- la valeur a mettre dans filtre_kalman.py")
+    sortie.append("-" * 96)
+
+    # --- les deux regimes se resument separement ---------------------------
+    poses = [l for l in lignes if l.get("mode", "pose") == "pose"]
+    bouges = [l for l in lignes if l.get("mode") == "bouge"]
+    moyenne = lambda ens: np.mean([float(l["sigma_pixel"]) for l in ens])
+    if poses:
+        sortie.append(f"sigma_pixel camera POSEE  : {moyenne(poses):.3f} px"
+                      "   <- plancher, meilleur cas absolu")
+    if bouges:
+        sortie.append(f"sigma_pixel camera QUI BOUGE : {moyenne(bouges):.3f} px"
+                      "   <- LA valeur a mettre dans filtre_kalman.py")
+        if poses:
+            sortie.append(f"                       le mouvement degrade d'un facteur "
+                          f"{moyenne(bouges)/max(moyenne(poses), 1e-9):.1f}")
+    else:
+        sortie.append("Aucune capture en mouvement ('d'). Le filtre a besoin du bruit")
+        sortie.append("EN CONDITIONS : camera posee, c'est le meilleur cas, pas l'usage.")
 
     # --- verification des lois en d et d^2 ---------------------------------
-    if len(lignes) >= 3:
-        d = np.array([float(l["distance_m"]) for l in lignes])
-        lat = np.array([float(l["sigma_lateral_mm"]) for l in lignes])
-        prof = np.array([float(l["sigma_profondeur_mm"]) for l in lignes])
+    for nom_regime, ensemble in (("camera posee", poses), ("camera qui bouge", bouges)):
+        if len(ensemble) < 3:
+            continue
+        d = np.array([float(l["distance_m"]) for l in ensemble])
         sortie.append("")
-        sortie.append("VERIFICATION DU MODELE (pente en echelle log-log)")
-        for nom, valeurs, attendu in (("lateral", lat, 1.0), ("profondeur", prof, 2.0)):
+        sortie.append(f"VERIFICATION DU MODELE — {nom_regime} (pente en log-log)")
+        for nom, cle, attendu in (("lateral", "sigma_lateral_mm", 1.0),
+                                  ("profondeur", "sigma_profondeur_mm", 2.0)):
+            valeurs = np.array([float(l[cle]) for l in ensemble])
             bons = valeurs > 0
             if bons.sum() >= 3:
                 pente = float(np.polyfit(np.log(d[bons]), np.log(valeurs[bons]), 1)[0])
                 verdict = "conforme" if abs(pente - attendu) < 0.5 else "NON CONFORME"
                 sortie.append(f"  {nom:<11} erreur ~ d^{pente:.2f}  "
                               f"(le modele predit d^{attendu:.0f})  -> {verdict}")
-    else:
+    if len(poses) < 3 and len(bouges) < 3:
         sortie.append("")
         sortie.append("Fais au moins 3 captures a des distances differentes "
                       "pour verifier les lois en d et d^2.")
-    sortie.append("=" * 92)
+    sortie.append("=" * 96)
     return "\n".join(sortie)
 
 
@@ -214,17 +283,21 @@ def main():
             capture["positions"].append(vu[3].flatten())
             capture["incidences"].append(incidence(vu[2], vu[3]))
             if len(capture["positions"]) >= IMAGES_PAR_CAPTURE:
+                dynamique = capture["mode"] == "bouge"
                 resultat = analyser(capture["coins"], capture["positions"],
-                                    K_CALIB[0, 0], TAILLE_TAG)
+                                    K_CALIB[0, 0], TAILLE_TAG, dynamique=dynamique)
                 resultat["incidence_deg"] = float(np.mean(capture["incidences"]))
+                resultat["mode"] = capture["mode"]
                 ligne = {c: (f"{int(resultat[c])}" if c == "images"
+                             else resultat[c] if c == "mode"
                              else f"{resultat[c]:.4f}") for c in COLONNES}
                 lignes.append(ligne)
                 with open(CSV, "w", newline="") as fic:
                     ecrivain = csv.DictWriter(fic, fieldnames=COLONNES)
                     ecrivain.writeheader()
                     ecrivain.writerows(lignes)
-                print(f"\nCapture terminee a {resultat['distance_m']:.2f} m :")
+                print(f"\nCapture '{capture['mode']}' terminee a "
+                      f"{resultat['distance_m']:.2f} m :")
                 print(f"  sigma_pixel      = {resultat['sigma_pixel']:.3f} px")
                 print(f"  bruit lateral    = {resultat['sigma_lateral_mm']:.2f} mm "
                       f"(modele : {resultat['lateral_theorique_mm']:.2f} mm)")
@@ -235,8 +308,10 @@ def main():
         # --- affichage ---------------------------------------------------
         if capture is not None:
             fait = len(capture["positions"])
-            cv2.putText(image, f"CAPTURE {fait}/{IMAGES_PAR_CAPTURE} — NE BOUGE PAS",
-                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            consigne = ("NE BOUGE PAS" if capture["mode"] == "pose"
+                        else "BOUGE LENTEMENT ET REGULIEREMENT")
+            cv2.putText(image, f"CAPTURE {fait}/{IMAGES_PAR_CAPTURE} — {consigne}",
+                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
             cv2.rectangle(image, (10, 44), (10 + int(400 * fait / IMAGES_PAR_CAPTURE), 56),
                           (0, 0, 255), -1)
         elif vu is not None:
@@ -244,12 +319,12 @@ def main():
             cv2.putText(image, f"tag {vu[0]} a {distance:.2f} m, "
                                f"incidence {incidence(vu[2], vu[3]):.0f} deg",
                         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-            cv2.putText(image, "'c' pour capturer (camera posee, immobile)",
+            cv2.putText(image, "'c' camera posee   |   'd' camera qui bouge",
                         (10, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
         else:
             cv2.putText(image, "Aucun tag visible", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(image, f"{len(lignes)} mesure(s)   c=capturer t=tableau "
+        cv2.putText(image, f"{len(lignes)} mesure(s)   c=posee d=bouge t=tableau "
                            f"e=effacer q=quitter", (10, H - 14),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
@@ -257,13 +332,19 @@ def main():
         touche = cv2.waitKey(1) & 0xFF
         if touche == ord("q"):
             break
-        if touche == ord("c") and capture is None:
+        if touche in (ord("c"), ord("d")) and capture is None:
             if vu is None:
                 print("Aucun tag visible : impossible de capturer.")
             else:
-                capture = {"coins": [], "positions": [], "incidences": []}
-                print(f"Capture en cours... ne touche a rien "
-                      f"({IMAGES_PAR_CAPTURE} images)")
+                mode = "pose" if touche == ord("c") else "bouge"
+                capture = {"coins": [], "positions": [], "incidences": [],
+                           "mode": mode}
+                if mode == "pose":
+                    print(f"Capture IMMOBILE... ne touche a rien "
+                          f"({IMAGES_PAR_CAPTURE} images)")
+                else:
+                    print(f"Capture EN MOUVEMENT... deplace la camera "
+                          f"LENTEMENT et REGULIEREMENT ({IMAGES_PAR_CAPTURE} images)")
         if touche == ord("t"):
             print(tableau(lignes))
         if touche == ord("e"):
