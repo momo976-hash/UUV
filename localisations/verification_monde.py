@@ -129,6 +129,21 @@ dernier_temps = None
 ref_p_filtre = ref_R_filtre = None
 lissage_filtre = deque(maxlen=LISSAGE)
 
+# --- mesure des vitesses reelles de l'engin --------------------------------
+# Le filtre a besoin de deux chiffres qui decrivent ce que l'engin fait sans
+# qu'il le sache : sigma_acceleration et derive_gyro. Plutot que de les
+# supposer, on les lit ici sur le mouvement reel. La pose BRUTE sert de
+# source (pas la filtree : le filtre lisse justement ce qu'on veut mesurer).
+MEMOIRE_DYNAMIQUE = 900          # 30 s a 30 Hz
+vitesses_angulaires = deque(maxlen=MEMOIRE_DYNAMIQUE)   # deg/s
+accelerations = deque(maxlen=MEMOIRE_DYNAMIQUE)         # m/s^2
+precedent_p = precedent_R = precedent_t = None
+precedente_vitesse = None
+
+
+def centile(valeurs, part):
+    return float(np.percentile(np.fromiter(valeurs, dtype=float), part)) if valeurs else 0.0
+
 
 def incidence_du_tag(pose_camera_tag):
     """Angle en degres sous lequel la camera voit ce tag (0 = pile en face).
@@ -203,6 +218,26 @@ while True:
         T_monde_cam = carte[ref] @ inverse(poses[ref])
         cam_p = T_monde_cam[:3, 3]
         cam_R = T_monde_cam[:3, :3]
+
+    # --- ce que l'engin fait vraiment : vitesse de rotation et acceleration -
+    # Mesure sur la pose BRUTE, entre deux images consecutives.
+    if cam_p is not None:
+        instant = time.time()
+        if precedent_t is not None:
+            intervalle = instant - precedent_t
+            if 1e-3 < intervalle < 0.5:      # on ignore les trous (tag perdu)
+                vitesses_angulaires.append(angle_entre(precedent_R, cam_R) / intervalle)
+                vitesse = (cam_p - precedent_p) / intervalle
+                if precedente_vitesse is not None:
+                    accelerations.append(
+                        float(np.linalg.norm(vitesse - precedente_vitesse) / intervalle))
+                precedente_vitesse = vitesse
+            else:
+                precedente_vitesse = None
+        precedent_p, precedent_R, precedent_t = cam_p.copy(), cam_R.copy(), instant
+    else:
+        precedent_t = None
+        precedente_vitesse = None
 
     # --- filtre de Kalman : nourri par TOUS les tags connus visibles --------
     # Chaque tag donne sa propre estimation de la pose camera dans le monde ;
@@ -281,6 +316,12 @@ while True:
                            f"(+/- {sigma*1000:.0f} mm)", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 120), 2)
         y += 24
+    if len(vitesses_angulaires) > 30:
+        cv2.putText(image, f"dynamique : rotation {centile(vitesses_angulaires, 50):.1f} "
+                           f"deg/s (95e {centile(vitesses_angulaires, 95):.1f})   "
+                           f"accel {centile(accelerations, 95):.2f} m/s2", (10, y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 255), 1)
+        y += 22
 
     if ref_p is None:
         cv2.putText(image, "Regarde le tag de reference et appuie sur 'o'", (10, y),
@@ -375,3 +416,24 @@ while True:
 cam.release()
 cv2.destroyAllWindows()
 print(f"\nTermine. Mesures dans : {CSV}")
+
+# --- les deux reglages du filtre, lus sur le mouvement reel ----------------
+if len(vitesses_angulaires) > 100:
+    rotation_95 = centile(vitesses_angulaires, 95)
+    accel_95 = centile(accelerations, 95)
+    print("\n" + "=" * 66)
+    print("DYNAMIQUE OBSERVEE  (a reporter dans filtre_kalman.py)")
+    print("=" * 66)
+    print(f"  rotation    mediane {centile(vitesses_angulaires, 50):6.1f} deg/s"
+          f"   95e centile {rotation_95:6.1f} deg/s")
+    print(f"  acceleration mediane {centile(accelerations, 50):5.2f} m/s2"
+          f"   95e centile {accel_95:6.2f} m/s2")
+    print("-" * 66)
+    # Le bruit de modele doit couvrir ce que l'engin fait REELLEMENT sans que
+    # le filtre le sache. Le 95e centile evite a la fois de sous-estimer, ce
+    # qui ferait retarder le filtre, et de se caler sur un pic isole.
+    print(f"  derive_gyro_deg_s   = {rotation_95:.0f}")
+    print(f"  sigma_acceleration  = {accel_95:.1f}")
+    print("=" * 66)
+    print("  Valable si ce que tu viens de faire ressemble a une vraie mission.")
+    print("  Une session ou la camera reste posee ne mesure rien d'utile.")
