@@ -61,9 +61,15 @@ DIST_CALIB = np.array([0.013835, 0.733706, -0.002333, 0.001136, -2.707687],
                       dtype=np.float64)
 
 CSV = Path(__file__).resolve().with_name("bruit_tag.csv")
-COLONNES = ["mode", "distance_m", "incidence_deg", "images", "sigma_pixel",
-            "sigma_lateral_mm", "sigma_profondeur_mm",
+COLONNES = ["mode", "distance_m", "incidence_deg", "images", "vitesse_cm_s",
+            "sigma_pixel", "sigma_lateral_mm", "sigma_profondeur_mm",
             "lateral_theorique_mm", "profondeur_theorique_mm"]
+
+# Le facteur 2 vient de ce que l'echelle du tag, d'ou se deduit la distance,
+# est lue sur QUATRE coins et non un seul : la moyenne divise le bruit par
+# racine de 4. Sans lui le modele surestimait la profondeur d'un facteur 2.3
+# sur les mesures reelles ; avec lui l'ecart tombe sous 15 %.
+COINS_PAR_TAG = 4.0
 
 
 def _poids_lissage(demi_fenetre, degre):
@@ -147,7 +153,7 @@ def analyser(coins, positions, focale, taille_tag, dynamique=False):
         # predictions du modele, a partir du sigma_pixel qu'on vient de mesurer
         "lateral_theorique_mm": 1000 * distance * sigma_pixel / focale,
         "profondeur_theorique_mm": 1000 * distance ** 2 * sigma_pixel
-                                   / (focale * taille_tag),
+                                   / (focale * taille_tag * np.sqrt(COINS_PAR_TAG)),
     }
 
 
@@ -171,7 +177,7 @@ def tableau(lignes):
               "-" * 96]
     for l in lignes:
         sortie.append(
-            f"{l.get('mode', 'pose'):>7} "
+            f"{(l.get('mode') or 'pose'):>7} "
             f"{float(l['distance_m']):6.2f} {float(l['incidence_deg']):6.1f} "
             f"{int(float(l['images'])):5d} {float(l['sigma_pixel']):9.3f} "
             f"{float(l['sigma_lateral_mm']):9.2f} {float(l['lateral_theorique_mm']):8.2f} "
@@ -182,43 +188,61 @@ def tableau(lignes):
     # --- les deux regimes se resument separement ---------------------------
     # On prend la MEDIANE et non la moyenne : une seule capture ratee (geste
     # trop brusque, tag mal eclaire) suffirait sinon a tirer le resultat.
-    poses = [l for l in lignes if l.get("mode", "pose") == "pose"]
+    # `or "pose"` et pas `get(..., "pose")` : les lignes ecrites avant que la
+    # colonne mode existe ont la CLE presente mais VIDE, le defaut ne joue pas.
+    poses = [l for l in lignes if (l.get("mode") or "pose") == "pose"]
     bouges = [l for l in lignes if l.get("mode") == "bouge"]
     sigmas = lambda ens: np.array([float(l["sigma_pixel"]) for l in ens])
-    if poses:
+
+    # --- captures suspectes ------------------------------------------------
+    # Trop de bruit par rapport aux autres, ou geste trop rapide : on les
+    # signale ET on les retire de TOUT le depouillement, mediane comprise,
+    # sinon elles le faussent.
+    def fiables(ensemble):
+        if len(ensemble) < 3:
+            return ensemble, []
+        med = float(np.median(sigmas(ensemble)))
+        bons, ecartes = [], []
+        for ligne in ensemble:
+            valeur = float(ligne["sigma_pixel"])
+            vitesse = float(ligne.get("vitesse_cm_s") or 0.0)
+            if valeur > 3 * med:
+                ecartes.append((ligne, f"{valeur:.3f} px, soit "
+                                       f"{valeur/med:.0f}x la mediane"))
+            elif vitesse > 100 * VITESSE_MAX_CONSEILLEE:
+                ecartes.append((ligne, f"deplacee a {vitesse:.0f} cm/s"))
+            else:
+                bons.append(ligne)
+        return bons, ecartes
+
+    poses_bons, poses_ecartes = fiables(poses)
+    bouges_bons, bouges_ecartes = fiables(bouges)
+    if poses_bons:
         sortie.append(f"sigma_pixel camera POSEE     : "
-                      f"{np.median(sigmas(poses)):.3f} px (mediane)"
-                      "   <- plancher, meilleur cas absolu")
-    if bouges:
-        med = float(np.median(sigmas(bouges)))
-        sortie.append(f"sigma_pixel camera QUI BOUGE : {med:.3f} px (mediane)"
-                      "   <- LA valeur a mettre dans filtre_kalman.py")
-        if poses:
+                      f"{np.median(sigmas(poses_bons)):.3f} px (mediane sur "
+                      f"{len(poses_bons)})   <- plancher, meilleur cas absolu")
+    if bouges_bons:
+        med = float(np.median(sigmas(bouges_bons)))
+        sortie.append(f"sigma_pixel camera QUI BOUGE : {med:.3f} px (mediane sur "
+                      f"{len(bouges_bons)})   <- LA valeur pour filtre_kalman.py")
+        if poses_bons:
             sortie.append(f"                               le mouvement degrade d'un "
-                          f"facteur {med/max(np.median(sigmas(poses)), 1e-9):.1f}")
+                          f"facteur {med/max(np.median(sigmas(poses_bons)), 1e-9):.1f}")
     else:
         sortie.append("Aucune capture en mouvement ('d'). Le filtre a besoin du bruit")
         sortie.append("EN CONDITIONS : camera posee, c'est le meilleur cas, pas l'usage.")
-
-    # --- captures suspectes ------------------------------------------------
-    for nom_regime, ensemble in (("posee", poses), ("bouge", bouges)):
-        if len(ensemble) < 3:
-            continue
-        valeurs = sigmas(ensemble)
-        med = float(np.median(valeurs))
-        for ligne, valeur in zip(ensemble, valeurs):
-            if valeur > 3 * med:
-                sortie.append(f"  !! capture '{nom_regime}' a "
-                              f"{float(ligne['distance_m']):.2f} m : "
-                              f"{valeur:.3f} px, soit {valeur/med:.0f}x la mediane. "
-                              "Geste trop brusque ? A refaire.")
+    for nom_regime, ecartes in (("posee", poses_ecartes), ("bouge", bouges_ecartes)):
+        for ligne, raison in ecartes:
+            sortie.append(f"  !! capture '{nom_regime}' a "
+                          f"{float(ligne['distance_m']):.2f} m ecartee : {raison}")
 
     # --- verification des lois en d et d^2 ---------------------------------
-    for nom_regime, ensemble in (("camera posee", poses), ("camera qui bouge", bouges)):
+    for nom_regime, ensemble in (("camera posee", poses_bons),
+                                 ("camera qui bouge", bouges_bons)):
         sortie.append("")
         if len(ensemble) < 3:
             sortie.append(f"VERIFICATION DU MODELE — {nom_regime} : "
-                          f"{len(ensemble)} capture(s), il en faut 3.")
+                          f"{len(ensemble)} capture(s) fiable(s), il en faut 3.")
             continue
         d = np.array([float(l["distance_m"]) for l in ensemble])
         etendue = float(d.max() / max(d.min(), 1e-9))
@@ -231,15 +255,22 @@ def tableau(lignes):
             sortie.append("  TROP ETROIT pour conclure : il faut au moins un rapport "
                           "de 3x (ex. 0.6 m a 2 m).")
             continue
-        for nom, cle, attendu in (("lateral", "sigma_lateral_mm", 1.0),
-                                  ("profondeur", "sigma_profondeur_mm", 2.0)):
+        for nom, cle, cle_th, attendu in (
+                ("lateral", "sigma_lateral_mm", "lateral_theorique_mm", 1.0),
+                ("profondeur", "sigma_profondeur_mm", "profondeur_theorique_mm", 2.0)):
             valeurs = np.array([float(l[cle]) for l in ensemble])
+            theorie = np.array([float(l[cle_th]) for l in ensemble])
             bons = valeurs > 0
             if bons.sum() >= 3:
                 pente = float(np.polyfit(np.log(d[bons]), np.log(valeurs[bons]), 1)[0])
-                verdict = "conforme" if abs(pente - attendu) < 0.5 else "NON CONFORME"
-                sortie.append(f"  {nom:<11} erreur ~ d^{pente:.2f}  "
-                              f"(le modele predit d^{attendu:.0f})  -> {verdict}")
+                # le rapport dit si le modele vise juste EN AMPLITUDE ;
+                # la pente dit s'il vise juste EN TENDANCE.
+                rapport = float(np.median(valeurs[bons] / np.maximum(theorie[bons], 1e-9)))
+                verdict = ("conforme" if abs(pente - attendu) < 0.5
+                           and 0.5 < rapport < 2.0 else "A REVOIR")
+                sortie.append(f"  {nom:<11} erreur ~ d^{pente:.2f} "
+                              f"(modele d^{attendu:.0f}),  amplitude mesuree = "
+                              f"{rapport:.2f}x le modele  -> {verdict}")
     sortie.append("=" * 96)
     return "\n".join(sortie)
 
@@ -321,6 +352,8 @@ def main():
                                     K_CALIB[0, 0], TAILLE_TAG, dynamique=dynamique)
                 resultat["incidence_deg"] = float(np.mean(capture["incidences"]))
                 resultat["mode"] = capture["mode"]
+                resultat["vitesse_cm_s"] = (100 * float(np.mean(capture["vitesses"]))
+                                            if capture["vitesses"] else 0.0)
                 ligne = {c: (f"{int(resultat[c])}" if c == "images"
                              else resultat[c] if c == "mode"
                              else f"{resultat[c]:.4f}") for c in COLONNES}

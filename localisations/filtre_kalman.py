@@ -154,7 +154,21 @@ import numpy as np
 # Valeurs par defaut calees sur la D435i a 640x480 derriere un hublot plat.
 FOCALE_EAU = 604.1876 * 1.33
 TAILLE_TAG = 0.223
-SIGMA_PIXEL = 0.5
+
+# MESURE, plus supposee : 14 captures camera en main a 0.72 - 1.52 m
+# (calibration/mesurer_bruit_tag.py, mode 'd'). La valeur precedente, 0.5 px,
+# etait une valeur d'usage courante en vision, jamais verifiee ici.
+#   camera posee    0.049 px  <- plancher, sans flou de bouge
+#   camera qui bouge 0.215 px <- valeur d'usage, retenue ici
+# Ces mesures sont faites EN AIR. A refaire dans le bassin : l'eau trouble et
+# le moindre contraste degraderont ce chiffre.
+SIGMA_PIXEL = 0.215
+
+# L'echelle du tag, d'ou se deduit la distance, est lue sur QUATRE coins et
+# non un seul : moyenner divise le bruit par racine de 4. Sans ce facteur, le
+# modele surestimait l'erreur de profondeur d'un facteur 2.3 face aux mesures
+# reelles ; avec lui l'ecart tombe a 0.85x, soit 15 %.
+COINS_PAR_TAG = 4.0
 
 
 # ===========================================================================
@@ -233,7 +247,8 @@ def covariance_position_tag(position_camera, position_tag, incidence_deg,
     # vu de biais, le tag parait plus etroit : sa taille apparente, d'ou l'on
     # tire la distance, porte moins d'information.
     cos_incidence = max(np.cos(np.radians(incidence_deg)), 0.20)
-    sigma_prof = d * d * sigma_pixel / (focale * taille_tag * cos_incidence)
+    sigma_prof = (d * d * sigma_pixel
+                  / (focale * taille_tag * cos_incidence * np.sqrt(COINS_PAR_TAG)))
 
     return (sigma_lat ** 2 * (np.eye(3) - np.outer(u, u))
             + sigma_prof ** 2 * np.outer(u, u))
@@ -688,9 +703,15 @@ def _auto_test():
     _, fusion = fusionner_positions([([1.0, 0.8, 0.5], seul), ([1.0, 0.8, 0.5], autre)])
     pire_seul = np.sqrt(np.linalg.eigvalsh(seul)).max()
     pire_fusion = np.sqrt(np.linalg.eigvalsh(fusion)).max()
+    # Deux mesures independantes de meme qualite gagnent deja un facteur
+    # racine de 2 par simple moyennage. Depasser ce seuil prouve que c'est la
+    # GEOMETRIE qui travaille : la ou un tag est aveugle (sa profondeur),
+    # l'autre est precis (son lateral).
+    gain = pire_seul / pire_fusion
     print(f"pire direction : 1 tag {pire_seul*1000:.2f} mm -> "
-          f"2 tags sur murs perpendiculaires {pire_fusion*1000:.2f} mm")
-    assert pire_fusion < pire_seul / 2, "deux murs doivent effondrer l'incertitude"
+          f"2 tags sur murs perpendiculaires {pire_fusion*1000:.2f} mm "
+          f"(gain {gain:.2f}x, moyennage seul : 1.41x)")
+    assert gain > np.sqrt(2), "les murs perpendiculaires doivent faire mieux que moyenner"
 
     # -- le filtre reduit-il vraiment le bruit ? ----------------------------
     dt, n = 1 / 30, 900
