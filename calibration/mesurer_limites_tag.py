@@ -61,6 +61,8 @@ TAILLE_TAG = 0.223          # le tag d'essai devant la camera (option --tag)
 
 FENETRE = 30          # images sur lesquelles on estime le taux de detection
 TAUX_LIMITE = 0.95    # en dessous, on considere la detection non fiable
+MARGE_BORD = 20       # px : plus pres du bord, le tag risque de sortir du cadre
+PALIERS_CONFIRMATION = 2   # paliers consecutifs sous le seuil pour conclure
 
 K_CALIB = np.array([
     [604.1876, 0.0000, 326.1973],
@@ -71,42 +73,127 @@ DIST_CALIB = np.array([0.013835, 0.733706, -0.002333, 0.001136, -2.707687],
                       dtype=np.float64)
 
 CSV = Path(__file__).resolve().with_name("limites_tag.csv")
-COLONNES = ["balayage", "taux", "pixels", "incidence_deg", "distance_m"]
+COLONNES = ["balayage", "taux", "pixels", "incidence_deg", "distance_m", "bord_px"]
 
 
 def limite_par_paliers(echantillons, cle, croissant, taux_limite=TAUX_LIMITE,
-                       nb_paliers=12):
+                       nb_paliers=12, logarithmique=False):
     """Cherche la valeur de `cle` ou le taux de detection decroche.
 
     `croissant` dit dans quel sens la difficulte augmente : l'incidence rend
     la detection plus dure quand elle MONTE, la taille apparente quand elle
-    DESCEND. On parcourt donc du plus facile vers le plus difficile et on
-    s'arrete au premier palier qui passe sous le seuil.
+    DESCEND. On parcourt donc du plus facile vers le plus difficile.
+
+    Deux precautions, apprises a nos depens sur un balayage ou le taux
+    sautait de 70 a 100 % sans rapport avec la taille du tag :
+
+    1. On mesure d'abord un TAUX DE REFERENCE sur les paliers les plus
+       faciles. S'il n'est pas proche de 100 %, c'est qu'une cause etrangere
+       fait rater des images — tag hors cadre, image filee — et le balayage
+       ne mesure plus ce qu'on croit. Les taux sont alors rapportes a cette
+       reference, et l'appelant est prevenu.
+    2. On ne conclut qu'apres PALIERS_CONFIRMATION paliers consecutifs sous
+       le seuil. Un creux isole est du bruit, pas une limite : au-dela de la
+       vraie limite, la detection ne revient jamais.
+
+    `logarithmique` decoupe les paliers en proportions plutot qu'en ecarts.
+    C'est ce qu'il faut pour la taille apparente : entre 20 et 210 px, des
+    paliers reguliers en font un seul de 20 a 36 px, justement la ou tout se
+    joue. En log, chaque palier vaut 21 % du precedent, et le bas du domaine
+    est resolu aussi finement que le haut.
     """
+    diagnostic = {"reference": None, "confirmee": False}
     if len(echantillons) < nb_paliers:
-        return None, []
+        return None, [], diagnostic
     valeurs = np.array([e[cle] for e in echantillons])
     taux = np.array([e["taux"] for e in echantillons])
 
-    bords = np.linspace(valeurs.min(), valeurs.max(), nb_paliers + 1)
+    if logarithmique and valeurs.min() > 0:
+        bords = np.geomspace(valeurs.min(), valeurs.max(), nb_paliers + 1)
+        milieu = lambda a, b: float(np.sqrt(a * b))  # noqa: E731
+    else:
+        bords = np.linspace(valeurs.min(), valeurs.max(), nb_paliers + 1)
+        milieu = lambda a, b: float((a + b) / 2)  # noqa: E731
     paliers = []
     for k in range(nb_paliers):
         dans = (valeurs >= bords[k]) & (valeurs <= bords[k + 1])
         if dans.sum() >= 5:
-            paliers.append({"centre": float((bords[k] + bords[k + 1]) / 2),
+            paliers.append({"centre": milieu(bords[k], bords[k + 1]),
                             "taux": float(taux[dans].mean()),
                             "n": int(dans.sum())})
-    if not paliers:
-        return None, []
+    if len(paliers) < 4:
+        return None, sorted(paliers, key=lambda p: p["centre"]), diagnostic
 
     # du plus facile vers le plus difficile
     ordonnes = sorted(paliers, key=lambda p: p["centre"], reverse=not croissant)
+
+    reference = float(np.median([p["taux"] for p in ordonnes[:3]]))
+    diagnostic["reference"] = reference
+    if reference < 0.85:
+        return None, sorted(paliers, key=lambda p: p["centre"]), diagnostic
+
+    # rapporte au regime facile : ce qui rate partout n'est pas du a la taille
+    for palier in ordonnes:
+        palier["taux_relatif"] = min(palier["taux"] / reference, 1.0)
+
     limite = None
-    for precedent, suivant in zip(ordonnes, ordonnes[1:]):
-        if precedent["taux"] >= taux_limite > suivant["taux"]:
-            limite = suivant["centre"]
+    for k, palier in enumerate(ordonnes):
+        if palier["taux_relatif"] >= taux_limite:
+            continue
+        suite = ordonnes[k:k + PALIERS_CONFIRMATION]
+        if (len(suite) == PALIERS_CONFIRMATION
+                and all(p["taux_relatif"] < taux_limite for p in suite)):
+            limite, diagnostic["confirmee"] = palier["centre"], True
             break
-    return limite, sorted(paliers, key=lambda p: p["centre"])
+    return limite, sorted(paliers, key=lambda p: p["centre"]), diagnostic
+
+
+def lire_balayage(lignes, nom):
+    """Les fenetres d'un balayage, celles au cadrage douteux mises de cote.
+
+    Une fenetre ou le tag a frole le bord de l'image ne mesure rien
+    d'exploitable : les images ratees le sont parce que le tag est sorti du
+    champ, pas parce qu'il etait trop petit ou trop de biais.
+    """
+    gardees, ecartees = [], 0
+    for ligne in lignes:
+        if ligne["balayage"] != nom:
+            continue
+        # les anciens enregistrements n'ont pas la colonne : on les garde
+        bord = float(ligne.get("bord_px") or MARGE_BORD)
+        if bord < MARGE_BORD:
+            ecartees += 1
+            continue
+        gardees.append({"taux": float(ligne["taux"]),
+                        "pixels": float(ligne["pixels"]),
+                        "incidence_deg": float(ligne["incidence_deg"])})
+    return gardees, ecartees
+
+
+def diagnostiquer(diagnostic, limite, sortie):
+    """Dit si le balayage a mesure ce qu'on croit. Vrai s'il est exploitable."""
+    reference = diagnostic["reference"]
+    if reference is None:
+        sortie.append("\n  Trop peu de paliers pour conclure. Balaye plus large.")
+        return False
+    if reference < 0.98:
+        sortie.append(f"\n  BALAYAGE CONTAMINE — meme dans le regime le plus facile,")
+        sortie.append(f"  {100*(1-reference):.0f} % des images ratent la detection. "
+                      "Ce n'est donc pas")
+        sortie.append("  la difficulte balayee qui les fait echouer, mais autre chose :")
+        sortie.append("   - le tag sort du champ (garde-le bien au centre) ;")
+        sortie.append("   - l'image est filee (avance par PALIERS : immobile 2 a 3 s,")
+        sortie.append("     puis un pas, puis immobile a nouveau — ne marche pas en continu) ;")
+        sortie.append("   - le tag gondole ou reflechit la lumiere.")
+        if reference < 0.85:
+            sortie.append("\n  Trop contamine pour en tirer quoi que ce soit. A refaire.")
+            return False
+        sortie.append(f"\n  Les taux ci-dessous sont rapportes a ce regime facile "
+                      f"({100*reference:.0f} %),")
+        sortie.append("  mais le resultat reste a confirmer par un balayage propre.")
+    if limite is None:
+        return False
+    return True
 
 
 def rapport(lignes):
@@ -114,37 +201,25 @@ def rapport(lignes):
         return "Aucun balayage. 'd' pour la distance, 'i' pour l'incidence."
     sortie = ["", "=" * 78, "LIMITES DE DETECTION MESUREES", "=" * 78]
 
-    distance = [{"taux": float(l["taux"]), "pixels": float(l["pixels"]),
-                 "incidence_deg": float(l["incidence_deg"])}
-                for l in lignes if l["balayage"] == "distance"]
-    incidence = [{"taux": float(l["taux"]), "pixels": float(l["pixels"]),
-                  "incidence_deg": float(l["incidence_deg"])}
-                 for l in lignes if l["balayage"] == "incidence"]
+    distance, hors_cadre_d = lire_balayage(lignes, "distance")
+    incidence, hors_cadre_i = lire_balayage(lignes, "incidence")
 
     # --- taille apparente minimale ----------------------------------------
-    sortie.append(f"\nBALAYAGE EN DISTANCE — {len(distance)} points")
+    sortie.append(f"\nBALAYAGE EN DISTANCE — {len(distance)} points"
+                  + (f", {hors_cadre_d} ecartes (tag au bord de l'image)"
+                     if hors_cadre_d else ""))
     if len(distance) < 12:
         sortie.append("  Trop peu de points. Refais un aller-retour complet ('d').")
     else:
-        limite, paliers = limite_par_paliers(distance, "pixels", croissant=False)
+        limite, paliers, diagnostic = limite_par_paliers(distance, "pixels",
+                                                         croissant=False,
+                                                         logarithmique=True)
         sortie.append(f"  {'taille apparente':>18} {'taux de detection':>18}")
         for p in reversed(paliers):
             barre = "#" * int(round(20 * p["taux"]))
             sortie.append(f"  {p['centre']:>15.0f} px {100*p['taux']:>15.0f} %  {barre}")
-        if limite is None:
-            atteint = min(p["centre"] for p in paliers)
-            sortie.append("\n  Le taux n'est jamais descendu sous "
-                          f"{100*TAUX_LIMITE:.0f} % : le tag reste detecte")
-            sortie.append(f"  jusqu'au bout du balayage ({atteint:.0f} px au plus petit).")
-            sortie.append("  Il faut descendre plus bas en taille apparente. Deux moyens :")
-            sortie.append("   - eloigner le TAG plutot que la camera (elle est au bout")
-            sortie.append(f"     d'un cable, lui non) ;")
-            sortie.append("   - ou prendre un tag d'essai plus petit. Pour atteindre 20 px")
-            for cible, recul in ((2.0, 20), (1.5, 20)):
-                besoin = cible * recul / K_CALIB[0, 0]
-                sortie.append(f"     a {cible:.1f} m il faut un tag de "
-                              f"{100*besoin:.0f} cm  (--tag {besoin:.3f})")
-        else:
+
+        if diagnostiquer(diagnostic, limite, sortie):
             sortie.append(f"\n  PIXELS_MIN mesure = {limite:.0f} px "
                           f"(la valeur supposee etait 30 px)")
             if abs(TAILLE_TAG - TAILLE_TAG_REELLE) > 1e-6:
@@ -156,30 +231,47 @@ def rapport(lignes):
             sortie.append(f"  Pour un tag de {100*TAILLE_TAG_REELLE:.1f} cm, cela donne")
             sortie.append(f"  une portee de {portee:.2f} m en air, "
                           f"{portee*1.33:.2f} m sous l'eau")
+        elif limite is None and paliers:
+            atteint = min(p["centre"] for p in paliers)
+            sortie.append(f"\n  Aucune limite confirmee : a {atteint:.0f} px, le plus "
+                          "petit atteint, le tag")
+            sortie.append("  est encore detecte. Il faut descendre plus bas. Deux moyens :")
+            sortie.append("   - eloigner le TAG plutot que la camera (elle est au bout")
+            sortie.append("     d'un cable, lui non) ;")
+            sortie.append("   - ou prendre un tag d'essai plus petit :")
+            for cible in (2.0, 1.5):
+                besoin = cible * 0.7 * atteint / K_CALIB[0, 0]
+                sortie.append(f"     pour atteindre {0.7*atteint:.0f} px a {cible:.1f} m, "
+                              f"un tag de {100*besoin:.0f} cm  (--tag {besoin:.3f})")
 
     # --- incidence maximale ------------------------------------------------
-    sortie.append(f"\nBALAYAGE EN INCIDENCE — {len(incidence)} points")
+    sortie.append(f"\nBALAYAGE EN INCIDENCE — {len(incidence)} points"
+                  + (f", {hors_cadre_i} ecartes (tag au bord de l'image)"
+                     if hors_cadre_i else ""))
     if len(incidence) < 12:
         sortie.append("  Trop peu de points. Refais un balayage complet ('i').")
     else:
-        limite, paliers = limite_par_paliers(incidence, "incidence_deg", croissant=True)
+        limite, paliers, diagnostic = limite_par_paliers(incidence, "incidence_deg",
+                                                         croissant=True)
         sortie.append(f"  {'incidence':>18} {'taux de detection':>18}")
         for p in paliers:
             barre = "#" * int(round(20 * p["taux"]))
             sortie.append(f"  {p['centre']:>14.0f} deg {100*p['taux']:>15.0f} %  {barre}")
-        petit = np.median([e["pixels"] for e in incidence]) < 60
-        if petit:
-            sortie.append("  ATTENTION : le tag ne faisait que "
-                          f"{np.median([e['pixels'] for e in incidence]):.0f} px "
+        taille_mediane = float(np.median([e["pixels"] for e in incidence]))
+        if taille_mediane < 60:
+            sortie.append(f"\n  ATTENTION : le tag ne faisait que {taille_mediane:.0f} px "
                           "pendant ce balayage.")
             sortie.append("  A cette taille c'est peut-etre la resolution qui a lache,")
             sortie.append("  pas l'angle. Refais-le avec le grand tag, plus pres.")
-        if limite is None:
-            sortie.append("\n  Le taux n'est jamais descendu sous "
-                          f"{100*TAUX_LIMITE:.0f} % : tourne davantage le tag.")
-        else:
+
+        if diagnostiquer(diagnostic, limite, sortie):
             sortie.append(f"\n  INCIDENCE_MAX mesuree = {limite:.0f} deg "
                           f"(la valeur supposee etait 65 deg)")
+        elif limite is None and paliers:
+            atteint = max(p["centre"] for p in paliers)
+            sortie.append(f"\n  Aucune limite confirmee : a {atteint:.0f} deg, le plus "
+                          "oblique atteint,")
+            sortie.append("  le tag est encore detecte. Tourne-le davantage.")
 
     sortie.append("\n" + "=" * 78)
     sortie.append("Reporte ces deux valeurs dans plan_piscine_3d.py.")
@@ -277,9 +369,14 @@ def main():
     print("=" * 70)
     print("MESURE DES LIMITES DE DETECTION")
     print(guide_de_portee(TAILLE_TAG))
-    print("\n  'd' balayage en distance  : recule LENTEMENT jusqu'a perdre le tag")
+    print("\n  'd' balayage en distance  : eloigne le tag jusqu'a le perdre")
     print("  'i' balayage en incidence : tourne le tag jusqu'a le perdre")
     print("  'r' rapport | 'e' effacer | 'q' quitter")
+    print("\n  AVANCE PAR PALIERS : immobile 3 s, un pas, immobile 3 s...")
+    print("  Marcher en continu file les images et fait rater la detection")
+    print("  pour une raison qui n'a rien a voir avec ce qu'on mesure.")
+    print("  Garde le tag BIEN AU CENTRE : s'il frole le bord, la fenetre")
+    print("  est ecartee du depouillement.")
     print("=" * 70)
 
     balayage = None
@@ -305,7 +402,12 @@ def main():
                 cotes = [np.linalg.norm(pts[k] - pts[(k + 1) % 4]) for k in range(4)]
                 vu = {"pixels": float(np.mean(cotes)),
                       "incidence": incidence_du_tag(rvec, tvec),
-                      "distance": float(np.linalg.norm(tvec))}
+                      "distance": float(np.linalg.norm(tvec)),
+                      # combien de pixels separent le tag du bord de l'image :
+                      # s'il le frole, les images ratees sont des sorties de
+                      # champ et ne disent rien de la limite cherchee
+                      "bord": float(min(pts[:, 0].min(), pts[:, 1].min(),
+                                        L - pts[:, 0].max(), H - pts[:, 1].max()))}
 
         if balayage is not None:
             fenetre.append(vu)
@@ -319,6 +421,7 @@ def main():
                     "pixels": f"{np.mean([f['pixels'] for f in reussies]):.4f}",
                     "incidence_deg": f"{np.mean([f['incidence'] for f in reussies]):.4f}",
                     "distance_m": f"{np.mean([f['distance'] for f in reussies]):.4f}",
+                    "bord_px": f"{min(f['bord'] for f in reussies):.1f}",
                 })
 
         # --- affichage ---------------------------------------------------
@@ -340,11 +443,16 @@ def main():
                 cv2.putText(image, f"= tag {100*TAILLE_TAG_REELLE:.0f} cm vu de "
                                    f"{equivalent_reel(m['pixels']):.2f} m", (10, 136),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 255), 1)
-            consigne = ("RECULE lentement jusqu'a perdre le tag"
+            consigne = ("PAR PALIERS : immobile 3 s, un pas en arriere, immobile"
                         if balayage == "distance"
-                        else "TOURNE le tag jusqu'a le perdre")
+                        else "PAR PALIERS : immobile 3 s, tourne un peu, immobile")
             cv2.putText(image, consigne, (10, 110),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+            if reussies and reussies[-1]["bord"] < MARGE_BORD:
+                cv2.rectangle(image, (2, 2), (L - 3, H - 3), (0, 0, 255), 3)
+                cv2.putText(image, "TAG AU BORD — recentre-le, sinon la mesure "
+                                   "est perdue", (10, 162),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
         elif vu is not None:
             cv2.putText(image, f"{vu['pixels']:.0f} px   {vu['incidence']:.0f} deg"
                                f"   {vu['distance']:.2f} m", (10, 30),
