@@ -64,6 +64,30 @@ TAUX_LIMITE = 0.95    # en dessous, on considere la detection non fiable
 MARGE_BORD = 20       # px : plus pres du bord, le tag risque de sortir du cadre
 PALIERS_CONFIRMATION = 2   # paliers consecutifs sous le seuil pour conclure
 
+# Taille apparente qu'il faut atteindre pour esperer encadrer la limite. Un
+# 36h11 fait huit cellules de large et il en faut environ deux pixels chacune
+# pour decoder : la limite ne peut pas etre bien au-dessus de la quinzaine de
+# pixels. Tant que le balayage s'arrete au-dessus, il ne prouve rien.
+CIBLE_PIXELS = 15
+
+# Le bassin, pour rapporter la mesure a ce qu'on en fera vraiment. Sa
+# diagonale majore la distance camera-tag ; l'eau grossit l'image d'un
+# facteur 1.33 a travers un hublot plat, donc les tags y paraissent PLUS
+# GROS qu'en air a distance egale.
+BASSIN = (3.80, 1.67, 1.00)
+INDICE_EAU = 1.33
+
+
+def pixels_pire_cas():
+    """Taille apparente du tag au point le plus eloigne possible du bassin.
+
+    C'est la seule valeur qui compte pour le plan de pose : inutile de
+    connaitre la limite absolue de detection si le bassin ne l'approche
+    jamais. Il suffit d'avoir verifie la detection jusqu'en dessous.
+    """
+    diagonale = float(np.linalg.norm(BASSIN))
+    return K_CALIB[0, 0] * INDICE_EAU * TAILLE_TAG_REELLE / diagonale, diagonale
+
 K_CALIB = np.array([
     [604.1876, 0.0000, 326.1973],
     [0.0000, 602.3668, 242.8850],
@@ -196,6 +220,48 @@ def diagnostiquer(diagnostic, limite, sortie):
     return True
 
 
+def besoin_du_bassin(atteint, recul):
+    """Ce que le balayage doit encore couvrir — et ce qu'il couvre deja.
+
+    Deux lectures d'un meme balayage. La limite ABSOLUE de detection demande
+    de descendre vers CIBLE_PIXELS, ce qui exige beaucoup de recul. Mais le
+    plan de pose n'en a pas besoin : il lui suffit que la detection soit
+    verifiee en dessous de ce que le bassin peut produire de plus petit.
+    """
+    pire, diagonale = pixels_pire_cas()
+    lignes = ["", "  CE QUE LE BASSIN DEMANDE VRAIMENT"]
+    lignes.append(f"  Sa diagonale fait {diagonale:.2f} m. A cette distance — le pire cas —")
+    lignes.append(f"  un tag de {100*TAILLE_TAG_REELLE:.1f} cm paraitra {pire:.0f} px "
+                  f"sous l'eau (l'eau grossit")
+    lignes.append(f"  l'image d'un facteur {INDICE_EAU}). C'est le plus petit que le "
+                  "bassin produise.")
+
+    if atteint <= pire:
+        lignes.append(f"\n  Tu es descendu a {atteint:.0f} px sans perdre le tag, "
+                      f"donc en dessous des {pire:.0f} px")
+        lignes.append("  du pire cas : la taille apparente ne sera JAMAIS le facteur")
+        lignes.append("  limitant dans ce bassin. C'est la conclusion utile, et elle")
+        lignes.append("  est acquise — la limite absolue n'a plus d'interet pratique.")
+    else:
+        lignes.append(f"\n  Ton balayage s'est arrete a {atteint:.0f} px, au-dessus de ces "
+                      f"{pire:.0f} px.")
+        lignes.append(f"  Il reste la tranche {pire:.0f}-{atteint:.0f} px a couvrir "
+                      "pour conclure. Avec")
+        lignes.append(f"  ce tag de {100*TAILLE_TAG:.1f} cm il faudrait reculer jusqu'a "
+                      f"{K_CALIB[0, 0] * TAILLE_TAG / pire:.1f} m ;")
+        besoin = pire * recul / K_CALIB[0, 0]
+        lignes.append(f"  en restant a {recul:.1f} m, il faut un tag de "
+                      f"{100*besoin:.0f} cm  (--tag {besoin:.3f}).")
+
+    lignes.append(f"\n  Pour la limite ABSOLUE de detection il faudrait descendre vers")
+    lignes.append(f"  {CIBLE_PIXELS:.0f} px — un 36h11 fait huit cellules de large et il "
+                  "en faut deux")
+    lignes.append("  pixels chacune pour decoder. Utile pour le rapport, pas pour poser")
+    lignes.append(f"  les tags. Il faudrait un tag de "
+                  f"{100 * CIBLE_PIXELS * recul / K_CALIB[0, 0]:.0f} cm a {recul:.1f} m.")
+    return lignes
+
+
 def rapport(lignes):
     if not lignes:
         return "Aucun balayage. 'd' pour la distance, 'i' pour l'incidence."
@@ -233,16 +299,11 @@ def rapport(lignes):
                           f"{portee*1.33:.2f} m sous l'eau")
         elif limite is None and paliers:
             atteint = min(p["centre"] for p in paliers)
+            recul = K_CALIB[0, 0] * TAILLE_TAG / atteint
             sortie.append(f"\n  Aucune limite confirmee : a {atteint:.0f} px, le plus "
                           "petit atteint, le tag")
-            sortie.append("  est encore detecte. Il faut descendre plus bas. Deux moyens :")
-            sortie.append("   - eloigner le TAG plutot que la camera (elle est au bout")
-            sortie.append("     d'un cable, lui non) ;")
-            sortie.append("   - ou prendre un tag d'essai plus petit :")
-            for cible in (2.0, 1.5):
-                besoin = cible * 0.7 * atteint / K_CALIB[0, 0]
-                sortie.append(f"     pour atteindre {0.7*atteint:.0f} px a {cible:.1f} m, "
-                              f"un tag de {100*besoin:.0f} cm  (--tag {besoin:.3f})")
+            sortie.append("  est encore detecte. La limite est en dessous.")
+            sortie.extend(besoin_du_bassin(atteint, recul))
 
     # --- incidence maximale ------------------------------------------------
     sortie.append(f"\nBALAYAGE EN INCIDENCE — {len(incidence)} points"
