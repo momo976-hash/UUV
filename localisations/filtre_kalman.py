@@ -158,14 +158,16 @@ import optique  # noqa: E402
 
 # L'optique vient de optique.py : camera, tube, paroi, milieu.
 #
-# DEUX RESERVES sur ce nombre unique, toutes deux dues au tube.
+# TROIS RESERVES sur ce nombre unique, toutes trois dues au tube.
 #
 # 1. Le systeme est ANAMORPHIQUE sous l'eau. La camera est couchee dans le
 #    tube : l'axe horizontal de l'image suit l'axe du tube et traverse une
-#    lame plane (focale x 1.33), l'axe vertical est circonferentiel et ne
-#    traverse rien (focale inchangee). On retient ici la plus PETITE des deux,
-#    donc la plus defavorable : la covariance annoncee est majorante dans un
-#    sens et juste dans l'autre, jamais optimiste.
+#    lame a faces paralleles (focale x 1.33) ; l'axe vertical est
+#    circonferentiel et traverse un menisque, qui RETRECIT la focale quand la
+#    pupille est en retrait de l'axe. Les deux focales finissent a 1.4 l'une
+#    de l'autre. On retient ici la plus PETITE, donc la plus defavorable : la
+#    covariance annoncee est majorante dans un sens et juste dans l'autre,
+#    jamais optimiste.
 #
 # 2. Meme dans la direction « lame plane », le facteur 1.33 n'est exact qu'au
 #    voisinage de l'axe optique — plus de 16 px d'ecart a 20 deg, quand le
@@ -173,7 +175,12 @@ import optique  # noqa: E402
 #    filtre la suit au lieu de la moyenner. Seule une calibration faite SOUS
 #    L'EAU la corrige.
 #
-# `python optique.py` chiffre les deux.
+# 3. La focale verticale depend de la position de la camera DANS son support :
+#    un millimetre de glissement apres calibration, et c'est 1 % sur toutes
+#    les distances — 30 mm a 3 m, soit vingt fois le bruit de mesure. Aucun
+#    filtre ne rattrape cela ; seule la mecanique le peut.
+#
+# `python optique.py` chiffre les trois.
 FOCALE_EAU = optique.focale_eau()
 TAILLE_TAG = 0.223
 

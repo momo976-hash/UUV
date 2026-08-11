@@ -81,11 +81,14 @@ PALIERS_CONFIRMATION = 2   # paliers consecutifs sous le seuil pour conclure
 CIBLE_PIXELS = 15
 
 # Le bassin, pour rapporter la mesure a ce qu'on en fera vraiment. Sa
-# diagonale majore la distance camera-tag ; sous l'eau, a travers un hublot
-# plat, l'image grossit et les tags y paraissent PLUS GROS qu'en air a
-# distance egale.
+# diagonale majore la distance camera-tag. On croit souvent que l'eau arrange
+# les choses — a travers un hublot plat elle grossit l'image de 1.33. Dans ce
+# montage-ci la camera est COUCHEE dans le tube : un seul des deux axes voit
+# une lame plane, l'autre traverse un menisque qui retrecit. Et pour decoder
+# un tag, c'est l'axe le moins grossi qui commande. `optique.focale_eau`
+# renvoie donc celui-la, et le pire cas du bassin est plus severe que ne le
+# laisserait croire le facteur 1.33.
 BASSIN = (3.80, 1.67, 1.00)
-INDICE_EAU = optique.INDICE_EAU
 
 
 def pixels_pire_cas():
@@ -235,9 +238,10 @@ def besoin_du_bassin(atteint, recul):
     lignes = ["", "  CE QUE LE BASSIN DEMANDE VRAIMENT"]
     lignes.append(f"  Sa diagonale fait {diagonale:.2f} m. A cette distance — le pire cas —")
     lignes.append(f"  un tag de {100*TAILLE_TAG_REELLE:.1f} cm paraitra {pire:.0f} px "
-                  f"sous l'eau (l'eau grossit")
-    lignes.append(f"  l'image d'un facteur {INDICE_EAU}). C'est le plus petit que le "
-                  "bassin produise.")
+                  f"sous l'eau, dans l'axe")
+    lignes.append(f"  le moins grossi par le tube (focale {optique.focale_eau(MONTAGE):.0f} px "
+                  f"contre {max(optique.focales_eau(MONTAGE)):.0f} dans l'autre).")
+    lignes.append("  C'est le plus petit que le bassin produise.")
 
     if atteint <= pire:
         lignes.append(f"\n  Tu es descendu a {atteint:.0f} px sans perdre le tag, "
@@ -296,10 +300,13 @@ def rapport(lignes):
                               f"{100*TAILLE_TAG:.1f} cm ; la limite est en pixels,")
                 sortie.append(f"   elle vaut donc aussi pour les "
                               f"{100*TAILLE_TAG_REELLE:.1f} cm du bassin)")
-            portee = K_CALIB[0, 0] * TAILLE_TAG_REELLE / limite
+            portee = min(K_CALIB[0, 0], K_CALIB[1, 1]) * TAILLE_TAG_REELLE / limite
             sortie.append(f"  Pour un tag de {100*TAILLE_TAG_REELLE:.1f} cm, cela donne")
             sortie.append(f"  une portee de {portee:.2f} m en air, "
-                          f"{portee*1.33:.2f} m sous l'eau")
+                          f"{optique.portee_eau(portee, MONTAGE):.2f} m sous l'eau")
+            sortie.append("  (pas de « x 1.33 » ici : la camera est couchee dans le "
+                          "tube, et")
+            sortie.append("   c'est l'axe le MOINS grossi qui decide de la detection)")
         elif limite is None and paliers:
             atteint = min(p["centre"] for p in paliers)
             recul = K_CALIB[0, 0] * TAILLE_TAG / atteint

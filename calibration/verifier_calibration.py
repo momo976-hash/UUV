@@ -1,20 +1,44 @@
-# verifier_calibration.py — Verifie si LA CAMERA BRANCHEE EN CE MOMENT correspond
-# a une calibration deja enregistree (calibration_camera.npz).
+# verifier_calibration.py — Verifie si CE QUI EST BRANCHE EN CE MOMENT correspond
+# encore a une calibration deja enregistree.
 #
 # Principe : une calibration est propre a UN EXEMPLAIRE de camera, pas a un
 # modele. Deux RealSense identiques peuvent avoir des cx/cy/distorsion legerement
 # differents (tolerances de fabrication). Ce script prend des photos du damier
 # avec la camera ACTUELLEMENT branchee, applique la calibration enregistree
 # (SANS la recalculer), et mesure l'erreur de reprojection :
-#   - erreur proche de celle de la calibration d'origine -> meme camera, ok
-#   - erreur nettement plus grande (x5, x10...) -> AUTRE camera, a recalibrer
+#   - erreur proche de celle de la calibration d'origine -> rien n'a bouge
+#   - erreur nettement plus grande (x5, x10...) -> a recalibrer
+#
+# DEPUIS LE TUBE, CE N'EST PLUS SEULEMENT UNE QUESTION DE CAMERA
+# La camera est couchee dans le tube et regarde par la paroi : sa focale
+# verticale depend de la distance entre sa pupille et l'axe du tube. Un
+# millimetre de glissement dans le support, et la calibration ne decrit plus
+# le montage — 1 % sur toutes les distances (voir optique.py). Ce script est
+# donc devenu le controle a passer APRES chaque remontage, meme avec la meme
+# camera, et avant chaque mise a l'eau.
+#
+#   python verifier_calibration.py --montage tube_air
+#   python verifier_calibration.py --montage tube_eau
 #
 # Touches : c = capturer une vue | v = verifier | q = quitter
+import argparse
+import sys
+from pathlib import Path
+
 import cv2
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import optique  # noqa: E402
+
+_analyseur = argparse.ArgumentParser(
+    description="Verifie qu'un montage correspond encore a sa calibration.")
+_analyseur.add_argument("--montage", default="tube_air", choices=optique.MONTAGES,
+                        help="montage a verifier (defaut %(default)s)")
+MONTAGE = _analyseur.parse_args().montage
+
 CAMERA_INDEX = None
-RESOLUTION = (640, 480)      # doit matcher calibration_camera.npz
+RESOLUTION = optique.RESOLUTION
 
 TAILLE_CARREAU = 0.050
 COINS = (6, 4)
@@ -57,19 +81,24 @@ def ouvrir_camera():
     return None, 0, 0
 
 
-try:
-    fichier = np.load("calibration_camera.npz")
-    K = fichier["K"].astype(np.float64)
-    dist = fichier["dist"].ravel()
-    Lc, Hc = int(fichier["largeur"]), int(fichier["hauteur"])
-except Exception:
-    print("ERREUR : calibration_camera.npz introuvable. Fais d'abord calibration.py.")
+if optique.source(MONTAGE) != MONTAGE:
+    print(f"ERREUR : le montage '{MONTAGE}' n'a jamais ete calibre — il n'y a "
+          "rien a verifier.")
+    print(f"  python calibration.py --montage {MONTAGE}")
     raise SystemExit
+K, dist = optique.charger(MONTAGE)
+K = K.astype(np.float64)
+dist = dist.ravel()
+Lc, Hc = RESOLUTION
 
 print("=" * 62)
-print("VERIFICATION : la camera branchee correspond-elle a cette calibration ?")
+print(f"VERIFICATION du montage '{MONTAGE}'")
 print(f"Calibration enregistree : {Lc}x{Hc}, fx={K[0,0]:.1f}, fy={K[1,1]:.1f}, "
       f"cx={K[0,2]:.1f}, cy={K[1,2]:.1f}")
+if optique.ORIENTATION == "radiale" and MONTAGE != "nue_air":
+    print(f"Rappel : {optique.sensibilite_glissement():.1f} % d'erreur de distance "
+          "par mm de glissement")
+    print("de la camera dans son support. C'est ce que ce controle attrape.")
 print("=" * 62)
 
 cam, L, H = ouvrir_camera()
@@ -117,6 +146,7 @@ while True:
         # On NE RECALCULE PAS K/dist : on utilise ceux enregistres et on mesure
         # l'ecart, via solvePnP sur les points connus (comme fait un tag).
         total, n = 0.0, 0
+        residus = []
         for p3, p2 in zip(points_3d, points_2d):
             ok2, rvec, tvec = cv2.solvePnP(p3, p2, K, dist)
             if not ok2:
@@ -125,17 +155,39 @@ while True:
             mesure = np.asarray(p2, dtype=np.float64).reshape(-1, 2)
             attendu = np.asarray(proj, dtype=np.float64).reshape(-1, 2)
             total += np.linalg.norm(mesure - attendu) / len(attendu)
+            residus.append(mesure - attendu)
             n += 1
         erreur = total / n
+        residus = np.vstack(residus)
+        rms_x = float(np.sqrt(np.mean(residus[:, 0] ** 2)))
+        rms_y = float(np.sqrt(np.mean(residus[:, 1] ** 2)))
+
         print("\n" + "=" * 50)
         print(f"ERREUR avec la calibration enregistree : {erreur:.3f} px")
         if erreur < 0.5:
-            print(">>> COMPATIBLE : c'est bien la meme camera (ou tres proche).")
+            print(">>> COMPATIBLE : rien n'a bouge depuis la calibration.")
         elif erreur < 1.5:
             print(">>> DOUTEUX : erreur elevee, calibration a reverifier.")
         else:
-            print(">>> INCOMPATIBLE : ce n'est PAS la camera calibree. "
-                  "Refais calibration.py avec CETTE camera.")
+            print(">>> INCOMPATIBLE : refais calibration.py sur ce montage.")
+
+        # Dans le tube, les deux axes de l'image ne traversent pas la meme
+        # optique : un residu qui penche d'un cote designe le coupable.
+        print(f"\n  residu horizontal {rms_x:.3f} px   vertical {rms_y:.3f} px")
+        if erreur >= 0.5 and optique.ORIENTATION == "radiale" and MONTAGE != "nue_air":
+            if rms_y > 2 * rms_x:
+                print("  Le residu est surtout VERTICAL, l'axe qui traverse le")
+                print("  menisque : la camera a tres probablement glisse dans son")
+                print("  support. Verifie la fixation avant de recalibrer, sinon")
+                print("  la nouvelle calibration ne tiendra pas plus longtemps.")
+            elif rms_x > 2 * rms_y:
+                print("  Le residu est surtout HORIZONTAL, l'axe qui ne voit qu'une")
+                print("  lame plane : ce n'est pas le montage dans le tube. Cherche")
+                print("  du cote de la mise au point, de la resolution ou de la")
+                print("  camera elle-meme.")
+            else:
+                print("  Le residu est isotrope : ce n'est pas la geometrie du tube.")
+                print("  Autre exemplaire de camera, autre resolution, ou paroi sale.")
         print("=" * 50 + "\n")
 
 cam.release()

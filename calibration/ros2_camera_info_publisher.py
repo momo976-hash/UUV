@@ -14,18 +14,30 @@ WHY THIS EXISTS
 
 USAGE
     ros2 run <your_pkg> camera_info_relay --ros-args \
-        -p calibration_file:=/path/to/camera_calibration_ros.yaml \
+        -p calibration_file:=<repo>/calibration/montages/tube_eau_ros.yaml \
         -p image_topic:=/camera/color/image_raw \
         -p output_namespace:=/camera_calibrated
 
     Then run apriltag_ros against /camera_calibrated/image_raw and
     /camera_calibrated/camera_info.
 
+PICK THE RIGHT FILE — IT IS NOT INTERCHANGEABLE
+    calibration.py writes one YAML per mounting, under calibration/montages/:
+    nue_air_ros.yaml, tube_air_ros.yaml, tube_eau_ros.yaml. The camera lies
+    along the tube and looks out through its cylindrical wall, so the two
+    image axes do not go through the same optics: underwater fx and fy end up
+    about 1.4 apart (see optique.py). Feeding the air calibration to a
+    submerged run is not a small error — every range it produces is wrong by
+    tens of percent, silently. The node logs which mounting it loaded; check
+    that line before trusting a pool run.
+
 NOTE
     The image is republished untouched — only CameraInfo changes. Rectification
     is left to whatever consumes the topics (apriltag_ros handles the
     distortion coefficients itself).
 """
+from pathlib import Path
+
 import rclpy
 import yaml
 from rclpy.node import Node
@@ -33,9 +45,17 @@ from sensor_msgs.msg import CameraInfo, Image
 
 
 def charger_yaml(chemin):
-    """Read a standard ROS camera_calibration YAML file."""
+    """Read a standard ROS camera_calibration YAML file.
+
+    Also returns the mounting the file was produced for, so the node can say
+    it out loud at startup — an air calibration used underwater is otherwise
+    indistinguishable from a good one until the poses come out wrong.
+    """
     with open(chemin, "r") as fichier:
         donnees = yaml.safe_load(fichier)
+
+    montage = Path(chemin).stem
+    montage = montage[:-4] if montage.endswith("_ros") else montage
 
     info = CameraInfo()
     info.width = int(donnees["image_width"])
@@ -45,7 +65,7 @@ def charger_yaml(chemin):
     info.k = [float(v) for v in donnees["camera_matrix"]["data"]]
     info.r = [float(v) for v in donnees["rectification_matrix"]["data"]]
     info.p = [float(v) for v in donnees["projection_matrix"]["data"]]
-    return info
+    return info, montage
 
 
 class CameraInfoRelay(Node):
@@ -58,7 +78,16 @@ class CameraInfoRelay(Node):
         chemin = self.get_parameter("calibration_file").value
         if not chemin:
             raise RuntimeError("Set the 'calibration_file' parameter.")
-        self.modele = charger_yaml(chemin)
+        self.modele, montage = charger_yaml(chemin)
+
+        fx, fy = self.modele.k[0], self.modele.k[4]
+        self.get_logger().info(
+            f"mounting '{montage}': fx={fx:.2f} fy={fy:.2f} "
+            f"(anamorphic ratio {max(fx, fy)/min(fx, fy):.2f})")
+        if "eau" not in montage:
+            self.get_logger().warn(
+                f"'{montage}' is an IN-AIR calibration. Do not use it for a "
+                "submerged run — ranges would be off by tens of percent.")
 
         topic_image = self.get_parameter("image_topic").value
         sortie = self.get_parameter("output_namespace").value.rstrip("/")

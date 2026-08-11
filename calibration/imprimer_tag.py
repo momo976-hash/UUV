@@ -192,7 +192,11 @@ def main():
     figure.savefig(sortie, format="pdf")
     plt.close(figure)
 
-    focale = optique.focale("tube_air")
+    # C'est l'axe le MOINS grossi qui decide si un tag est decode : un carre
+    # trop etroit dans un sens ne passe pas, meme large dans l'autre. Ces
+    # mesures se font en air, sur un bureau, donc avec les focales en air.
+    K_air, _ = optique.charger("tube_air", silencieux=True)
+    focale = min(float(K_air[0, 0]), float(K_air[1, 1]))
     print(f"Ecrit : {sortie}")
     print("\nA quelle distance chaque tag atteint-il la limite supposee ?")
     for taille in tailles_cm:

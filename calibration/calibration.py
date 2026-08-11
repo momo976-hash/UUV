@@ -24,12 +24,25 @@
 #   --montage tube_air    dans le tube, hublot en place, a l'air  <- a faire
 #   --montage tube_eau    dans le tube, immerge
 #
-# En AIR, le hublot plat ne devie pas les rayons : ses deux faces sont
-# paralleles et le meme air regne des deux cotes, si bien que la calibration
-# en tube doit retomber tres pres de la camera nue. C'est justement ce qui en
-# fait un bon controle : elle valide le montage, la mise au point et le
-# vignettage AVANT de mouiller quoi que ce soit. Sous l'eau, en revanche, le
-# hublot devient une vraie lentille et la recalibration n'est plus optionnelle.
+# CALIBRER DANS L'AIR N'EST PAS UN ECHAUFFEMENT
+# La camera est couchee dans le tube et regarde par la paroi cylindrique. Les
+# deux axes de l'image ne traversent donc pas la meme chose (voir optique.py) :
+#
+#   fx, l'axe HORIZONTAL, suit l'axe du tube. La paroi s'y reduit a deux plans
+#   paralleles, et en air un tel dioptre ne devie STRICTEMENT rien. fx doit
+#   retomber sur la camera nue. Tout ecart la-dessus vient du montage — mise
+#   au point, resolution, damier mal mesure — pas de l'optique.
+#
+#   fy, l'axe VERTICAL, est circonferentiel : c'est un menisque. Il ne devie
+#   rien non plus SI la pupille est sur l'axe du tube, et de plus en plus
+#   quand elle s'en ecarte. Or la pupille de la D435i est forcement en retrait
+#   de quelques millimetres. Le rapport fy_tube / fy_nue MESURE donc ce
+#   retrait, sans rien demonter. C'est la seule facon de le connaitre.
+#
+# La calibration en air fait ainsi d'une pierre deux coups : elle valide le
+# montage, et elle donne le seul parametre geometrique qu'on ne sait pas
+# mesurer autrement. Sous l'eau la paroi devient une vraie lentille dans les
+# deux directions, et la recalibration n'est plus optionnelle.
 #
 # Touches : c = capturer | k = calibrer | z = annuler la derniere | q = quitter
 import argparse
@@ -112,6 +125,109 @@ def ouvrir_camera():
     return None, 0, 0
 
 
+def relire_le_montage(K, erreur_rms):
+    """Ce que les focales mesurees disent du montage physique.
+
+    Les deux axes de l'image ne traversent pas la meme optique (voir l'entete
+    et optique.py), donc on les lit separement. C'est ce qui transforme une
+    calibration en mesure mecanique.
+    """
+    nue = optique.K_NUE_AIR
+    fx, fy = float(K[0, 0]), float(K[1, 1])
+    ecart_fx = 100 * (fx / nue[0, 0] - 1)
+    radial = optique.ORIENTATION == "radiale"
+
+    print("\n" + "-" * 58)
+    print(f"CE QUE CETTE CALIBRATION DIT DU MONTAGE  ({MONTAGE})")
+    print("-" * 58)
+    print(f"  camera nue de reference : fx {nue[0,0]:.2f}   fy {nue[1,1]:.2f}")
+
+    if MONTAGE == "nue_air":
+        print(f"  mesure                  : fx {fx:.2f}   fy {fy:.2f}"
+              f"   ({ecart_fx:+.1f} % sur fx)")
+        if abs(ecart_fx) > 3:
+            print("  ATTENTION : c'est la meme camera nue, les focales devraient")
+            print("  coincider. Verifie la resolution et la taille des carreaux.")
+        return
+
+    if MONTAGE == "tube_air":
+        print(f"\n  fx = {fx:.2f}  ({ecart_fx:+.2f} % / camera nue)")
+        if not radial:
+            print("    montage axial : le hublot plat ne devie rien en air.")
+        else:
+            print("    Selon l'axe du tube la paroi est une lame a faces "
+                  "paralleles ;")
+            print("    en air elle ne devie rien, fx doit coincider.")
+        if abs(ecart_fx) > 2:
+            print("    ATTENTION : ecart trop grand pour de l'optique. Cherche")
+            print("    ailleurs — mise au point, resolution, damier mal mesure,")
+            print("    ou paroi rayee/embuee.")
+
+        if radial:
+            ecart_mm = 1000 * optique.decentrement_depuis_calibration(
+                K, nue, optique.INDICE_AIR)
+            attendu = nue[1, 1] * optique.grandissement_section(
+                indice_exterieur=optique.INDICE_AIR)
+            suppose = 1000 * optique.decentrement_pupille()
+            print(f"\n  fy = {fy:.2f}  ({100*(fy/nue[1,1]-1):+.2f} % / camera nue)")
+            print("    Selon la circonference la paroi est un menisque : il ne")
+            print("    devie rien si la pupille est sur l'axe, et d'autant plus")
+            print("    qu'elle s'en ecarte. Ce rapport MESURE cet ecart.")
+            print(f"\n    decentrement mesure  : {ecart_mm:+.1f} mm")
+            print(f"    decentrement suppose : {suppose:+.1f} mm  "
+                  f"(fy attendu {attendu:.2f})")
+            if abs(ecart_mm - suppose) > 2:
+                print(f"\n    Les deux ne collent pas. Le suspect est "
+                      f"PUPILLE_DERRIERE_FACE")
+                print(f"    ({1000*optique.PUPILLE_DERRIERE_FACE:.0f} mm dans "
+                      "optique.py), qui n'etait qu'une estimation.")
+                corrige = (1000 * (optique.rayon_tube(pire_cas=False)
+                                   - optique.JEU_ARRIERE
+                                   - optique.CAMERA_PROFONDEUR) + ecart_mm)
+                print(f"    Valeur compatible avec la mesure : "
+                      f"{-corrige:.1f} mm. La corriger dans optique.py")
+                print("    rendra justes toutes les predictions sous l'eau.")
+            else:
+                print("\n    Coherent avec la geometrie supposee : optique.py "
+                      "decrit bien le montage.")
+            print(f"\n    residu apres calibration : "
+                  f"{optique.residu_section(ecart_mm/1000, optique.INDICE_EAU):.2f} px "
+                  f"sous l'eau")
+            print(f"    (bruit de detection mesure : "
+                  f"{optique.BRUIT_COIN_PX:.3f} px)")
+        return
+
+    # tube_eau
+    depart = optique.source("tube_air")
+    K_air, _ = optique.charger("tube_air", silencieux=True)
+    attendu_fx = float(K_air[0, 0]) * optique.INDICE_EAU
+    print(f"\n  reference en air : {depart} (fx {K_air[0,0]:.2f}  "
+          f"fy {K_air[1,1]:.2f})")
+    if depart == "nue_air":
+        print("  Le montage tube_air n'est pas calibre : la comparaison ci-dessous")
+        print("  reste indicative. Calibre-le, c'est 10 minutes et ca cadre tout.")
+    print(f"\n  fx = {fx:.2f}   attendu {attendu_fx:.2f} "
+          f"({100*(fx/attendu_fx-1):+.1f} %)")
+    print(f"    Lame plane sous l'eau : la focale est multipliee par "
+          f"{optique.INDICE_EAU}.")
+    if radial:
+        attendu_fy = float(K_air[1, 1]) * (
+            optique.grandissement_section(indice_exterieur=optique.INDICE_EAU)
+            / (optique.grandissement_section(indice_exterieur=optique.INDICE_AIR)
+               if depart == "tube_air" else 1.0))
+        print(f"\n  fy = {fy:.2f}   attendu {attendu_fy:.2f} "
+              f"({100*(fy/attendu_fy-1):+.1f} %)")
+        print("    Menisque sous l'eau : l'effet depend du decentrement.")
+        print(f"\n  anamorphose mesuree : {max(fx,fy)/min(fx,fy):.3f}   "
+              f"predite {optique.anamorphose():.3f}")
+        print("    Les deux axes ne grossissent pas pareil : c'est normal et")
+        print("    c'est la signature du montage radial. Une anamorphose de 1.00")
+        print("    voudrait dire que la camera n'est pas orientee comme on croit.")
+    print(f"\n  RMS {erreur_rms:.3f} px : sous l'eau le modele plumb_bob")
+    print("  n'a pas la symetrie de revolution qu'il suppose, un residu plus")
+    print("  eleve qu'en air est attendu — pas forcement une mauvaise calibration.")
+
+
 def calibrer(points_3d, points_2d, taille_image):
     """Calcule les parametres de la camera et l'erreur de reprojection."""
     erreur_rms, K, dist, rvecs, tvecs = cv2.calibrateCamera(
@@ -147,27 +263,20 @@ def calibrer(points_3d, points_2d, taille_image):
     print(f"cx = {K[0,2]:.2f}    cy = {K[1,2]:.2f}")
     print(f"distorsion = {dist.ravel()}")
 
-    # Comparaison avec la camera nue : c'est le controle du montage.
-    reference = optique.K_NUE_AIR
-    ecart = 100 * (K[0, 0] / reference[0, 0] - 1)
-    print(f"\nMontage calibre : {MONTAGE}")
-    print(f"  fx camera nue = {reference[0,0]:.2f}  ->  ecart {ecart:+.1f} %")
-    if MONTAGE == "tube_air" and abs(ecart) > 3:
-        print("  ATTENTION : en air, le hublot plat ne devrait presque rien changer.")
-        print("  Un tel ecart trahit un probleme — mise au point, resolution")
-        print("  differente, damier mal mesure, ou hublot qui n'est pas plat.")
-    if MONTAGE == "tube_eau":
-        attendu = reference[0, 0] * optique.INDICE_EAU
-        print(f"  focale attendue sous l'eau (modele paraxial) : {attendu:.2f}")
-        print(f"  ecart au modele : {100*(K[0,0]/attendu - 1):+.1f} %")
-
     print(f"\nParametres sauves dans {fichier}")
+    relire_le_montage(K, erreur_rms)
 
     # Export au format YAML standard ROS (camera_calibration_parsers).
     # Ce fichier est directement utilisable par un node ROS pour publier
     # sensor_msgs/CameraInfo : aucune recalibration sous ROS n'est necessaire.
+    #
+    # UN FICHIER PAR MONTAGE. Ecrire toujours au meme nom serait un piege :
+    # calibrer tube_air ecraserait le tube_eau, et le node ROS publierait
+    # tranquillement les intrinseques de l'air pendant un essai en bassin,
+    # sans que rien ne le signale.
     largeur_img, hauteur_img = taille_image
     lignes_yaml = [
+        f"# montage : {MONTAGE}  (genere par calibration.py)",
         f"image_width: {largeur_img}",
         f"image_height: {hauteur_img}",
         "camera_name: realsense_color",
@@ -190,9 +299,12 @@ def calibrer(points_3d, points_2d, taille_image):
         "  data: [" + ", ".join(
             f"{v:.8f}" for v in np.hstack([K, np.zeros((3, 1))]).flatten()) + "]",
     ]
-    with open("camera_calibration_ros.yaml", "w") as f:
+    yaml_montage = optique.DOSSIER_MONTAGES / f"{MONTAGE}_ros.yaml"
+    with open(yaml_montage, "w") as f:
         f.write("\n".join(lignes_yaml) + "\n")
-    print("Fichier ROS ecrit : camera_calibration_ros.yaml")
+    print(f"Fichier ROS ecrit : {yaml_montage}")
+    print("  ros2 run <pkg> camera_info_relay --ros-args \\")
+    print(f"      -p calibration_file:={yaml_montage}")
 
     # Version copiable directement dans les autres programmes
     print("\n--- A copier dans tes programmes ---")

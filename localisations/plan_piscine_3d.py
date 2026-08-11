@@ -77,14 +77,20 @@ _demi_h_air, _demi_v_air, _demi_d_air = optique.demi_champs()
 
 # Le champ n'est pas reduit pareil dans les deux directions. Camera couchee
 # dans le tube, l'axe HORIZONTAL de l'image suit l'axe du tube et traverse une
-# lame plane : il se retrecit d'un facteur 1.33. L'axe VERTICAL, lui, est
-# circonferentiel — le cylindre ne devie rien et le champ reste entier.
+# lame a faces paralleles : il se retrecit d'un facteur 1.33. L'axe VERTICAL
+# est circonferentiel et traverse un menisque, dont l'effet ne depend que de
+# l'ecart entre la pupille et l'axe du tube : nul si elle est sur l'axe, et
+# ELARGISSANT si elle est en retrait, comme c'est le cas ici. Le cone tracé
+# plus bas est donc plus large en hauteur qu'en largeur, ce qui surprend mais
+# est bien ce que la camera voit.
 DEMI_FOV_H = np.radians(optique.demi_champ_eau(_demi_h_air, "axe"))
 DEMI_FOV_V = np.radians(optique.demi_champ_eau(_demi_v_air, "section"))
 
 # Pour la taille apparente d'un tag, c'est la direction la MOINS grossie qui
 # decide de la detection : un carre trop etroit dans un sens n'est pas decode,
-# meme s'il est large dans l'autre.
+# meme s'il est large dans l'autre. Sous l'eau et dans ce montage, la moins
+# grossie est la VERTICALE — donc immerger ne fait pas gagner de portee, au
+# contraire du raccourci « x 1.33 » qui ne vaut que pour un hublot plat.
 FOCALE_EAU = optique.focale_eau()
 
 # Vignettage : le tube est un tuyau, et la camera regarde par un bout.
