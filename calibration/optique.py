@@ -77,10 +77,11 @@ CAMERA_LARGEUR = 0.090
 CAMERA_HAUTEUR = 0.025
 CAMERA_PROFONDEUR = 0.025
 
-# Retrait de la pupille d'entree derriere la face avant du boitier. Estimation
-# — c'est le parametre le moins sur de tout ce fichier. La calibration en air
-# le mesure : voir `decentrement_depuis_calibration`.
-PUPILLE_DERRIERE_FACE = 0.005
+# Retrait de la pupille d'entree derriere la face avant du boitier.
+# Valeur ajustee par la calibration tube_air du 11/08 : le rapport
+# fy_tube / fy_nue donne le decentrement reel, qui sert a predire les
+# focales sous l'eau. Voir `decentrement_depuis_calibration`.
+PUPILLE_DERRIERE_FACE = -0.0029
 
 # --- le tube : Blue Robotics BR-100230-151, acrylique coule -----------------
 TUBE_NOM = 'BR-100230-151, 2" cast acrylic, 150 mm'
