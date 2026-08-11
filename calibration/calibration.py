@@ -14,11 +14,39 @@
 #   2. Quand les coins colores apparaissent, appuie sur 'c' pour capturer.
 #   3. Capture 15 a 25 vues DIFFERENTES (angles, distances, coins de l'image).
 #   4. Appuie sur 'k' pour calculer la calibration.
-#   5. Les parametres sont sauves dans calibration_camera.npz et affiches.
+#   5. Les parametres sont sauves et affiches.
+#
+# UN MONTAGE, UNE CALIBRATION
+# La camera nue et la camera dans son tube ne voient pas pareil, et sous
+# l'eau encore moins. On range donc chaque calibration sous le nom de son
+# montage, et optique.py va y puiser :
+#   --montage nue_air    la camera seule, a l'air libre
+#   --montage tube_air    dans le tube, hublot en place, a l'air  <- a faire
+#   --montage tube_eau    dans le tube, immerge
+#
+# En AIR, le hublot plat ne devie pas les rayons : ses deux faces sont
+# paralleles et le meme air regne des deux cotes, si bien que la calibration
+# en tube doit retomber tres pres de la camera nue. C'est justement ce qui en
+# fait un bon controle : elle valide le montage, la mise au point et le
+# vignettage AVANT de mouiller quoi que ce soit. Sous l'eau, en revanche, le
+# hublot devient une vraie lentille et la recalibration n'est plus optionnelle.
 #
 # Touches : c = capturer | k = calibrer | z = annuler la derniere | q = quitter
+import argparse
+import sys
+from pathlib import Path
+
 import cv2
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import optique  # noqa: E402
+
+_analyseur = argparse.ArgumentParser(
+    description="Calibration par damier, rangee sous le nom d'un montage.")
+_analyseur.add_argument("--montage", default="tube_air", choices=optique.MONTAGES,
+                        help="montage calibre (defaut %(default)s)")
+MONTAGE = _analyseur.parse_args().montage
 
 # Index de la camera (None = detection automatique).
 CAMERA_INDEX = None
@@ -90,6 +118,10 @@ def calibrer(points_3d, points_2d, taille_image):
         points_3d, points_2d, taille_image, None, None)
 
     # Sauvegarde immediate : on ne veut pas perdre le resultat en cas de souci
+    optique.DOSSIER_MONTAGES.mkdir(parents=True, exist_ok=True)
+    fichier = optique.DOSSIER_MONTAGES / f"{MONTAGE}.npz"
+    np.savez(fichier, K=K, dist=dist,
+             largeur=taille_image[0], hauteur=taille_image[1])
     np.savez("calibration_camera.npz", K=K, dist=dist,
              largeur=taille_image[0], hauteur=taille_image[1])
 
@@ -115,13 +147,21 @@ def calibrer(points_3d, points_2d, taille_image):
     print(f"cx = {K[0,2]:.2f}    cy = {K[1,2]:.2f}")
     print(f"distorsion = {dist.ravel()}")
 
-    # Comparaison avec l'approximation utilisee jusqu'ici
-    largeur = taille_image[0]
-    print(f"\nComparaison : approximation focale = largeur x facteur")
-    print(f"  fx reel / largeur = {K[0,0] / largeur:.4f}"
-          f"   (le facteur 0.95 utilise jusqu'ici)")
+    # Comparaison avec la camera nue : c'est le controle du montage.
+    reference = optique.K_NUE_AIR
+    ecart = 100 * (K[0, 0] / reference[0, 0] - 1)
+    print(f"\nMontage calibre : {MONTAGE}")
+    print(f"  fx camera nue = {reference[0,0]:.2f}  ->  ecart {ecart:+.1f} %")
+    if MONTAGE == "tube_air" and abs(ecart) > 3:
+        print("  ATTENTION : en air, le hublot plat ne devrait presque rien changer.")
+        print("  Un tel ecart trahit un probleme — mise au point, resolution")
+        print("  differente, damier mal mesure, ou hublot qui n'est pas plat.")
+    if MONTAGE == "tube_eau":
+        attendu = reference[0, 0] * optique.INDICE_EAU
+        print(f"  focale attendue sous l'eau (modele paraxial) : {attendu:.2f}")
+        print(f"  ecart au modele : {100*(K[0,0]/attendu - 1):+.1f} %")
 
-    print("\nParametres sauves dans calibration_camera.npz")
+    print(f"\nParametres sauves dans {fichier}")
 
     # Export au format YAML standard ROS (camera_calibration_parsers).
     # Ce fichier est directement utilisable par un node ROS pour publier

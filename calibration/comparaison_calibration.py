@@ -1,3 +1,5 @@
+from pathlib import Path
+import sys
 # comparaison_calibration.py — Compare l'approximation et la calibration damier.
 #
 # DEUX grandeurs mesurables, a ne pas confondre :
@@ -23,6 +25,9 @@ from collections import deque
 import cv2
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import optique  # noqa: E402
+
 CAMERA_INDEX = None          # None = detection automatique
 RESOLUTION = (640, 480)      # doit etre identique a celle de la calibration
 
@@ -31,13 +36,10 @@ FACTEUR_APPROX = 0.95        # ancienne approximation
 LISSAGE = 30                 # images moyennees pour stabiliser l'affichage
 
 # Calibration par damier (5x7, 22 vues, RMS 0.169 px)
-K_CALIB = np.array([
-    [604.1876, 0.0000, 326.1973],
-    [0.0000, 602.3668, 242.8850],
-    [0.0000, 0.0000, 1.0000],
-], dtype=np.float64)
-DIST_CALIB = np.array([0.013835, 0.733706, -0.002333, 0.001136, -2.707687],
-                      dtype=np.float64)
+MONTAGE = "tube_air"
+# L'optique vient de optique.py : camera, tube, hublot, milieu. Tant que le
+# montage n'est pas calibre, optique.py retombe sur la camera nue en le disant.
+K_CALIB, DIST_CALIB = optique.charger(MONTAGE)
 LARGEUR_CALIB, HAUTEUR_CALIB = 640, 480
 
 

@@ -1,8 +1,13 @@
+from pathlib import Path
+import sys
 # webcam_live.py — Lecture d'AprilTags en direct : POSITION (x,y,z) + ORIENTATION.
 # Cherche automatiquement une camera qui fonctionne, detecte les AprilTags,
 # et affiche pour chaque tag sa position (metres) et son orientation (degres).
 import cv2
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import optique  # noqa: E402
 
 # Index de la camera (None = detection automatique).
 CAMERA_INDEX = None
@@ -14,13 +19,10 @@ TAILLE_TAG = 0.223   # cote reel du carre noir, en metres (22,3 cm)
 
 # --- Calibration reelle de la camera (damier 5x7, 22 vues, RMS 0.169 px) ---
 # Si le fichier calibration_camera.npz est a cote du script, il est utilise.
-K_CALIB = np.array([
-    [604.1876, 0.0000, 326.1973],
-    [0.0000, 602.3668, 242.8850],
-    [0.0000, 0.0000, 1.0000],
-], dtype=np.float64)
-DIST_CALIB = np.array([0.013835, 0.733706, -0.002333, 0.001136, -2.707687],
-                      dtype=np.float64)
+MONTAGE = "tube_air"
+# L'optique vient de optique.py : camera, tube, hublot, milieu. Tant que le
+# montage n'est pas calibre, optique.py retombe sur la camera nue en le disant.
+K_CALIB, DIST_CALIB = optique.charger(MONTAGE)
 LARGEUR_CALIB = 640          # resolution utilisee lors de la calibration
 
 

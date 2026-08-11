@@ -147,12 +147,25 @@
 # visible, rien ne distingue "la camera a bouge" de "le tag a bouge". La
 # detection exige que le tag suspect soit vu, au moins par moments, en meme
 # temps que d'autres.
+import sys
 from collections import defaultdict, deque
+from pathlib import Path
 
 import numpy as np
 
-# Valeurs par defaut calees sur la D435i a 640x480 derriere un hublot plat.
-FOCALE_EAU = 604.1876 * 1.33
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import optique  # noqa: E402
+
+# L'optique vient de optique.py : camera, tube, hublot, milieu.
+#
+# RESERVE IMPORTANTE sur cette focale. Derriere un hublot PLAT, multiplier la
+# focale par l'indice de l'eau n'est exact qu'au voisinage de l'axe optique :
+# le hublot ajoute une distorsion radiale que ce seul nombre ne decrit pas.
+# `python optique.py` montre l'ecart — plus de 16 px a 20 deg de l'axe, quand
+# le bruit de detection vaut 0.215 px. Le filtre en herite : la covariance
+# calculee ici sous-estime l'erreur des tags vus loin du centre de l'image,
+# tant qu'une calibration faite SOUS L'EAU n'a pas remplace ce modele.
+FOCALE_EAU = optique.focale_eau()
 TAILLE_TAG = 0.223
 
 # MESURE, plus supposee : 14 captures camera en main a 0.72 - 1.52 m

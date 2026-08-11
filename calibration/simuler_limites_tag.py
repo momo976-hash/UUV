@@ -26,15 +26,20 @@
 #   python simuler_limites_tag.py --carte     la carte taille x incidence
 #   python simuler_limites_tag.py --sensible  l'influence du flou et du bruit
 import argparse
+import sys
+from pathlib import Path
 
 import cv2
 import numpy as np
 
-K_CALIB = np.array([
-    [604.1876, 0.0000, 326.1973],
-    [0.0000, 602.3668, 242.8850],
-    [0.0000, 0.0000, 1.0000],
-], dtype=np.float64)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import optique  # noqa: E402
+
+MONTAGE = "tube_air"
+# L'optique vient de optique.py : camera, tube, hublot, milieu. Le montage
+# par defaut est 'tube_air' — la camera dans son tube, a l'air libre. Tant
+# qu'il n'est pas calibre, optique.py retombe sur la camera nue en le disant.
+K_CALIB, DIST_CALIB = optique.charger(MONTAGE)
 
 FAMILLE = cv2.aruco.DICT_APRILTAG_36h11
 BORDURE = 1

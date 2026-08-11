@@ -48,13 +48,23 @@
 #           r = rapport | e = effacer | q = quitter
 import argparse
 import csv
+import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import optique  # noqa: E402
+
 CAMERA_INDEX = None
-RESOLUTION = (640, 480)
+
+MONTAGE = "tube_air"
+# L'optique vient de optique.py : camera, tube, hublot, milieu. Le montage
+# par defaut est 'tube_air' — la camera dans son tube, a l'air libre. Tant
+# qu'il n'est pas calibre, optique.py retombe sur la camera nue en le disant.
+K_CALIB, DIST_CALIB = optique.charger(MONTAGE)
+RESOLUTION = optique.RESOLUTION
 
 TAILLE_TAG_REELLE = 0.223   # les tags du bassin : c'est vers eux qu'on conclut
 TAILLE_TAG = 0.223          # le tag d'essai devant la camera (option --tag)
@@ -71,11 +81,11 @@ PALIERS_CONFIRMATION = 2   # paliers consecutifs sous le seuil pour conclure
 CIBLE_PIXELS = 15
 
 # Le bassin, pour rapporter la mesure a ce qu'on en fera vraiment. Sa
-# diagonale majore la distance camera-tag ; l'eau grossit l'image d'un
-# facteur 1.33 a travers un hublot plat, donc les tags y paraissent PLUS
-# GROS qu'en air a distance egale.
+# diagonale majore la distance camera-tag ; sous l'eau, a travers un hublot
+# plat, l'image grossit et les tags y paraissent PLUS GROS qu'en air a
+# distance egale.
 BASSIN = (3.80, 1.67, 1.00)
-INDICE_EAU = 1.33
+INDICE_EAU = optique.INDICE_EAU
 
 
 def pixels_pire_cas():
@@ -86,15 +96,8 @@ def pixels_pire_cas():
     jamais. Il suffit d'avoir verifie la detection jusqu'en dessous.
     """
     diagonale = float(np.linalg.norm(BASSIN))
-    return K_CALIB[0, 0] * INDICE_EAU * TAILLE_TAG_REELLE / diagonale, diagonale
+    return optique.focale_eau(MONTAGE) * TAILLE_TAG_REELLE / diagonale, diagonale
 
-K_CALIB = np.array([
-    [604.1876, 0.0000, 326.1973],
-    [0.0000, 602.3668, 242.8850],
-    [0.0000, 0.0000, 1.0000],
-], dtype=np.float64)
-DIST_CALIB = np.array([0.013835, 0.733706, -0.002333, 0.001136, -2.707687],
-                      dtype=np.float64)
 
 CSV = Path(__file__).resolve().with_name("limites_tag.csv")
 COLONNES = ["balayage", "taux", "pixels", "incidence_deg", "distance_m", "bord_px"]

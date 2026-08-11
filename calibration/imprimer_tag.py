@@ -29,11 +29,15 @@
 # bien plat (un tag gondole fausse l'angle) et lancer
 #   python mesurer_limites_tag.py --tag 0.05
 import argparse
+import sys
 from pathlib import Path
 
 import cv2
 import matplotlib
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import optique  # noqa: E402
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -188,7 +192,7 @@ def main():
     figure.savefig(sortie, format="pdf")
     plt.close(figure)
 
-    focale = 604.1876
+    focale = optique.focale("tube_air")
     print(f"Ecrit : {sortie}")
     print("\nA quelle distance chaque tag atteint-il la limite supposee ?")
     for taille in tailles_cm:

@@ -23,6 +23,9 @@ from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import optique  # noqa: E402
+
 EXPORT = "--png" in sys.argv
 
 # L'image part toujours a cote de ce fichier, jamais dans le dossier courant :
@@ -64,21 +67,34 @@ COULEUR_PAROI = {
 }
 
 # --------------------------------------------------------------------------
-# 2. La camera sous l'eau
+# 2. La camera sous l'eau, dans son tube
 # --------------------------------------------------------------------------
-# Calibration en AIR de la D435i (640x480). Un hublot plat multiplie la focale
-# apparente par l'indice de l'eau : la camera voit un tiers moins large.
-FX_AIR, FY_AIR = 604.1876, 602.3668
-INDICE_EAU = 1.33
-LARGEUR_PX, HAUTEUR_PX = 640, 480
+# Toute l'optique vient de optique.py : matrice de calibration, refraction du
+# hublot, et le TUBE, qui peut rogner le champ avant meme que l'eau s'en mele.
+# Le champ retenu ci-dessous est donc le plus petit des deux.
+LARGEUR_PX, HAUTEUR_PX = optique.RESOLUTION
+FOCALE_EAU = optique.focale_eau()
+_demi_h_air, _demi_v_air, _demi_d_air = optique.demi_champs()
 
-FX_EAU, FY_EAU = FX_AIR * INDICE_EAU, FY_AIR * INDICE_EAU
-DEMI_FOV_H = np.arctan(LARGEUR_PX / 2 / FX_EAU)      # radians
-DEMI_FOV_V = np.arctan(HAUTEUR_PX / 2 / FY_EAU)
+DEMI_FOV_H = np.radians(optique.demi_champ_eau(_demi_h_air))
+DEMI_FOV_V = np.radians(optique.demi_champ_eau(_demi_v_air))
+
+# Vignettage : le tube est un tuyau, et la camera regarde par un bout.
+_VIGNETTAGE = optique.vignettage()
+_DEMI_TUBE = np.radians(_VIGNETTAGE["demi_angle_tube"])
+if _VIGNETTAGE["rogne_horizontal"]:
+    DEMI_FOV_H = min(DEMI_FOV_H, _DEMI_TUBE)
+if _VIGNETTAGE["rogne_vertical"]:
+    DEMI_FOV_V = min(DEMI_FOV_V, _DEMI_TUBE)
 
 PORTEE = 3.0             # portee retenue pour le trace du cone
-INCIDENCE_MAX = 65.0     # au-dela, le tag est trop de biais pour etre exploitable
-PIXELS_MIN = 30          # taille apparente minimale du tag pour une detection sure
+# Les deux limites de detection, mesurees puis simulees (voir
+# calibration/simuler_limites_tag.py) : le critere reel est en fait unique,
+# taille_apparente x cos(incidence) >= PIXELS_MIN, l'angle ne faisant que
+# comprimer le tag. INCIDENCE_MAX reste le plafond dur au-dela duquel la
+# detection s'effondre quelle que soit la taille.
+INCIDENCE_MAX = 65.0
+PIXELS_MIN = 20
 
 
 def repere_tag(normale):
@@ -129,8 +145,12 @@ def visibles_depuis(position, azimut):
         incidence = np.degrees(np.arccos(np.clip(float(-v @ n) / distance, -1.0, 1.0)))
         if incidence > INCIDENCE_MAX:
             continue
-        pixels = FX_EAU * TAILLE_TAG / distance
-        if pixels < PIXELS_MIN:
+        pixels = FOCALE_EAU * TAILLE_TAG / distance
+        # Le critere porte sur la largeur du tag UNE FOIS COMPRIME par
+        # l'angle : la simulation a montre que l'incidence ne fait rien
+        # d'autre que le retrecir d'un facteur cosinus, jusqu'au plafond dur
+        # de INCIDENCE_MAX ou la detection s'effondre.
+        if pixels * np.cos(np.radians(incidence)) < PIXELS_MIN:
             continue
         trouves.append((tid, distance, incidence, pixels))
     return trouves
