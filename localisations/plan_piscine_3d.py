@@ -73,11 +73,19 @@ COULEUR_PAROI = {
 # hublot, et le TUBE, qui peut rogner le champ avant meme que l'eau s'en mele.
 # Le champ retenu ci-dessous est donc le plus petit des deux.
 LARGEUR_PX, HAUTEUR_PX = optique.RESOLUTION
-FOCALE_EAU = optique.focale_eau()
 _demi_h_air, _demi_v_air, _demi_d_air = optique.demi_champs()
 
-DEMI_FOV_H = np.radians(optique.demi_champ_eau(_demi_h_air))
-DEMI_FOV_V = np.radians(optique.demi_champ_eau(_demi_v_air))
+# Le champ n'est pas reduit pareil dans les deux directions. Camera couchee
+# dans le tube, l'axe HORIZONTAL de l'image suit l'axe du tube et traverse une
+# lame plane : il se retrecit d'un facteur 1.33. L'axe VERTICAL, lui, est
+# circonferentiel — le cylindre ne devie rien et le champ reste entier.
+DEMI_FOV_H = np.radians(optique.demi_champ_eau(_demi_h_air, "axe"))
+DEMI_FOV_V = np.radians(optique.demi_champ_eau(_demi_v_air, "section"))
+
+# Pour la taille apparente d'un tag, c'est la direction la MOINS grossie qui
+# decide de la detection : un carre trop etroit dans un sens n'est pas decode,
+# meme s'il est large dans l'autre.
+FOCALE_EAU = optique.focale_eau()
 
 # Vignettage : le tube est un tuyau, et la camera regarde par un bout.
 _VIGNETTAGE = optique.vignettage()

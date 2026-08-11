@@ -156,15 +156,24 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import optique  # noqa: E402
 
-# L'optique vient de optique.py : camera, tube, hublot, milieu.
+# L'optique vient de optique.py : camera, tube, paroi, milieu.
 #
-# RESERVE IMPORTANTE sur cette focale. Derriere un hublot PLAT, multiplier la
-# focale par l'indice de l'eau n'est exact qu'au voisinage de l'axe optique :
-# le hublot ajoute une distorsion radiale que ce seul nombre ne decrit pas.
-# `python optique.py` montre l'ecart — plus de 16 px a 20 deg de l'axe, quand
-# le bruit de detection vaut 0.215 px. Le filtre en herite : la covariance
-# calculee ici sous-estime l'erreur des tags vus loin du centre de l'image,
-# tant qu'une calibration faite SOUS L'EAU n'a pas remplace ce modele.
+# DEUX RESERVES sur ce nombre unique, toutes deux dues au tube.
+#
+# 1. Le systeme est ANAMORPHIQUE sous l'eau. La camera est couchee dans le
+#    tube : l'axe horizontal de l'image suit l'axe du tube et traverse une
+#    lame plane (focale x 1.33), l'axe vertical est circonferentiel et ne
+#    traverse rien (focale inchangee). On retient ici la plus PETITE des deux,
+#    donc la plus defavorable : la covariance annoncee est majorante dans un
+#    sens et juste dans l'autre, jamais optimiste.
+#
+# 2. Meme dans la direction « lame plane », le facteur 1.33 n'est exact qu'au
+#    voisinage de l'axe optique — plus de 16 px d'ecart a 20 deg, quand le
+#    bruit de detection vaut 0.215 px. Cette erreur-la est SYSTEMATIQUE : le
+#    filtre la suit au lieu de la moyenner. Seule une calibration faite SOUS
+#    L'EAU la corrige.
+#
+# `python optique.py` chiffre les deux.
 FOCALE_EAU = optique.focale_eau()
 TAILLE_TAG = 0.223
 
