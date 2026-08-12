@@ -153,7 +153,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "calibration"))
 import optique  # noqa: E402
 
 # L'optique vient de optique.py : camera, tube, paroi, milieu.

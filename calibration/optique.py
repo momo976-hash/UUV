@@ -115,7 +115,16 @@ INDICE_ACRYLIQUE = 1.49
 
 # Calibrations enregistrees par calibration.py --montage <nom>
 MONTAGES = ("nue_air", "tube_air", "tube_eau")
-DOSSIER_MONTAGES = Path(__file__).resolve().parent / "calibration" / "montages"
+
+# On cherche le dossier des calibrations la ou il peut etre, selon que ce
+# fichier vive a la racine du depot ou dans calibration/. Se tromper ici ne
+# fait pas planter : `charger` retombe silencieusement sur la camera nue, et
+# on mesure des semaines avec la mauvaise focale sans jamais s'en apercevoir.
+_ICI = Path(__file__).resolve().parent
+DOSSIER_MONTAGES = next(
+    (d for d in (_ICI / "montages", _ICI / "calibration" / "montages")
+     if d.is_dir()),
+    _ICI / "montages")
 
 
 # --- chargement -------------------------------------------------------------

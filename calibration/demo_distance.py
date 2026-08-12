@@ -1,25 +1,86 @@
-# demo_distance.py — Preuve visuelle que la calibration est juste.
+# demo_distance.py — La calibration, montree plutot que racontee.
 #
-# Pose un AprilTag a une distance connue (mesuree au metre) devant la paroi
-# du tube. L'ecran affiche en temps reel la distance calculee par solvePnP
-# avec la calibration enregistree. Si les deux nombres coincident, la
-# calibration est correcte — Thein peut verifier au metre a ruban.
+# POURQUOI CE SCRIPT
+# Dire "la camera est calibree" ne prouve rien : les chiffres d'une matrice K
+# ne se verifient pas a l'oeil. Ce script rend la calibration TESTABLE par
+# quelqu'un qui n'a qu'un metre a ruban. On pose un tag a une distance connue,
+# et l'ecran affiche cote a cote ce que TROIS modeles de camera repondent a la
+# meme image :
 #
-#   python demo_distance.py                     tag de 22.3 cm (bassin)
-#   python demo_distance.py --tag 0.05          tag imprime de 5 cm
-#   python demo_distance.py --montage tube_eau  calibration sous l'eau
+#   1. SANS CALIBRATION   focale devinee (= largeur de l'image), centre au
+#                         milieu, aucune distorsion. C'est ce qu'on ecrit
+#                         quand on n'a pas calibre.
+#   2. HORS TUBE          la vraie calibration de la camera nue, faite avant
+#                         de la mettre dans le tube.
+#   3. DANS LE TUBE       la calibration du montage reel, tube compris.
+#
+# Les trois lisent EXACTEMENT les memes coins de tag : tout ecart entre elles
+# vient du modele optique, de rien d'autre. Avec la distance vraie donnee par
+# --reference, chaque ligne affiche son erreur en cm et en %.
+#
+# LA DISTANCE NE RACONTE PAS TOUTE L'HISTOIRE
+# C'est le piege de cette demo, et c'est ce qui la rend interessante. Sur un
+# tag a 1.5 m, mesure sur la calibration reelle du 11/08 :
+#
+#                          distance      position dans l'espace
+#   sans calibration       +6 %  (+9 cm)         10 cm a cote
+#   calibree hors tube     -0.3 % (-0.4 cm)       4 cm a cote
+#
+# La ligne 2 donne une distance quasi juste et se trompe pourtant de 4 cm.
+# Raison : entre la camera nue et la camera dans le tube, ce qui bouge le plus
+# n'est pas la focale (602.4 -> 607.5) mais le POINT PRINCIPAL, cy passe de
+# 242.9 a 258.5 — 15.6 px, soit 1.5 deg de visee. Un cap fausse de 1.5 deg ne
+# change pas la portee, il decale lateralement : 4 cm a 1.5 m, 8 cm a 3 m. Le
+# metre a ruban ne le verra pas ; le filtre de Kalman, si.
+# La colonne "ecart 3D" du panneau est la pour cela.
+#
+# NE PAS ATTENDRE QUE L'ERREUR EXPLOSE DANS LES COINS
+# On pourrait croire que la ligne 1 s'effondre loin du centre, faute de
+# corriger la distorsion. Verifie : son erreur de distance passe de 6.0 % au
+# centre a 3.8 % au bord — elle DIMINUE, la distorsion negligee compensant en
+# partie la focale fausse. Ne pas conclure sur une seule position du tag.
+#
+# ENFIN, EN AIR, LES LIGNES 2 ET 3 RESTENT PROCHES
+# C'est normal et c'est un resultat : en air la paroi ne devie presque rien.
+# Leur ecart se creuse sous l'eau, ou la paroi devient une vraie lentille
+# (focales 804 / 625 px au lieu de 596 / 608). C'est tout l'objet de tube_eau.
+#
+# MODE D'EMPLOI DEVANT QUELQU'UN
+#   1. Poser le tag bien en face, a une distance mesuree au metre (1 a 2 m).
+#   2. python demo_distance.py --tag 0.223 --reference 1.50
+#   3. Lire les trois lignes. Deplacer le tag vers un coin de l'image.
+#   4. 's' capture l'ecran en PNG : la preuve part dans le rapport.
+#
+# ON MESURE DEPUIS LA PUPILLE, PAS DEPUIS LA PAROI DU TUBE
+# Le metre part du verre de l'objectif, a ~2 cm pres. A 1.5 m cela pese 1 % :
+# ne pas conclure sur un ecart plus petit que cela.
+#
+# Touches : t = changer de taille de tag | + / - = ajuster la reference
+#           0 = oublier la reference     | s = capturer l'ecran | q = quitter
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optique  # noqa: E402
 
 CAMERA_INDEX = None
 FAMILLE = cv2.aruco.DICT_APRILTAG_36h11
+
+# Les deux tags dont on dispose : celui du bassin et le petit.
+TAILLES = (0.223, 0.115)
+
+DOSSIER_PREUVES = Path(__file__).resolve().parent / "preuves"
+
+VERT = (90, 220, 90)
+ORANGE = (60, 170, 250)
+ROUGE = (70, 70, 240)
+GRIS = (170, 170, 170)
+BLANC = (245, 245, 245)
 
 
 def ouvrir_camera():
@@ -40,40 +101,217 @@ def ouvrir_camera():
     return None, 0, 0
 
 
-def main():
-    analyseur = argparse.ArgumentParser(
-        description="Mesure la distance a un AprilTag en temps reel "
-                    "— preuve que la calibration est juste.")
-    analyseur.add_argument("--tag", type=float, default=0.223,
-                           help="cote du carre noir du tag, en metres "
-                                "(defaut %(default)s)")
-    analyseur.add_argument("--montage", default="tube_air",
-                           choices=optique.MONTAGES,
-                           help="calibration a utiliser (defaut %(default)s)")
-    options = analyseur.parse_args()
+def modeles(montage, largeur, hauteur):
+    """Les trois cameras qu'on va faire repondre a la meme image.
 
-    taille = options.tag
-    K, dist = optique.charger(options.montage)
-    K = K.astype(np.float64)
-    dist = dist.ravel()
-
-    print(f"Calibration : {options.montage}  "
-          f"(fx={K[0,0]:.1f}, fy={K[1,1]:.1f})")
-    print(f"Tag : {taille*100:.1f} cm de cote")
-    print("Pose le tag a une distance connue et verifie que l'ecran affiche "
-          "la meme valeur.")
-    print("'q' pour quitter.\n")
-
-    demi = taille / 2
-    coins_3d = np.array([
-        [-demi,  demi, 0],
-        [ demi,  demi, 0],
-        [ demi, -demi, 0],
-        [-demi, -demi, 0],
+    La premiere n'est pas une calibration ratee : c'est l'absence de
+    calibration, telle qu'on l'ecrit quand on n'a rien mesure — focale prise
+    egale a la largeur de l'image (~60 deg de champ), centre optique suppose
+    au centre geometrique, distorsion supposee nulle.
+    """
+    devine = np.array([
+        [float(largeur), 0.0, largeur / 2.0],
+        [0.0, float(largeur), hauteur / 2.0],
+        [0.0, 0.0, 1.0],
     ], dtype=np.float64)
 
+    K_tube, dist_tube = optique.charger(montage, silencieux=True)
+    return [
+        ("SANS CALIBRATION", "focale devinee, distorsion ignoree",
+         devine, np.zeros(5, dtype=np.float64), ROUGE),
+        ("CALIBREE HORS TUBE", "camera nue, avant le montage",
+         optique.K_NUE_AIR.astype(np.float64),
+         optique.DIST_NUE_AIR.astype(np.float64), ORANGE),
+        ("CALIBREE DANS LE TUBE", f"montage '{montage}', ce qu'on utilise",
+         K_tube.astype(np.float64), dist_tube.ravel().astype(np.float64), VERT),
+    ]
+
+
+def coins_du_tag(taille):
+    demi = taille / 2.0
+    return np.array([
+        [-demi,  demi, 0.0],
+        [ demi,  demi, 0.0],
+        [ demi, -demi, 0.0],
+        [-demi, -demi, 0.0],
+    ], dtype=np.float64)
+
+
+def bandeau(image, x, y, largeur, hauteur, alpha=0.72):
+    """Un fond sombre translucide, pour que le texte reste lisible."""
+    x0, y0 = max(x, 0), max(y, 0)
+    x1, y1 = min(x + largeur, image.shape[1]), min(y + hauteur, image.shape[0])
+    if x1 <= x0 or y1 <= y0:
+        return
+    zone = image[y0:y1, x0:x1]
+    image[y0:y1, x0:x1] = cv2.addWeighted(
+        zone, 1 - alpha, np.zeros_like(zone), alpha, 0)
+
+
+def ecrire(image, texte, position, taille=0.5, couleur=BLANC, gras=1):
+    cv2.putText(image, texte, position, cv2.FONT_HERSHEY_SIMPLEX,
+                taille, couleur, gras, cv2.LINE_AA)
+
+
+def dessiner_panneau(toile, lignes, reference, taille_tag, vu):
+    """Le tableau des trois reponses, en bas de l'image.
+
+    Deux colonnes de chiffres, parce que les deux disent des choses
+    differentes : la DISTANCE, que le metre a ruban peut contredire, et
+    l'ECART 3D avec la calibration du tube, qui attrape le decalage lateral
+    qu'aucun metre tenu de face ne fera apparaitre.
+    """
+    H, L = toile.shape[:2]
+    hauteur_ligne = 54
+    haut = H - (hauteur_ligne * 3 + 60)
+    bandeau(toile, 0, haut, L, H - haut)
+
+    colonne_d = L - 300      # la distance
+    colonne_e = L - 150      # l'ecart 3D
+
+    titre = (f"tag {taille_tag*100:.1f} cm"
+             + (f"   |   metre a ruban : {reference:.3f} m" if reference
+                else "   |   reference non saisie (touches + / -)"))
+    ecrire(toile, titre, (14, haut + 22), 0.5, GRIS)
+    ecrire(toile, "distance", (colonne_d, haut + 22), 0.42, GRIS)
+    ecrire(toile, "ecart 3D", (colonne_e, haut + 22), 0.42, GRIS)
+
+    y = haut + 34
+    for nom, detail, distance, ecart_3d, couleur in lignes:
+        cv2.rectangle(toile, (14, y + 8), (20, y + hauteur_ligne - 12),
+                      couleur, -1)
+        ecrire(toile, nom, (32, y + 24), 0.52, couleur, 2)
+        ecrire(toile, detail, (32, y + 42), 0.40, GRIS)
+
+        if distance is None:
+            ecrire(toile, "--", (colonne_d, y + 30), 0.8, GRIS, 2)
+        else:
+            ecrire(toile, f"{distance:.3f} m", (colonne_d, y + 30), 0.8,
+                   couleur, 2)
+            if reference:
+                ecart = distance - reference
+                pourcent = 100.0 * ecart / reference
+                ecrire(toile, f"{ecart*100:+.1f} cm  ({pourcent:+.1f} %)",
+                       (colonne_d, y + 47), 0.44,
+                       VERT if abs(pourcent) < 2 else couleur, 1)
+
+            # La 3e ligne est l'etalon : elle ne peut pas s'ecarter d'elle-meme.
+            if ecart_3d is None:
+                ecrire(toile, "reference", (colonne_e, y + 30), 0.5, GRIS, 1)
+            else:
+                ecrire(toile, f"{ecart_3d*100:.1f} cm", (colonne_e, y + 30),
+                       0.8, couleur, 2)
+                ecrire(toile, "a cote", (colonne_e, y + 47), 0.44, GRIS, 1)
+        y += hauteur_ligne
+
+    if not vu:
+        ecrire(toile, "aucun tag detecte", (L // 2 - 70, haut - 14), 0.6, ROUGE, 2)
+
+
+def composer(image, cameras, detecteur, taille_tag, reference, montage, echelle):
+    """Une image de la camera -> l'image annotee a afficher.
+
+    Tout le raisonnement de la demo tient ici : detecter le tag, faire
+    repondre les trois modeles aux MEMES coins, dessiner le verdict.
+    """
+    coins_vus, ids, _ = detecteur.detectMarkers(image)
+    coins_3d = coins_du_tag(taille_tag)
+
+    # S'il y a plusieurs tags, on raisonne sur le plus grand : c'est le plus
+    # proche, celui que la personne tient devant la camera.
+    principal = None
+    if ids is not None and len(ids) > 0:
+        aires = [cv2.contourArea(c.reshape(4, 2).astype(np.float32))
+                 for c in coins_vus]
+        principal = int(np.argmax(aires))
+
+    toile = cv2.resize(image, None, fx=echelle, fy=echelle,
+                       interpolation=cv2.INTER_LINEAR)
+
+    lignes = []
+    if principal is not None:
+        coins_2d = coins_vus[principal].reshape(4, 2).astype(np.float64)
+        pts = (coins_2d * echelle).astype(int)
+        for j in range(4):
+            cv2.line(toile, tuple(pts[j]), tuple(pts[(j + 1) % 4]),
+                     VERT, 2, cv2.LINE_AA)
+        for p in pts:
+            cv2.circle(toile, tuple(p), 4, BLANC, -1, cv2.LINE_AA)
+
+        # On resout la meme image avec les trois modeles. Le dernier, le
+        # montage reel, sert d'etalon pour l'ecart 3D des deux autres.
+        poses = []
+        for _, _, K, dist, _ in cameras:
+            ok, _, tvec = cv2.solvePnP(coins_3d, coins_2d, K, dist)
+            poses.append(tvec if ok else None)
+
+        etalon = poses[-1]
+        for indice, ((nom, detail, _, _, couleur), tvec) in enumerate(
+                zip(cameras, poses)):
+            distance = float(np.linalg.norm(tvec)) if tvec is not None else None
+            dernier = indice == len(cameras) - 1
+            if tvec is None or etalon is None or dernier:
+                ecart_3d = None
+            else:
+                ecart_3d = float(np.linalg.norm(tvec - etalon))
+            lignes.append((nom, detail, distance, ecart_3d, couleur))
+
+        # L'etiquette va AU-DESSUS du tag : ecrite au centre, elle masquerait
+        # le motif que la personne est justement en train de regarder.
+        cote_px = float(np.max(np.linalg.norm(
+            coins_2d - np.roll(coins_2d, -1, axis=0), axis=1)))
+        cx = int(coins_2d[:, 0].mean() * echelle)
+        haut_tag = int(coins_2d[:, 1].min() * echelle)
+        ecrire(toile, f"id {int(ids[principal])}   {cote_px:.0f} px",
+               (cx - 55, max(haut_tag - 16, 18)), 0.5, VERT, 2)
+    else:
+        lignes = [(nom, detail, None, None, couleur)
+                  for nom, detail, _, _, couleur in cameras]
+
+    dessiner_panneau(toile, lignes, reference, taille_tag,
+                     principal is not None)
+    return toile
+
+
+def main():
+    analyseur = argparse.ArgumentParser(
+        description="Compare en direct ce que repondent trois modeles de "
+                    "camera sur la meme image de tag : sans calibration, "
+                    "calibree hors tube, calibree dans le tube.")
+    analyseur.add_argument("--tag", type=float, default=TAILLES[0],
+                           help="cote du carre noir en metres "
+                                f"(defaut %(default)s ; 't' bascule entre "
+                                f"{TAILLES[0]} et {TAILLES[1]})")
+    analyseur.add_argument("--reference", type=float, default=0.0,
+                           metavar="METRES",
+                           help="distance vraie mesuree au metre a ruban ; "
+                                "active l'affichage des erreurs")
+    analyseur.add_argument("--montage", default="tube_air",
+                           choices=optique.MONTAGES,
+                           help="calibration a mettre en 3e ligne "
+                                "(defaut %(default)s)")
+    analyseur.add_argument("--zoom", type=float, default=1.5,
+                           help="agrandissement de la fenetre (defaut "
+                                "%(default)s) — pour etre lisible a deux")
+    options = analyseur.parse_args()
+
+    if optique.source(options.montage) != options.montage:
+        print(f"ATTENTION : le montage '{options.montage}' n'a jamais ete "
+              "calibre. La 3e ligne affichera la camera nue, et la demo ne "
+              "montrera rien.")
+        print(f"  python calibration.py --montage {options.montage}")
+
+    taille_tag = options.tag
+    reference = max(options.reference, 0.0)
+
+    # Sans raffinement sous-pixel, les coins sortent a l'ENTIER pres. Sur un
+    # tag de 90 px cela suffit a fausser la distance de pres de 2 % — soit
+    # plus que tout ce que la demo cherche a montrer, et la ligne calibree
+    # tomberait a cote devant tout le monde. Meme reglage que le reste du
+    # depot (mesurer_bruit_tag.py, avec lequel les 0.215 px ont ete mesures).
     dictionnaire = cv2.aruco.getPredefinedDictionary(FAMILLE)
     parametres = cv2.aruco.DetectorParameters()
+    parametres.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
     detecteur = cv2.aruco.ArucoDetector(dictionnaire, parametres)
 
     cam, L, H = ouvrir_camera()
@@ -81,59 +319,50 @@ def main():
         print("ERREUR : aucune camera detectee.")
         return
 
+    cameras = modeles(options.montage, L, H)
+    print("\nTrois modeles, une seule image :")
+    for nom, detail, K, _, _ in cameras:
+        print(f"  {nom:<22} fx={K[0,0]:7.2f}  fy={K[1,1]:7.2f}   ({detail})")
+    print("\nPose le tag a une distance connue et compare. "
+          "'t' change la taille, '+/-' la reference, 's' capture, 'q' quitte.\n")
+
+    echelle = max(options.zoom, 1.0)
+    fenetre = "Calibration : avant / apres"
+
     while True:
         ok, image = cam.read()
         if not ok:
             continue
 
-        coins_detectes, ids, _ = detecteur.detectMarkers(image)
+        toile = composer(image, cameras, detecteur, taille_tag, reference,
+                         options.montage, echelle)
+        ecrire(toile, "t=taille   +/-=reference   0=effacer   s=capture   q=quitter",
+               (14, toile.shape[0] - 10), 0.42, GRIS)
+        cv2.imshow(fenetre, toile)
 
-        if ids is not None:
-            for i, identifiant in enumerate(ids.ravel()):
-                coins_2d = coins_detectes[i].reshape(4, 2).astype(np.float64)
-
-                ok2, rvec, tvec = cv2.solvePnP(coins_3d, coins_2d, K, dist)
-                if not ok2:
-                    continue
-
-                distance = float(np.linalg.norm(tvec))
-                tx, ty, tz = float(tvec[0]), float(tvec[1]), float(tvec[2])
-
-                taille_px = float(np.max(np.linalg.norm(
-                    coins_2d - np.roll(coins_2d, -1, axis=0), axis=1)))
-
-                pts = coins_2d.astype(int)
-                for j in range(4):
-                    cv2.line(image, tuple(pts[j]), tuple(pts[(j+1) % 4]),
-                             (0, 255, 0), 2)
-
-                cx, cy = int(coins_2d[:, 0].mean()), int(coins_2d[:, 1].mean())
-
-                cv2.putText(image, f"{distance:.3f} m",
-                            (cx - 60, cy - 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
-                cv2.putText(image, f"id {identifiant}  |  {taille_px:.0f} px",
-                            (cx - 60, cy + 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 200), 2)
-
-                cv2.putText(image,
-                            f"x={tx:.3f}  y={ty:.3f}  z={tz:.3f}",
-                            (10, H - 40),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
-        else:
-            cv2.putText(image, "Pas de tag detecte", (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-
-        cv2.putText(image,
-                    f"Calibration {options.montage} | tag {taille*100:.0f} cm | "
-                    f"q=quitter",
-                    (10, H - 14),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1)
-
-        cv2.imshow("Demo calibration — distance en temps reel", image)
-
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+        touche = cv2.waitKey(1) & 0xFF
+        if touche == ord("q"):
             break
+        if touche == ord("t"):
+            autre = [t for t in TAILLES if abs(t - taille_tag) > 1e-6]
+            taille_tag = autre[0] if autre else TAILLES[0]
+            print(f"Taille de tag : {taille_tag*100:.1f} cm")
+        if touche in (ord("+"), ord("=")):
+            reference = round(reference + 0.05, 3)
+            print(f"Reference : {reference:.3f} m")
+        if touche in (ord("-"), ord("_")):
+            reference = max(round(reference - 0.05, 3), 0.0)
+            print(f"Reference : {reference:.3f} m")
+        if touche == ord("0"):
+            reference = 0.0
+            print("Reference effacee.")
+        if touche == ord("s"):
+            DOSSIER_PREUVES.mkdir(parents=True, exist_ok=True)
+            nom = DOSSIER_PREUVES / (
+                f"preuve_{options.montage}_"
+                f"{datetime.now():%Y%m%d_%H%M%S}.png")
+            cv2.imwrite(str(nom), toile)
+            print(f"Capture ecrite : {nom}")
 
     cam.release()
     cv2.destroyAllWindows()

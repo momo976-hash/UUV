@@ -6,7 +6,7 @@ import sys
 import cv2
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "calibration"))
 import optique  # noqa: E402
 
 # Index de la camera (None = detection automatique).
