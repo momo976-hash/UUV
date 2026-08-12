@@ -5,34 +5,51 @@
 # ne se verifient pas a l'oeil. Ce script rend la calibration TESTABLE par
 # quelqu'un qui n'a qu'un metre a ruban. On pose un tag a une distance connue,
 # et l'ecran affiche cote a cote ce que TROIS modeles de camera repondent a la
-# meme image :
+# meme image. Le panneau est en anglais : il est fait pour etre montre.
 #
-#   1. SANS CALIBRATION   focale devinee (= largeur de l'image), centre au
-#                         milieu, aucune distorsion. C'est ce qu'on ecrit
-#                         quand on n'a pas calibre.
-#   2. HORS TUBE          la vraie calibration de la camera nue, faite avant
-#                         de la mettre dans le tube.
-#   3. DANS LE TUBE       la calibration du montage reel, tube compris.
+#   1. NO CALIBRATION              focale devinee (= largeur de l'image),
+#                                  centre au milieu, distorsion nulle. Ce
+#                                  qu'on ecrit quand on n'a rien mesure.
+#   2. NOT CALIBRATED IN THE TUBE  la calibration de la camera nue, faite
+#                                  avant de la monter dans le tube.
+#   3. CALIBRATED IN THE TUBE      la calibration du montage reel.
 #
-# Les trois lisent EXACTEMENT les memes coins de tag : tout ecart entre elles
-# vient du modele optique, de rien d'autre. Avec la distance vraie donnee par
-# --reference, chaque ligne affiche son erreur en cm et en %.
+# Les trois lisent EXACTEMENT les memes coins de tag : elles ne different que
+# par les nombres avec lesquels on interprete ces pixels. La camera, elle, ne
+# bouge pas et ne sort jamais du tube.
 #
-# LA DISTANCE NE RACONTE PAS TOUTE L'HISTOIRE
-# C'est le piege de cette demo, et c'est ce qui la rend interessante. Sur un
-# tag a 1.5 m, mesure sur la calibration reelle du 11/08 :
+# CE QUE CHAQUE LIGNE PROUVE — ET CE QU'ELLE NE PROUVE PAS
+# Une seule ligne est une preuve : la 3e, confrontee au metre a ruban. Si elle
+# annonce la distance mesuree, la calibration est bonne. C'est tout le reste
+# de la demo qui demande de la prudence :
 #
-#                          distance      position dans l'espace
-#   sans calibration       +6 %  (+9 cm)         10 cm a cote
-#   calibree hors tube     -0.3 % (-0.4 cm)       4 cm a cote
+#   - la ligne 1 montre ce que coute l'absence totale de calibration (~6 %).
+#     C'est une illustration, pas une mesure : la focale devinee est un choix.
+#   - la ligne 2 montre que reutiliser une calibration faite hors du tube
+#     donne un desaccord. Elle ne montre PAS qui a tort : sur la portee les
+#     lignes 2 et 3 s'accordent, et le desaccord est surtout vertical — or le
+#     metre a ruban ne mesure pas le vertical. On constate, on ne tranche pas.
 #
-# La ligne 2 donne une distance quasi juste et se trompe pourtant de 4 cm.
-# Raison : entre la camera nue et la camera dans le tube, ce qui bouge le plus
-# n'est pas la focale (602.4 -> 607.5) mais le POINT PRINCIPAL, cy passe de
-# 242.9 a 258.5 — 15.6 px, soit 1.5 deg de visee. Un cap fausse de 1.5 deg ne
-# change pas la portee, il decale lateralement : 4 cm a 1.5 m, 8 cm a 3 m. Le
-# metre a ruban ne le verra pas ; le filtre de Kalman, si.
-# La colonne "ecart 3D" du panneau est la pour cela.
+# D'OU VIENT LE DESACCORD DE LA LIGNE 2 : ON NE SAIT PAS
+# Entre la calibration nue et celle du tube, cy passe de 242.9 a 258.5 (15.6
+# px, ~1.5 deg de visee) — c'est ce que la colonne "3D offset" attrape. La
+# tentation est d'y voir l'effet du tube. Le modele de ce depot ne le dit pas :
+# une paroi cylindrique vue de face est symetrique autour de l'axe optique,
+# elle change la FOCALE (voir grandissement_section dans optique.py) et ne
+# deplace pas le point principal. Deux causes plus vraisemblables, qu'on ne
+# sait pas departager ici : la camera est legerement inclinee dans son support
+# imprime, ou une part vient de l'ecart entre deux seances de calibration.
+# Indice pour la seconde : fx est passe de 604.19 a 595.79 (-1.4 %) alors
+# qu'en air, le long de l'axe, la paroi est une lame a faces paralleles et ne
+# devrait rien changer a fx.
+#
+# CE QUI JUSTIFIE MALGRE TOUT DE CALIBRER DANS LE TUBE
+# Pas cette demo : le principe. On calibre l'objet qu'on utilise. Quelle que
+# soit la cause du decalage, la calibration faite dans le tube en tient
+# compte et celle faite dehors ne le peut pas, par construction. L'argument
+# sans ambiguite viendra sous l'eau, ou la paroi devient une vraie lentille
+# (focales attendues 804 / 625 px au lieu de 596 / 608) : la, l'ecart se
+# compte en dizaines de pourcents et le metre a ruban le verra.
 #
 # NE PAS ATTENDRE QUE L'ERREUR EXPLOSE DANS LES COINS
 # On pourrait croire que la ligne 1 s'effondre loin du centre, faute de
@@ -40,15 +57,10 @@
 # centre a 3.8 % au bord — elle DIMINUE, la distorsion negligee compensant en
 # partie la focale fausse. Ne pas conclure sur une seule position du tag.
 #
-# ENFIN, EN AIR, LES LIGNES 2 ET 3 RESTENT PROCHES
-# C'est normal et c'est un resultat : en air la paroi ne devie presque rien.
-# Leur ecart se creuse sous l'eau, ou la paroi devient une vraie lentille
-# (focales 804 / 625 px au lieu de 596 / 608). C'est tout l'objet de tube_eau.
-#
 # MODE D'EMPLOI DEVANT QUELQU'UN
 #   1. Poser le tag bien en face, a une distance mesuree au metre (1 a 2 m).
 #   2. python demo_distance.py --tag 0.223 --reference 1.50
-#   3. Lire les trois lignes. Deplacer le tag vers un coin de l'image.
+#   3. Lire la ligne verte contre le metre. Le reste est du commentaire.
 #   4. 's' capture l'ecran en PNG : la preuve part dans le rapport.
 #
 # ON MESURE DEPUIS LA PUPILLE, PAS DEPUIS LA PAROI DU TUBE
@@ -77,7 +89,7 @@ TAILLES = (0.223, 0.115)
 DOSSIER_PREUVES = Path(__file__).resolve().parent / "preuves"
 
 VERT = (90, 220, 90)
-ORANGE = (60, 170, 250)
+JAUNE = (70, 225, 245)
 ROUGE = (70, 70, 240)
 GRIS = (170, 170, 170)
 BLANC = (245, 245, 245)
@@ -117,12 +129,12 @@ def modeles(montage, largeur, hauteur):
 
     K_tube, dist_tube = optique.charger(montage, silencieux=True)
     return [
-        ("SANS CALIBRATION", "focale devinee, distorsion ignoree",
+        ("NO CALIBRATION", "guessed focal length, distortion ignored",
          devine, np.zeros(5, dtype=np.float64), ROUGE),
-        ("CALIBREE HORS TUBE", "camera nue, avant le montage",
+        ("NOT CALIBRATED IN THE TUBE", "bare camera, calibrated before mounting",
          optique.K_NUE_AIR.astype(np.float64),
-         optique.DIST_NUE_AIR.astype(np.float64), ORANGE),
-        ("CALIBREE DANS LE TUBE", f"montage '{montage}', ce qu'on utilise",
+         optique.DIST_NUE_AIR.astype(np.float64), JAUNE),
+        ("CALIBRATED IN THE TUBE", f"mounting '{montage}' — the one we use",
          K_tube.astype(np.float64), dist_tube.ravel().astype(np.float64), VERT),
     ]
 
@@ -170,11 +182,11 @@ def dessiner_panneau(toile, lignes, reference, taille_tag, vu):
     colonne_e = L - 150      # l'ecart 3D
 
     titre = (f"tag {taille_tag*100:.1f} cm"
-             + (f"   |   metre a ruban : {reference:.3f} m" if reference
-                else "   |   reference non saisie (touches + / -)"))
+             + (f"   |   tape measure: {reference:.3f} m" if reference
+                else "   |   no reference set (keys + / -)"))
     ecrire(toile, titre, (14, haut + 22), 0.5, GRIS)
     ecrire(toile, "distance", (colonne_d, haut + 22), 0.42, GRIS)
-    ecrire(toile, "ecart 3D", (colonne_e, haut + 22), 0.42, GRIS)
+    ecrire(toile, "3D offset", (colonne_e, haut + 22), 0.42, GRIS)
 
     y = haut + 34
     for nom, detail, distance, ecart_3d, couleur in lignes:
@@ -201,11 +213,11 @@ def dessiner_panneau(toile, lignes, reference, taille_tag, vu):
             else:
                 ecrire(toile, f"{ecart_3d*100:.1f} cm", (colonne_e, y + 30),
                        0.8, couleur, 2)
-                ecrire(toile, "a cote", (colonne_e, y + 47), 0.44, GRIS, 1)
+                ecrire(toile, "away", (colonne_e, y + 47), 0.44, GRIS, 1)
         y += hauteur_ligne
 
     if not vu:
-        ecrire(toile, "aucun tag detecte", (L // 2 - 70, haut - 14), 0.6, ROUGE, 2)
+        ecrire(toile, "no tag detected", (L // 2 - 65, haut - 14), 0.6, ROUGE, 2)
 
 
 def composer(image, cameras, detecteur, taille_tag, reference, montage, echelle):
@@ -336,7 +348,7 @@ def main():
 
         toile = composer(image, cameras, detecteur, taille_tag, reference,
                          options.montage, echelle)
-        ecrire(toile, "t=taille   +/-=reference   0=effacer   s=capture   q=quitter",
+        ecrire(toile, "t=tag size   +/-=reference   0=clear   s=snapshot   q=quit",
                (14, toile.shape[0] - 10), 0.42, GRIS)
         cv2.imshow(fenetre, toile)
 
