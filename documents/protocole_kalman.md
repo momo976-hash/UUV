@@ -176,27 +176,79 @@ et dans les valeurs par defaut de `FiltrePose` (`filtre_kalman.py` lignes
 
 ## Etape 6 — Valider que le filtre ameliore vraiment
 
-Toujours dans `verification_monde.py` : la touche `f` allume et coupe le
-filtre, et l'ecran affiche la position **brute** et la position **filtree**
-l'une sous l'autre.
+Toujours dans `verification_monde.py`. La manip :
 
-Le test : deplacer la camera d'une distance connue au metre, taper la valeur
-reelle au clavier, `s` pour enregistrer. Refaire une dizaine de fois, filtre
-allume puis filtre coupe. Tout est journalise dans `verification_monde.csv`.
+1. `o` sur le tag de reference
+2. deplacer la camera d'une distance **mesuree au metre a ruban**
+3. taper la valeur reelle au clavier, `s` pour enregistrer
+4. recommencer une **quinzaine** de fois, a des distances variees
 
-**Ce qu'on veut voir** : l'erreur RMS filtree nettement en dessous de
-l'erreur RMS brute. Si le filtre n'ameliore pas, c'est que
-`sigma_acceleration` est mal regle — c'est le symptome typique.
+Le filtre doit rester **allume** (touche `f`, indicateur `filtre : ON`) :
+chaque `s` enregistre le brut ET le filtre du meme instant, sur la meme
+ligne. Pas besoin de refaire la serie filtre coupe — comparer deux series
+obligerait a refaire exactement le meme geste deux fois, et c'est le geste
+qui dominerait l'ecart.
 
-N'annonce PAS de gain chiffre a l'avance. L'auto-test affiche 33x, mais
+En quittant avec `q`, le script imprime le verdict tout seul.
+
+### Les deux questions du verdict
+
+**Question 1 — le filtre reduit-il l'erreur ?**
+
+```
+  erreur RMS   brut      16.1 mm
+               filtre     8.6 mm     -> gain 1.88x
+  [OK] le filtre reduit l'erreur.
+```
+
+Seuil : gain >= 1.2. En dessous de 1.2 le script repond `[PEU CONCLUANT]` —
+sur quinze mesures, quelques pourcents ne se distinguent pas du hasard.
+Un gain < 1.0 pointe presque toujours `sigma_acceleration` (etape 5).
+
+**N'annonce aucun gain chiffre a l'avance.** L'auto-test affiche 33x, mais
 c'est une simulation ou le bruit est exactement celui que le filtre suppose
-et ou la trajectoire est a vitesse constante — les deux hypotheses du filtre
-sont vraies par construction. Dans le bassin ce sera nettement moins. Le
-chiffre honnete est celui que TU mesureras a cette etape.
+et ou la trajectoire est a vitesse constante : les deux hypotheses du filtre
+y sont vraies par construction. Dans le bassin ce sera bien moins. Le seul
+chiffre defendable est celui que TU mesures ici.
 
-Verifier aussi le compteur de rejets. Quelques rejets sont sains (le filtre
-attrape les retournements de tag). Des centaines veulent dire que le modele
-de bruit est trop optimiste.
+**Question 2 — le filtre dit-il la verite sur sa precision ?**
+
+C'est la question la plus importante, et elle ne se voit pas a l'ecran.
+
+```
+  incertitude annoncee par le filtre :    7.0 mm (mediane)
+  erreur reellement constatee        :    6.5 mm (mediane)
+  rapport reel / annonce : 0.9
+  [OK] le filtre dit la verite sur sa precision.
+```
+
+| Rapport | Verdict |
+|---|---|
+| < 0.5 | prudent — il annonce plus d'erreur qu'il n'en fait, sans danger |
+| 0.5 a 2 | honnete |
+| 2 a 4 | il se croit plus precis qu'il n'est, ne pas se fier au `+/-` |
+| > 4 | **il ment** — verifier `SIGMA_PIXEL`, puis la carte des tags |
+
+Pourquoi ca compte plus que le gain : un filtre qui annonce +/- 2 mm en se
+trompant de 20 est **plus dangereux** qu'un filtre qui ne lisse rien. Tout
+ce qui consomme sa sortie — une commande, une carte, un rapport — le croit
+sur parole.
+
+Reserve honnete a connaitre : l'erreur enregistree porte sur une **distance
+entre deux poses**, quand sigma porte sur **une position**. Ce ne sont pas
+tout a fait les memes grandeurs, et l'erreur du metre a ruban s'y ajoute. Ce
+rapport se lit en ordre de grandeur : il attrape un filtre qui ment d'un
+facteur 3, pas un ecart de 20 %.
+
+**Question 3 — les compteurs**
+
+```
+  mesures rejetees : 2   reprises apres blocage : 0
+```
+
+Quelques rejets sont **sains** : le filtre attrape les retournements de tag.
+Des centaines veulent dire que le modele de bruit est trop optimiste. Plus
+de 3 reprises signale en general des tags mal places dans la carte.
 
 ---
 

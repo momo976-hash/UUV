@@ -164,9 +164,30 @@ def incidence_du_tag(pose_camera_tag):
     return float(np.degrees(np.arccos(np.clip(cos, 0.0, 1.0))))
 
 CSV = os.path.abspath("verification_monde.csv")
+# On enregistre le BRUT ET LE FILTRE sur la meme ligne, au meme instant. Les
+# consigner separement (une serie filtre ON, une serie filtre OFF) obligerait
+# a refaire exactement le meme geste deux fois : impossible a la main, et
+# c'est le geste qui domine l'ecart. Ici la comparaison porte sur la meme
+# mesure, donc elle ne mesure que le filtre.
+#
+# sigma_filtre_mm est l'incertitude que le filtre ANNONCE. C'est elle qui
+# permet de repondre a la seule question qui compte vraiment : le filtre
+# dit-il la verite sur sa propre precision ?
+ENTETE = ["mode", "valeur_reelle", "brut", "erreur_brut",
+          "filtre", "erreur_filtre", "sigma_filtre_mm", "nb_tags"]
+if os.path.exists(CSV):
+    with open(CSV, newline="") as fic:
+        ancienne = next(csv.reader(fic), [])
+    if ancienne != ENTETE:
+        # Un fichier a l'ancien format (4 colonnes) : y ajouter des lignes a 8
+        # colonnes produirait un tableau illisible et un bilan faux. On le met
+        # de cote plutot que d'y toucher.
+        archive = CSV.replace(".csv", "_ancien_format.csv")
+        os.replace(CSV, archive)
+        print(f"Ancien fichier de mesures deplace vers : {archive}")
 if not os.path.exists(CSV):
     with open(CSV, "w", newline="") as fic:
-        csv.writer(fic).writerow(["mode", "valeur_reelle", "mesure", "erreur"])
+        csv.writer(fic).writerow(ENTETE)
 
 print("=" * 66)
 print("VERIFICATION DANS UN REPERE MONDE (deplacement libre entre tags)")
@@ -409,18 +430,150 @@ while True:
             print("Valeur invalide.")
             continue
         e = d - reel
+        ef = None if d_filtre is None else d_filtre - reel
+        sigma_mm = (filtre.position.incertitude_position * 1000
+                    if filtre.position.demarre else None)
         with open(CSV, "a", newline="") as fic:
-            csv.writer(fic).writerow([MODES[mode], f"{reel:.3f}", f"{d:.3f}", f"{e:+.3f}"])
+            csv.writer(fic).writerow([
+                MODES[mode], f"{reel:.3f}", f"{d:.3f}", f"{e:+.3f}",
+                "" if d_filtre is None else f"{d_filtre:.3f}",
+                "" if ef is None else f"{ef:+.3f}",
+                "" if sigma_mm is None else f"{sigma_mm:.1f}",
+                len(connus_vus)])
         if mode == 0:
-            print(f"[deplacement] reel {reel:.3f} m | mesure {d:.3f} m "
-                  f"({e*100:+.1f} cm)")
+            ligne = (f"[deplacement] reel {reel:.3f} m | brut {d:.3f} m "
+                     f"({e*100:+.1f} cm)")
+            if ef is not None:
+                ligne += f" | filtre {d_filtre:.3f} m ({ef*100:+.1f} cm)"
         else:
-            print(f"[rotation] reel {reel:.2f} deg | mesure {d:.2f} deg "
-                  f"({e:+.2f} deg)")
+            ligne = (f"[rotation] reel {reel:.2f} deg | brut {d:.2f} deg "
+                     f"({e:+.2f} deg)")
+            if ef is not None:
+                ligne += f" | filtre {d_filtre:.2f} deg ({ef:+.2f} deg)"
+        print(ligne)
 
 cam.release()
 cv2.destroyAllWindows()
 print(f"\nTermine. Mesures dans : {CSV}")
+
+
+# --- le filtre fait-il son travail ? ---------------------------------------
+def bilan_filtre():
+    """Verdict lu sur les mesures a distance connue enregistrees.
+
+    DEUX questions distinctes, et la seconde est la plus importante.
+
+    1. Le filtre REDUIT-IL l'erreur ? Se lit sur le rapport des RMS. C'est la
+       question qu'on pose spontanement, et la plus facile.
+
+    2. Le filtre DIT-IL LA VERITE sur sa propre precision ? Un filtre qui
+       annonce +/- 2 mm alors qu'il se trompe de 20 est plus dangereux qu'un
+       filtre qui ne lisse rien : tout ce qui consomme sa sortie -- une
+       commande, une carte, un rapport -- le croit sur parole. Cette
+       question-la ne se voit pas a l'oeil sur l'ecran, seulement ici.
+
+    Reserve a garder en tete pour le point 2 : l'erreur enregistree porte sur
+    une DISTANCE entre deux poses, quand sigma porte sur UNE position. Les
+    deux ne sont pas la meme grandeur (facteur ~racine de 2 au pire), et
+    l'erreur du metre a ruban s'y ajoute. Le rapport ci-dessous se lit donc
+    en ordre de grandeur : il attrape un filtre qui ment d'un facteur 3, pas
+    un ecart de 20 %.
+    """
+    try:
+        with open(CSV, newline="") as fic:
+            lignes = [l for l in csv.DictReader(fic) if l["mode"] == MODES[0]]
+    except OSError:
+        return
+    if len(lignes) < 3:
+        print("\n(Moins de 3 mesures de deplacement : pas de bilan du filtre.)")
+        return
+
+    def colonne(nom):
+        valeurs = []
+        for l in lignes:
+            try:
+                valeurs.append(float(l[nom]))
+            except (ValueError, KeyError, TypeError):
+                valeurs.append(None)
+        return valeurs
+
+    bruts = [e for e in colonne("erreur_brut") if e is not None]
+    apparies = [(b, f) for b, f in zip(colonne("erreur_brut"), colonne("erreur_filtre"))
+                if b is not None and f is not None]
+
+    print("\n" + "=" * 66)
+    print(f"LE FILTRE FAIT-IL SON TRAVAIL ?   ({len(lignes)} mesures de deplacement)")
+    print("=" * 66)
+
+    if not apparies:
+        print("  Aucune mesure prise avec le filtre allume (touche 'f').")
+        print("  Refaire une serie filtre ON pour pouvoir conclure.")
+        print("=" * 66)
+        return
+
+    rms = lambda v: float(np.sqrt(np.mean(np.square(v))))
+    rms_brut = rms([b for b, _ in apparies])
+    rms_filtre = rms([f for _, f in apparies])
+    print(f"  erreur RMS   brut   {rms_brut*1000:7.1f} mm")
+    print(f"               filtre {rms_filtre*1000:7.1f} mm", end="")
+    if rms_filtre > 0:
+        print(f"     -> gain {rms_brut/rms_filtre:.2f}x")
+    else:
+        print()
+    gain = rms_brut / rms_filtre if rms_filtre > 0 else float("inf")
+    if gain >= 1.2:
+        print("  [OK] le filtre reduit l'erreur.")
+    elif gain > 1.0:
+        # Sur une dizaine de mesures, un gain de quelques pourcents ne se
+        # distingue pas du hasard. L'annoncer comme un succes serait se
+        # mentir : autant dire qu'on ne sait pas encore.
+        print("  [PEU CONCLUANT] gain trop faible pour etre distingue du")
+        print("       hasard sur si peu de mesures. En faire une vingtaine,")
+        print("       ou verifier sigma_acceleration (etape 5 du protocole).")
+    else:
+        print("  [NON] le filtre n'ameliore pas. Cause la plus frequente :")
+        print("       sigma_acceleration mal regle (etape 5 du protocole).")
+
+    # -- le filtre est-il honnete sur son incertitude ? ----------------------
+    couples = [(abs(f), s) for (_, f), s in zip(apparies, colonne("sigma_filtre_mm"))
+               if s is not None and s > 0]
+    if len(couples) >= 3:
+        reel = float(np.median([f * 1000 for f, _ in couples]))
+        annonce = float(np.median([s for _, s in couples]))
+        rapport = reel / annonce
+        print(f"\n  incertitude annoncee par le filtre : {annonce:6.1f} mm (mediane)")
+        print(f"  erreur reellement constatee        : {reel:6.1f} mm (mediane)")
+        print(f"  rapport reel / annonce : {rapport:.1f}")
+        if rapport < 0.5:
+            print("  [OK] le filtre est prudent : il annonce plus d'erreur qu'il")
+            print("       n'en fait. Sans danger, mais il se sous-estime.")
+        elif rapport <= 2.0:
+            print("  [OK] le filtre dit la verite sur sa precision.")
+        elif rapport <= 4.0:
+            print("  [ATTENTION] le filtre se croit plus precis qu'il n'est.")
+            print("       Ne pas se fier au +/- affiche tel quel.")
+        else:
+            print("  [NON] le filtre MENT sur sa precision. Ne pas utiliser son")
+            print("       +/- pour decider quoi que ce soit. Verifier d'abord")
+            print("       SIGMA_PIXEL (mesure-t-il bien le bruit du bassin ?)")
+            print("       puis les positions des tags dans la carte.")
+
+    # -- rejets et reprises --------------------------------------------------
+    total_rejets = filtre.position.rejets + filtre.orientation.rejets
+    reprises = filtre.position.reprises + filtre.orientation.reprises
+    print(f"\n  mesures rejetees : {total_rejets}   reprises apres blocage : {reprises}")
+    if reprises > 3:
+        print("  [ATTENTION] beaucoup de reprises : le filtre se bloque puis se")
+        print("       recale. Souvent le signe de tags mal places dans la carte.")
+
+    suspects = filtre.surveillance.rapport()
+    if "aucun tag suspect" not in suspects:
+        print("\n  SUPPORTS QUI ONT BOUGE")
+        print(suspects)
+    print("=" * 66)
+
+
+bilan_filtre()
 
 # --- les deux reglages du filtre, lus sur le mouvement reel ----------------
 if len(vitesses_angulaires) > 100:
