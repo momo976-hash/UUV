@@ -44,36 +44,51 @@ il faut comprendre pourquoi avant d'aller plus loin.
 
 ---
 
-## Etape 2 — Basculer les scripts sur `tube_eau`
+## Etape 2 — Basculer sur `tube_eau`
 
-**C'est l'etape ou on se plante en silence.** Tant qu'un script reste sur
-`tube_air`, il travaille avec la mauvaise focale sans jamais le dire : les
-distances sont fausses de ~33 % et rien ne clignote.
+**Une seule ligne**, dans `calibration/optique.py` :
 
-Remplacer `MONTAGE = "tube_air"` par `MONTAGE = "tube_eau"` dans :
+```python
+MONTAGE_ACTIF = os.environ.get("UUV_MONTAGE", "tube_air")
+                                              ^^^^^^^^^^
+                                              mettre "tube_eau"
+```
 
-- `calibration/comparaison_calibration.py` (ligne 39)
-- `calibration/mesurer_bruit_tag.py` (ligne 61)
-- `calibration/mesurer_limites_tag.py` (ligne 62)
-- `calibration/simuler_limites_tag.py` (ligne 38)
-- `calibration/verification_camera.py` (ligne 44)
-- `demos/webcam_live.py` (ligne 22)
-- `localisations/carte_2d.py` (ligne 42)
-- `localisations/verification_monde.py` (ligne 48)
+Tous les scripts lisent cette valeur. Il n'y a rien d'autre a editer.
 
-Et deux appels a corriger, plus discrets mais aussi importants :
+Variante sans rien modifier, pratique au bord du bassin ou pour comparer
+deux montages sur la meme manip :
 
-- `localisations/filtre_kalman.py` ligne 184 :
-  `optique.focale_eau()` -> `optique.focale_eau("tube_eau")`
-- `localisations/plan_piscine_3d.py` ligne 94 : idem
+```
+UUV_MONTAGE=tube_eau python localisations/verification_monde.py
+```
 
-Pourquoi ces deux-la : par defaut `focale_eau()` part de la calibration
-`tube_air` et **predit** la focale sous l'eau par le modele optique. Une fois
-`tube_eau.npz` present, on veut la valeur **mesuree**, pas la prediction.
+Verifier tout de suite que la bascule a pris :
 
-> Dix endroits a modifier a la main, c'est fragile. Un reglage central dans
-> `optique.py` (`MONTAGE_ACTIF`) reglerait le probleme en une ligne — a faire
-> si tu veux, ce n'est pas fait aujourd'hui.
+```
+python calibration/optique.py
+```
+
+La ligne `MONTAGE ACTIF` en tete du rapport doit afficher `tube_eau`, et
+`source` doit valoir `tube_eau` (et non `nue_air`, qui voudrait dire que la
+calibration n'a pas ete trouvee).
+
+**Pourquoi ca compte a ce point.** Un script reste sur la focale de l'air
+sans jamais le dire : les distances sont fausses de pres d'un tiers et rien
+ne clignote. C'est le genre d'erreur qu'on ne decouvre qu'apres des semaines
+de mesures. Avant ce reglage il fallait editer dix fichiers et n'en oublier
+aucun.
+
+Deux appels sont concernes sans en avoir l'air, et se reglent tout seuls
+desormais : `filtre_kalman.py` ligne 184 et `plan_piscine_3d.py` ligne 94
+appellent `optique.focale_eau()`. Sur `tube_air`, cette fonction **predit**
+la focale sous l'eau par le modele optique ; sur `tube_eau`, elle rend la
+valeur **mesuree**. C'est exactement ce qu'on veut, mais seulement si la
+bascule a bien eu lieu.
+
+> Deux endroits gardent `tube_air` en dur, et c'est VOULU :
+> `calibration.py` et `imprimer_tag.py` comparent deliberement le resultat
+> immerge a la reference en air. Ne pas y toucher.
 
 ---
 

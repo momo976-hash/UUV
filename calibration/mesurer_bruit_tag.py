@@ -55,13 +55,16 @@ FREQUENCE_SUPPOSEE = 30.0
 # dire. Repere : v_limite ~ d / (focale x temps_de_pose).
 VITESSE_MAX_CONSEILLEE = 0.15    # m/s
 
-# Ce script se mesure EN AIR. Le bruit qu'il donne vaut donc pour l'air : sous
-# l'eau, la turbidite et la perte de contraste le degraderont, et il faudra le
-# remesurer avec le montage immerge (MONTAGE = "tube_eau").
-MONTAGE = "tube_air"
+# Le bruit mesure vaut pour le milieu ou la manip est faite. Celui du depot a
+# ete releve EN AIR ; sous l'eau, la turbidite et la perte de contraste le
+# degraderont, et il faut donc le remesurer une fois immerge — en basculant
+# optique.MONTAGE_ACTIF sur 'tube_eau'.
+MONTAGE = optique.MONTAGE_ACTIF
 # L'optique vient de optique.py : camera, tube, hublot, milieu. Le montage
-# par defaut est 'tube_air' — la camera dans son tube, a l'air libre. Tant
-# qu'il n'est pas calibre, optique.py retombe sur la camera nue en le disant.
+# n'est plus ecrit ici : il se regle en UN seul endroit, optique.MONTAGE_ACTIF
+# (ou pour une seule commande : UUV_MONTAGE=tube_eau python ce_script.py).
+# Tant qu'il n'est pas calibre, optique.py retombe sur la camera nue en le
+# disant.
 K_CALIB, DIST_CALIB = optique.charger(MONTAGE)
 
 CSV = Path(__file__).resolve().with_name("bruit_tag.csv")

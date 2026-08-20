@@ -57,7 +57,8 @@ import optique  # noqa: E402
 
 _analyseur = argparse.ArgumentParser(
     description="Calibration par damier, rangee sous le nom d'un montage.")
-_analyseur.add_argument("--montage", default="tube_air", choices=optique.MONTAGES,
+_analyseur.add_argument("--montage", default=optique.MONTAGE_ACTIF,
+                        choices=optique.MONTAGES,
                         help="montage calibre (defaut %(default)s)")
 MONTAGE = _analyseur.parse_args().montage
 

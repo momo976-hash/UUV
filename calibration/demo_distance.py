@@ -298,7 +298,7 @@ def main():
                            metavar="METRES",
                            help="distance vraie mesuree au metre a ruban ; "
                                 "active l'affichage des erreurs")
-    analyseur.add_argument("--montage", default="tube_air",
+    analyseur.add_argument("--montage", default=optique.MONTAGE_ACTIF,
                            choices=optique.MONTAGES,
                            help="calibration a mettre en 3e ligne "
                                 "(defaut %(default)s)")

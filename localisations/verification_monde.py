@@ -45,10 +45,12 @@ MIN_LIAISON = 6      # co-visibilites avant d'utiliser un tag (liaison rapide)
 MAX_LIAISON = 60     # on garde ce nombre d'observations pour affiner la liaison
 LISSAGE = 15
 
-MONTAGE = "tube_air"
+MONTAGE = optique.MONTAGE_ACTIF
 # L'optique vient de optique.py : camera, tube, hublot, milieu. Le montage
-# par defaut est 'tube_air' — la camera dans son tube, a l'air libre. Tant
-# qu'il n'est pas calibre, optique.py retombe sur la camera nue en le disant.
+# n'est plus ecrit ici : il se regle en UN seul endroit, optique.MONTAGE_ACTIF
+# (ou pour une seule commande : UUV_MONTAGE=tube_eau python ce_script.py).
+# Tant qu'il n'est pas calibre, optique.py retombe sur la camera nue en le
+# disant.
 K_CALIB, DIST_CALIB = optique.charger(MONTAGE)
 LARGEUR_CALIB, HAUTEUR_CALIB = optique.RESOLUTION
 

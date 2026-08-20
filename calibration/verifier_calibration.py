@@ -33,7 +33,8 @@ import optique  # noqa: E402
 
 _analyseur = argparse.ArgumentParser(
     description="Verifie qu'un montage correspond encore a sa calibration.")
-_analyseur.add_argument("--montage", default="tube_air", choices=optique.MONTAGES,
+_analyseur.add_argument("--montage", default=optique.MONTAGE_ACTIF,
+                        choices=optique.MONTAGES,
                         help="montage a verifier (defaut %(default)s)")
 MONTAGE = _analyseur.parse_args().montage
 

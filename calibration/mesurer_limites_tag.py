@@ -59,10 +59,12 @@ import optique  # noqa: E402
 
 CAMERA_INDEX = None
 
-MONTAGE = "tube_air"
+MONTAGE = optique.MONTAGE_ACTIF
 # L'optique vient de optique.py : camera, tube, hublot, milieu. Le montage
-# par defaut est 'tube_air' — la camera dans son tube, a l'air libre. Tant
-# qu'il n'est pas calibre, optique.py retombe sur la camera nue en le disant.
+# n'est plus ecrit ici : il se regle en UN seul endroit, optique.MONTAGE_ACTIF
+# (ou pour une seule commande : UUV_MONTAGE=tube_eau python ce_script.py).
+# Tant qu'il n'est pas calibre, optique.py retombe sur la camera nue en le
+# disant.
 K_CALIB, DIST_CALIB = optique.charger(MONTAGE)
 RESOLUTION = optique.RESOLUTION
 

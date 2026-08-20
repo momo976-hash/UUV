@@ -52,6 +52,7 @@
 # UTILISATION
 #   python optique.py            le rapport complet du montage
 #   from optique import ...      dans les autres scripts
+import os
 from pathlib import Path
 
 import numpy as np
@@ -126,19 +127,44 @@ DOSSIER_MONTAGES = next(
      if d.is_dir()),
     _ICI / "montages")
 
+# LE MONTAGE ACTIF — l'unique ligne a changer le jour ou l'engin entre dans
+# l'eau. Tous les scripts lisent cette valeur au lieu de la recopier.
+#
+# Avant ce reglage, le nom du montage etait ecrit en dur dans dix fichiers.
+# En oublier un ne fait rien planter : le script continue avec la focale de
+# l'air, les distances sont fausses de pres d'un tiers, et aucun message ne
+# le dit. C'est exactement le genre d'erreur qu'on ne trouve qu'apres avoir
+# mesure pendant des semaines.
+#
+# On peut aussi la forcer le temps d'une seule commande, sans rien editer —
+# pratique au bord du bassin, ou pour comparer deux montages sur la meme
+# manip :
+#     UUV_MONTAGE=tube_eau python localisations/verification_monde.py
+MONTAGE_ACTIF = os.environ.get("UUV_MONTAGE", "tube_air")
+if MONTAGE_ACTIF not in MONTAGES:
+    raise SystemExit(
+        f"[optique] UUV_MONTAGE='{MONTAGE_ACTIF}' inconnu. "
+        f"Montages possibles : {', '.join(MONTAGES)}")
+
+
+def _actif(montage):
+    """Resout le montage demande. None = celui qui est actif."""
+    return MONTAGE_ACTIF if montage is None else montage
+
 
 # --- chargement -------------------------------------------------------------
-def source(montage):
+def source(montage=None):
     """Le montage dont les chiffres seront REELLEMENT servis.
 
     Tant qu'un montage n'a pas ete calibre, `charger` retombe sur la camera
     nue. Les conversions optiques ont besoin de savoir laquelle des deux elles
     ont sous la main, sinon elles corrigent deux fois.
     """
+    montage = _actif(montage)
     return montage if (DOSSIER_MONTAGES / f"{montage}.npz").exists() else "nue_air"
 
 
-def charger(montage="tube_air", silencieux=False):
+def charger(montage=None, silencieux=False):
     """La matrice et les distorsions d'un montage donne.
 
     Tant qu'un montage n'a pas ete calibre, on retombe sur la camera nue en le
@@ -146,6 +172,7 @@ def charger(montage="tube_air", silencieux=False):
     du tube, et le menisque ne coute qu'un peu plus de 1 % selon l'autre axe.
     Ce n'est PAS defendable sous l'eau, ou la paroi devient une vraie lentille.
     """
+    montage = _actif(montage)
     fichier = DOSSIER_MONTAGES / f"{montage}.npz"
     if fichier.exists():
         donnees = np.load(fichier)
@@ -160,7 +187,7 @@ def charger(montage="tube_air", silencieux=False):
     return K_NUE_AIR.copy(), DIST_NUE_AIR.copy()
 
 
-def focale(montage="tube_air"):
+def focale(montage=None):
     """La focale horizontale du montage, en pixels."""
     return float(charger(montage, silencieux=True)[0][0, 0])
 
@@ -409,7 +436,7 @@ def demi_champ_eau(demi_angle_air, direction="axe"):
     return float(np.degrees(np.arcsin(np.clip(sinus, -1.0, 1.0))))
 
 
-def focales_eau(montage="tube_air"):
+def focales_eau(montage=None):
     """Focales equivalentes sous l'eau : (horizontale, verticale).
 
     Montage radial : la camera est couchee, sa largeur — donc l'axe HORIZONTAL
@@ -424,6 +451,7 @@ def focales_eau(montage="tube_air"):
     Montage axial : les deux directions traversent le meme bouchon plat, et
     les deux focales sont multipliees.
     """
+    montage = _actif(montage)
     K, _ = charger(montage, silencieux=True)
     fx, fy = float(K[0, 0]), float(K[1, 1])
     if montage == "tube_eau" and source(montage) == "tube_eau":
@@ -435,7 +463,7 @@ def focales_eau(montage="tube_air"):
     return fx * INDICE_EAU, fy * grandissement_section() / deja
 
 
-def focale_eau(montage="tube_air"):
+def focale_eau(montage=None):
     """La focale sous l'eau la plus DEFAVORABLE des deux.
 
     Un seul nombre ne peut pas decrire un systeme anamorphique. Pour tout ce
@@ -445,13 +473,13 @@ def focale_eau(montage="tube_air"):
     return float(min(focales_eau(montage)))
 
 
-def anamorphose(montage="tube_air"):
+def anamorphose(montage=None):
     """Rapport entre les deux focales sous l'eau. 1.0 = pas d'anamorphose."""
     fx, fy = focales_eau(montage)
     return float(max(fx, fy) / min(fx, fy))
 
 
-def portee_eau(portee_air, montage="tube_air"):
+def portee_eau(portee_air, montage=None):
     """Ce que devient, une fois immergee, une portee mesuree en air.
 
     Le raccourci courant est « x 1.33 : sous l'eau on voit plus loin ». Il ne
@@ -471,6 +499,9 @@ def rayon_image(angle_eau_deg, f=None):
     Vaut pour la direction ou la paroi se comporte en lame plane : l'axe du
     tube en montage radial, les deux directions en montage axial.
     """
+    # 'tube_air' est ecrit en dur A DESSEIN, et ne suit pas MONTAGE_ACTIF :
+    # cette fonction PART d'une focale en air pour lui appliquer la refraction.
+    # Lui donner une focale deja mesuree sous l'eau compterait l'eau deux fois.
     f = focale("tube_air") if f is None else f
     angle_air = np.degrees(np.arcsin(np.clip(
         INDICE_EAU * np.sin(np.radians(angle_eau_deg)), -1.0, 1.0)))
@@ -569,8 +600,18 @@ def rapport():
     fy_nue = float(K_NUE_AIR[1, 1])
     fx_eau, fy_eau = focales_eau()
     ecart = decentrement_pupille()
+    servi = source(MONTAGE_ACTIF)
+    # En tete, et non en bas de page : c'est le premier chiffre a verifier
+    # apres une bascule. `servi` differe de `MONTAGE_ACTIF` quand le montage
+    # demande n'est pas encore calibre — le seul cas ou l'on mesure avec une
+    # optique qui n'est pas celle qu'on croit.
+    forcage = "  (impose par UUV_MONTAGE)" if "UUV_MONTAGE" in os.environ else ""
     lignes = [
         "=" * 74, "OPTIQUE DU MONTAGE", "=" * 74,
+        f"\nMONTAGE ACTIF  {MONTAGE_ACTIF}{forcage}",
+        (f"  source des chiffres : {servi}" if servi == MONTAGE_ACTIF else
+         f"  >>> ATTENTION : '{MONTAGE_ACTIF}' n'est pas calibre, les chiffres "
+         f"servis viennent de '{servi}'."),
         "\nCAMERA (nue, en air)",
         f"  focale {f:.1f} px, champ {2*h:.1f} x {2*v:.1f} deg (diagonale {2*d:.1f})",
         f"  encombrement {1000*CAMERA_LARGEUR:.0f} x {1000*CAMERA_HAUTEUR:.0f} x "

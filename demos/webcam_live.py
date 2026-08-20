@@ -19,9 +19,11 @@ TAILLE_TAG = 0.223   # cote reel du carre noir, en metres (22,3 cm)
 
 # --- Calibration reelle de la camera (damier 5x7, 22 vues, RMS 0.169 px) ---
 # Si le fichier calibration_camera.npz est a cote du script, il est utilise.
-MONTAGE = "tube_air"
-# L'optique vient de optique.py : camera, tube, hublot, milieu. Tant que le
-# montage n'est pas calibre, optique.py retombe sur la camera nue en le disant.
+MONTAGE = optique.MONTAGE_ACTIF
+# L'optique vient de optique.py : camera, tube, hublot, milieu. Le montage se
+# regle en UN seul endroit, optique.MONTAGE_ACTIF (ou pour une seule commande :
+# UUV_MONTAGE=tube_eau python ce_script.py). Tant qu'il n'est pas calibre,
+# optique.py retombe sur la camera nue en le disant.
 K_CALIB, DIST_CALIB = optique.charger(MONTAGE)
 LARGEUR_CALIB = 640          # resolution utilisee lors de la calibration
 
