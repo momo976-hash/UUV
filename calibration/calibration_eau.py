@@ -106,23 +106,72 @@ def zones_touchees(coins, largeur, hauteur):
     return touchees
 
 
+def est_en_couleur(cap, essais=5):
+    """Ce flux est-il en couleur, ou en niveaux de gris ?
+
+    LA D435i EXPOSE TROIS IMAGEURS : deux INFRAROUGES (gris, champ large) et
+    un RGB (couleur, champ plus etroit). Ce sont des objectifs differents, aux
+    focales tres differentes. Le systeme entier tourne sur le flux COULEUR
+    (src/apriltag_pose.py ouvre rs.stream.color) : calibrer un infrarouge
+    donne des chiffres justes... pour la mauvaise camera.
+
+    Prendre simplement le premier index qui s'ouvre ne garantit rien — l'ordre
+    d'enumeration place souvent un infrarouge en premier. On regarde donc ce
+    qui sort vraiment.
+
+    Un flux gris recopie a l'identique sur les trois canaux : leur difference
+    est exactement nulle. Une vraie image couleur, meme d'une scene terne, ne
+    l'est jamais.
+    """
+    for _ in range(essais):
+        ok, image = cap.read()
+        if not ok or image is None or image.ndim != 3 or image.shape[2] != 3:
+            continue
+        b, v, r = image[:, :, 0], image[:, :, 1], image[:, :, 2]
+        ecart = max(int(np.abs(b.astype(int) - v.astype(int)).max()),
+                    int(np.abs(v.astype(int) - r.astype(int)).max()))
+        if ecart > 2:
+            return True
+    return False
+
+
 def ouvrir_camera():
-    """Ouvre la camera en forcant 640x480."""
+    """Ouvre la camera en forcant 640x480, en preferant un flux COULEUR."""
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"),
                 (cv2.CAP_V4L2, "V4L2"), (0, "AUTO")]
-    for index in range(4):
+    gris_trouves = []
+    for index in range(6):
         for backend, nom in backends:
             cap = (cv2.VideoCapture(index, backend) if backend
                    else cv2.VideoCapture(index))
-            if cap.isOpened():
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, RESOLUTION[0])
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, RESOLUTION[1])
-                ok, image = cap.read()
-                if ok and image is not None:
-                    h, l = image.shape[:2]
-                    print(f"Camera : index={index}, backend={nom}, {l}x{h}")
-                    return cap, l, h
+            if not cap.isOpened():
+                cap.release()
+                continue
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, RESOLUTION[0])
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, RESOLUTION[1])
+            ok, image = cap.read()
+            if not ok or image is None:
+                cap.release()
+                continue
+            h, l = image.shape[:2]
+            if est_en_couleur(cap):
+                print(f"Camera COULEUR : index={index}, backend={nom}, {l}x{h}")
+                return cap, l, h
+            gris_trouves.append(f"index={index} ({nom}, {l}x{h})")
             cap.release()
+            break          # cet index est gris : inutile d'essayer ses autres backends
+
+    print("\nERREUR : aucun flux COULEUR trouve.")
+    if gris_trouves:
+        print("Flux en niveaux de gris rencontres :")
+        for description in gris_trouves:
+            print(f"  {description}")
+        print("\nCe sont les cameras INFRAROUGES de la D435i, pas la RGB.")
+        print("Elles ont un autre objectif et une tout autre focale : les")
+        print("calibrer donnerait des chiffres justes pour la mauvaise camera.")
+        print("\nOuvre explicitement le flux couleur (pyrealsense2) :")
+        print("    cfg.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)")
+        print("comme le fait deja src/apriltag_pose.py.")
     return None, 0, 0
 
 
