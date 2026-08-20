@@ -11,8 +11,31 @@ attend, et qui sont pour l'instant supposes ou mesures en air.
 |---|---|---|---|
 | focale sous l'eau | **predite** : 792 / 625 px | calibration `tube_eau` | 1 et 2 |
 | `SIGMA_PIXEL` | 0.215 px, **mesure en AIR** | `mesurer_bruit_tag.py` | 4 |
-| `sigma_acceleration` | 0.4 m/s2, **suppose** | `verification_monde.py` | 5 |
-| `derive_gyro_deg_s` | 10 deg/s, **suppose** | `verification_monde.py` | 5 |
+| `SIGMA_ACCELERATION` | 0.4 m/s2, **suppose** | `verification_monde.py` | 5 |
+| `DERIVE_GYRO_DEG_S` | 10 deg/s, **suppose** | `verification_monde.py` | 5 |
+
+## En tout : 4 lignes a changer, dans 2 fichiers
+
+Rien d'autre. Les scripts qui les utilisent vont tous puiser a ces deux
+endroits.
+
+**1. `calibration/optique.py`** — le montage (etape 2)
+
+```python
+MONTAGE_ACTIF = os.environ.get("UUV_MONTAGE", "tube_air")
+```
+
+**2. `localisations/filtre_kalman.py`** — bloc « LES TROIS NOMBRES A
+MESURER », vers la ligne 190 (etapes 4 et 5)
+
+```python
+SIGMA_PIXEL        = 0.215
+SIGMA_ACCELERATION = 0.4
+DERIVE_GYRO_DEG_S  = 10.0
+```
+
+Les scripts qui mesurent ces valeurs **affichent la ligne exacte a recopier**
+en fin de session. Tu n'as pas a chercher ou ca va.
 
 ---
 
@@ -127,11 +150,18 @@ La valeur a retenir est celle en **mouvement** (mode `d`) : c'est le regime
 reel de l'engin. En air on avait 0.215 px. Sous l'eau ce sera **moins bon**
 (turbidite, contraste plus faible, particules).
 
-Reporter le resultat dans `localisations/filtre_kalman.py` ligne 194 :
+En quittant (`q`), le script imprime la ligne exacte a recopier :
 
-```python
-SIGMA_PIXEL = 0.215   # <- mettre la valeur mesuree dans l'eau
 ```
+A RECOPIER dans localisations/filtre_kalman.py,
+bloc « LES TROIS NOMBRES A MESURER » (vers la ligne 190) :
+
+    SIGMA_PIXEL = 0.312
+
+Cette ligne existe deja : il n'y a qu'a changer le nombre.
+```
+
+**Une seule ligne a changer.** C'est tout pour cette etape.
 
 ---
 
@@ -145,31 +175,33 @@ Faire un parcours qui **ressemble a une vraie mission** : les vitesses et
 accelerations habituelles, pas une camera posee, pas des mouvements brusques
 artificiels. Une trentaine de secondes suffit (la memoire est de 900 images).
 
-Puis `q`. Le script affiche a la fin :
+Puis `q`. Le script imprime les deux lignes exactes a recopier :
 
 ```
-DYNAMIQUE OBSERVEE  (a reporter dans filtre_kalman.py)
-  derive_gyro_deg_s   = ...
-  sigma_acceleration  = ...
+DYNAMIQUE OBSERVEE
+  rotation    mediane   12.4 deg/s   95e centile   31.0 deg/s
+  acceleration mediane   0.18 m/s2   95e centile     0.62 m/s2
+------------------------------------------------------------------
+  A RECOPIER dans localisations/filtre_kalman.py,
+  bloc « LES TROIS NOMBRES A MESURER » (vers la ligne 190) :
+
+      SIGMA_ACCELERATION = 0.6
+      DERIVE_GYRO_DEG_S  = 31
+
+  Ces deux lignes existent deja : il n'y a qu'a changer les nombres.
+  Tout le depot lit ce bloc, il n'y a rien d'autre a modifier.
 ```
+
+**Deux lignes a changer**, dans le meme bloc qu'a l'etape 4.
 
 Ce sont les 95e centiles — assez larges pour couvrir ce que l'engin fait
 vraiment, sans se caler sur un pic isole.
 
-Reporter dans `localisations/verification_monde.py` lignes 129, 383 et 395 :
-
-```python
-filtre = FiltrePose(sigma_acceleration=0.4, derive_gyro_deg_s=10.0)
-```
-
-et dans les valeurs par defaut de `FiltrePose` (`filtre_kalman.py` lignes
-658-659) pour que le noeud ROS herite des memes.
-
 **Sens physique**, pour l'expliquer a Thein :
-- `sigma_acceleration` = de combien l'engin peut accelerer sans que le filtre
+- `SIGMA_ACCELERATION` = de combien l'engin peut accelerer sans que le filtre
   le sache. Trop petit -> le filtre retarde sur les virages. Trop grand ->
   il ne lisse plus rien.
-- `derive_gyro_deg_s` = a quelle vitesse l'orientation peut changer entre
+- `DERIVE_GYRO_DEG_S` = a quelle vitesse l'orientation peut changer entre
   deux images sans mesure.
 
 ---
@@ -254,14 +286,17 @@ de 3 reprises signale en general des tags mal places dans la carte.
 
 ## Etape 7 — Surveiller que les tags ne bougent pas
 
-Ca tourne tout seul dans `FiltrePose.surveillance`. A la fin d'une session :
+**Rien a faire** : c'est inclus dans le verdict de l'etape 6. Si un support a
+bouge, le bilan l'ajoute tout seul :
 
-```python
-print(filtre.surveillance.rapport())
+```
+  SUPPORTS QUI ONT BOUGE
+  tag 11 : boite deplacee de 19 mm (+18, -6, +0) mm  [confirme par plusieurs voisins]
 ```
 
-Le module dit **quel** support a bouge, **de combien** et **dans quelle
-direction** — de quoi corriger la carte sans tout re-enregistrer.
+Il dit **quel** support a bouge, **de combien** et **dans quelle direction** —
+de quoi corriger la carte sans tout re-enregistrer. Si rien n'apparait sous ce
+titre, c'est qu'aucun tag n'est suspect.
 
 Pourquoi ca compte : l'erreur du systeme apres filtrage est de l'ordre de
 2 mm. Une boite lestee decalee de 1 cm pese a elle seule cinq fois tout le
@@ -276,14 +311,21 @@ defaut. Rien ne distingue alors « la camera a bouge » de « le tag a bouge ».
 
 ## Recapitulatif — une seule session de bassin
 
-Les etapes 1, 3, 4, 5 et 6 se font toutes dans l'eau. Ordre conseille sur
-place :
+Tout se fait dans l'eau, dans cet ordre. Les etapes 2, 4 et 5 demandent
+d'ouvrir un fichier ; les autres, rien du tout.
 
-1. Calibration `tube_eau` avec le damier (etape 1)
-2. Poser les tags, faire la carte (etape 3)
-3. Bruit de detection, mode `d` (etape 4)
-4. Parcours type mission, relever les deux chiffres (etape 5)
-5. Une dizaine de mesures brut / filtre a distance connue (etape 6)
+| # | Sur place | A editer ensuite |
+|---|---|---|
+| 1 | `calibration.py --montage tube_eau` — damier, 30 vues | — |
+| 2 | *(au bord du bassin, sur le portable)* | `optique.py` : **1 ligne** |
+| 3 | Poser les tags, `o` puis se deplacer pour la carte | — |
+| 4 | `mesurer_bruit_tag.py` — captures mode `d` | `filtre_kalman.py` : **1 ligne** |
+| 5 | `verification_monde.py` — parcours type mission, `q` | `filtre_kalman.py` : **2 lignes** |
+| 6 | `verification_monde.py` — 15 mesures au metre, `q` | — (le verdict s'affiche) |
+| 7 | — | — (inclus dans le verdict de 6) |
 
-L'etape 2 (basculer les scripts) se fait **entre** 1 et 3, au bord du bassin,
-sur le portable. Sans elle tout le reste est mesure avec la mauvaise focale.
+**Total : 4 lignes, dans 2 fichiers.** Et les scripts des etapes 4 et 5
+affichent la ligne exacte a recopier.
+
+L'etape 2 ne peut pas attendre : sans elle, les etapes 3 a 6 sont mesurees
+avec la focale de l'air, et le bilan de l'etape 6 ne veut plus rien dire.

@@ -43,6 +43,11 @@ PROBA_ABERRATION = 0.015
 # decrivent ce que l'engin est capable de faire SANS que le filtre le sache.
 # Trop petites, le filtre sous-pondere les mesures et retarde sur la realite.
 # Ici la trajectoire simulee tourne a 7.2 deg/s en mediane, 10.2 deg/s au pic.
+#
+# Ces valeurs sont VOLONTAIREMENT independantes du bloc de filtre_kalman.py :
+# elles decrivent la trajectoire SIMULEE ci-dessous, pas l'engin reel. Les
+# faire suivre les mesures du bassin rendrait la demo non reproductible, et
+# ferait varier son resultat a chaque nouvelle session de mesure.
 SIGMA_ACCELERATION = 0.4       # m/s^2
 DERIVE_GYRO = 10.0             # deg/s
 

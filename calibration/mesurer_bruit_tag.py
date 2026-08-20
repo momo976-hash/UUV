@@ -231,10 +231,19 @@ def tableau(lignes):
     if bouges_bons:
         med = float(np.median(sigmas(bouges_bons)))
         sortie.append(f"sigma_pixel camera QUI BOUGE : {med:.3f} px (mediane sur "
-                      f"{len(bouges_bons)})   <- LA valeur pour filtre_kalman.py")
+                      f"{len(bouges_bons)})   <- LA valeur a retenir")
         if poses_bons:
             sortie.append(f"                               le mouvement degrade d'un "
                           f"facteur {med/max(np.median(sigmas(poses_bons)), 1e-9):.1f}")
+        sortie += [
+            "",
+            "A RECOPIER dans localisations/filtre_kalman.py,",
+            "bloc « LES TROIS NOMBRES A MESURER » (vers la ligne 190) :",
+            "",
+            f"    SIGMA_PIXEL = {med:.3f}",
+            "",
+            "Cette ligne existe deja : il n'y a qu'a changer le nombre.",
+        ]
     else:
         sortie.append("Aucune capture en mouvement ('d'). Le filtre a besoin du bruit")
         sortie.append("EN CONDITIONS : camera posee, c'est le meilleur cas, pas l'usage.")

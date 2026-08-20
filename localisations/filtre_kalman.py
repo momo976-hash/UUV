@@ -184,7 +184,20 @@ import optique  # noqa: E402
 FOCALE_EAU = optique.focale_eau()
 TAILLE_TAG = 0.223
 
-# MESURE, plus supposee : 14 captures camera en main a 0.72 - 1.52 m
+# ===========================================================================
+# LES TROIS NOMBRES A MESURER
+#
+# C'est LE SEUL bloc a modifier apres une session de bassin. Tout le reste du
+# depot vient y puiser : les classes ci-dessous en font leurs valeurs par
+# defaut, et verification_monde.py construit son filtre sans rien preciser.
+# Auparavant ces chiffres etaient recopies a cinq endroits dans deux fichiers,
+# et en corriger quatre sur cinq ne produisait aucun message d'erreur.
+#
+# Le protocole (documents/protocole_kalman.md) dit comment mesurer chacun.
+# ===========================================================================
+
+# Bruit de detection d'un coin de tag, en pixels.
+# MESURE, plus suppose : 14 captures camera en main a 0.72 - 1.52 m
 # (calibration/mesurer_bruit_tag.py, mode 'd'). La valeur precedente, 0.5 px,
 # etait une valeur d'usage courante en vision, jamais verifiee ici.
 #   camera posee    0.049 px  <- plancher, sans flou de bouge
@@ -192,6 +205,16 @@ TAILLE_TAG = 0.223
 # Ces mesures sont faites EN AIR. A refaire dans le bassin : l'eau trouble et
 # le moindre contraste degraderont ce chiffre.
 SIGMA_PIXEL = 0.215
+
+# De combien l'engin peut accelerer sans que le filtre le sache, en m/s2.
+# Trop petit : le filtre retarde dans les virages. Trop grand : il ne lisse
+# plus rien. SUPPOSE — a remplacer par le 95e centile qu'affiche
+# verification_monde.py en fin de session.
+SIGMA_ACCELERATION = 0.4
+
+# A quelle vitesse l'orientation peut changer entre deux images sans mesure,
+# en deg/s. SUPPOSE — meme source que ci-dessus.
+DERIVE_GYRO_DEG_S = 10.0
 
 # L'echelle du tag, d'ou se deduit la distance, est lue sur QUATRE coins et
 # non un seul : moyenner divise le bruit par racine de 4. Sans ce facteur, le
@@ -327,8 +350,10 @@ class FiltreKalmanPosition:
 
     H = np.hstack([np.eye(3), np.zeros((3, 3))])
 
-    def __init__(self, sigma_acceleration=0.5, seuil_chi2=16.27,
+    def __init__(self, sigma_acceleration=None, seuil_chi2=16.27,
                  max_rejets_consecutifs=5, sigma_vitesse_reprise=0.5):
+        if sigma_acceleration is None:
+            sigma_acceleration = SIGMA_ACCELERATION
         self.sigma_a = float(sigma_acceleration)   # m/s^2 d'acceleration non modelisee
         self.seuil = float(seuil_chi2)             # chi2 a 3 ddl, seuil 99.9 %
         self.max_rejets_consecutifs = int(max_rejets_consecutifs)
@@ -423,8 +448,10 @@ class FiltreOrientation:
     pas fusionne la centrale inertielle de la D435i.
     """
 
-    def __init__(self, derive_gyro_deg_s=2.0, seuil_saut_deg=25.0,
+    def __init__(self, derive_gyro_deg_s=None, seuil_saut_deg=25.0,
                  max_rejets_consecutifs=5):
+        if derive_gyro_deg_s is None:
+            derive_gyro_deg_s = DERIVE_GYRO_DEG_S
         self.q = np.array([1.0, 0.0, 0.0, 0.0])
         self.variance = np.radians(180.0) ** 2
         self.derive = np.radians(derive_gyro_deg_s)   # rad/s d'errance non modelisee
@@ -655,7 +682,7 @@ class FiltrePose:
         filtre.appliquer()
     """
 
-    def __init__(self, sigma_acceleration=0.5, derive_gyro_deg_s=2.0,
+    def __init__(self, sigma_acceleration=None, derive_gyro_deg_s=None,
                  seuil_deplacement_mm=8.0):
         self.position = FiltreKalmanPosition(sigma_acceleration)
         self.orientation = FiltreOrientation(derive_gyro_deg_s)

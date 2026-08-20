@@ -128,7 +128,7 @@ lissage = deque(maxlen=LISSAGE)
 saisie = ""
 
 # --- filtre de Kalman (touche 'f' pour l'activer / le couper) --------------
-filtre = FiltrePose(sigma_acceleration=0.4, derive_gyro_deg_s=10.0)
+filtre = FiltrePose()
 filtre_actif = True
 dernier_temps = None
 ref_p_filtre = ref_R_filtre = None
@@ -403,7 +403,7 @@ while True:
             ref_p, ref_R = T_monde_cam[:3, 3].copy(), T_monde_cam[:3, :3].copy()
             lissage.clear()
             # on repart aussi le filtre depuis cette reference.
-            filtre = FiltrePose(sigma_acceleration=0.4, derive_gyro_deg_s=10.0)
+            filtre = FiltrePose()
             ref_p_filtre = ref_R_filtre = None
             lissage_filtre.clear()
             print(f"Reference = tag {origine}. Bouge vers le 2e tag : la "
@@ -415,7 +415,7 @@ while True:
         origine = None
         ref_p = ref_R = None
         lissage.clear()
-        filtre = FiltrePose(sigma_acceleration=0.4, derive_gyro_deg_s=10.0)
+        filtre = FiltrePose()
         ref_p_filtre = ref_R_filtre = None
         lissage_filtre.clear()
         print("Remis a zero : regarde le tag de reference et appuie sur 'o'.")
@@ -580,7 +580,7 @@ if len(vitesses_angulaires) > 100:
     rotation_95 = centile(vitesses_angulaires, 95)
     accel_95 = centile(accelerations, 95)
     print("\n" + "=" * 66)
-    print("DYNAMIQUE OBSERVEE  (a reporter dans filtre_kalman.py)")
+    print("DYNAMIQUE OBSERVEE")
     print("=" * 66)
     print(f"  rotation    mediane {centile(vitesses_angulaires, 50):6.1f} deg/s"
           f"   95e centile {rotation_95:6.1f} deg/s")
@@ -590,8 +590,14 @@ if len(vitesses_angulaires) > 100:
     # Le bruit de modele doit couvrir ce que l'engin fait REELLEMENT sans que
     # le filtre le sache. Le 95e centile evite a la fois de sous-estimer, ce
     # qui ferait retarder le filtre, et de se caler sur un pic isole.
-    print(f"  derive_gyro_deg_s   = {rotation_95:.0f}")
-    print(f"  sigma_acceleration  = {accel_95:.1f}")
+    print("  A RECOPIER dans localisations/filtre_kalman.py,")
+    print("  bloc « LES TROIS NOMBRES A MESURER » (vers la ligne 190) :")
+    print()
+    print(f"      SIGMA_ACCELERATION = {accel_95:.1f}")
+    print(f"      DERIVE_GYRO_DEG_S  = {rotation_95:.0f}")
+    print()
+    print("  Ces deux lignes existent deja : il n'y a qu'a changer les nombres.")
+    print("  Tout le depot lit ce bloc, il n'y a rien d'autre a modifier.")
     print("=" * 66)
     print("  Valable si ce que tu viens de faire ressemble a une vraie mission.")
     print("  Une session ou la camera reste posee ne mesure rien d'utile.")
