@@ -79,6 +79,10 @@ TAILLE_CARREAU = 0.050
 COINS = (6, 4)
 CAPTURES_MINI = 15
 ZONES_MINI = 8
+# Fraction du rayon "centre -> coin d'image" qu'au moins une vue doit atteindre.
+# Les zones seules ne suffisent pas : un damier entre dans la case du coin sans
+# forcement approcher le coin reel, et la distorsion y reste alors extrapolee.
+PORTEE_MINI = 0.90
 
 CRITERES = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 ICI = Path(__file__).resolve().parent
@@ -151,6 +155,28 @@ def zones_touchees(coins, largeur, hauteur):
         ligne = min(2, max(0, int(3 * point[1] / hauteur)))
         touchees.add((ligne, colonne))
     return touchees
+
+
+def portee_radiale(coins, largeur, hauteur):
+    """Jusqu'ou, du centre de l'image vers son coin, ce damier va-t-il ?
+
+    Rendue en fraction du rayon du coin d'image : 1.0 = un coin du damier
+    atteint le coin de l'image, 0.5 = il s'arrete a mi-chemin.
+
+    POURQUOI CE CONTROLE EN PLUS DES ZONES. La grille 3x3 est trop indulgente :
+    un damier peut entrer dans la case du coin sans jamais approcher le coin
+    reel. La distorsion s'y trouve alors EXTRAPOLEE, et le polynome part en
+    vrille exactement la ou on ne l'a pas contraint — c'est ainsi qu'il
+    s'inverse a l'interieur de l'image, defaut qu'aucun RMS ne revele et qui
+    se paie en focale fausse.
+
+    On mesure donc le rayon reellement atteint, pas la case occupee.
+    """
+    cx, cy = largeur / 2.0, hauteur / 2.0
+    rayon_coin = float(np.hypot(cx, cy))
+    points = coins.reshape(-1, 2)
+    atteint = float(np.hypot(points[:, 0] - cx, points[:, 1] - cy).max())
+    return atteint / rayon_coin
 
 
 def est_en_couleur(cap, essais=5):
@@ -451,7 +477,7 @@ def main():
         return 1
 
     modele = grille_3d()
-    points_3d, points_2d, zones = [], [], []
+    points_3d, points_2d, zones, portees = [], [], [], []
     couvertes = set()
 
     print("=" * 68)
@@ -459,10 +485,13 @@ def main():
     print("=" * 68)
     print(f"  Damier : 5x7 carreaux de {1000*TAILLE_CARREAU:.0f} mm "
           f"-> {COINS[1]}x{COINS[0]} coins interieurs")
-    print(f"  Objectif : {CAPTURES_MINI} vues, {ZONES_MINI}/9 zones, 4 coins")
+    print(f"  Objectif : {CAPTURES_MINI} vues, {ZONES_MINI}/9 zones, 4 coins,")
+    print(f"             et une portee radiale d'au moins {PORTEE_MINI:.0%}")
     print("\n  8 PETITES sur les bords et les coins de l'image,")
     print("  7 GRANDES au centre, TOUTES PENCHEES d'environ 30 deg sauf une.")
     print("  Les cases rouges montrent ce qui manque encore.")
+    print("\n  La PORTEE dit jusqu'ou, vers le coin de l'image, un coin du")
+    print("  damier est alle. Sous 90 %, la distorsion des bords est devinee.")
     print("\n  c = capturer   k = calibrer   z = annuler   q = quitter")
     print("=" * 68)
 
@@ -477,18 +506,30 @@ def main():
         if trouve:
             cv2.drawChessboardCorners(image, forme, coins, True)
 
+        portee = max(portees) if portees else 0.0
         assez_vues = len(points_3d) >= CAPTURES_MINI
         assez_zones = len(couvertes) >= ZONES_MINI
+        assez_loin = portee >= PORTEE_MINI
         manquants = {(0, 0), (0, 2), (2, 0), (2, 2)} - couvertes
 
         cv2.putText(image, f"{montage}   vues {len(points_3d)}/{CAPTURES_MINI}   "
-                    f"zones {len(couvertes)}/9", (10, 26),
+                    f"zones {len(couvertes)}/9   portee {portee:.0%}", (10, 26),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        if trouve:
+            actuelle = portee_radiale(coins, largeur, hauteur)
+            cv2.putText(image, f"cette vue : portee {actuelle:.0%}", (10, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        (0, 220, 0) if actuelle > portee else (200, 200, 200), 2)
+        ligne = hauteur - 62
         if manquants:
             cv2.putText(image, f"{len(manquants)} coin(s) d'image jamais vu(s)",
-                        (10, hauteur - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
-                        (0, 0, 255), 2)
-        pret = assez_vues and assez_zones and not manquants
+                        (10, ligne), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2)
+            ligne += 22
+        if not assez_loin:
+            cv2.putText(image, f"portee {portee:.0%} < {PORTEE_MINI:.0%} : "
+                        "va plus loin dans les coins", (10, ligne),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2)
+        pret = assez_vues and assez_zones and assez_loin and not manquants
         cv2.putText(image, "PRET : appuie sur 'k'" if pret else "continue a capturer",
                     (10, hauteur - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
                     (0, 255, 0) if pret else (0, 170, 255), 2)
@@ -504,9 +545,12 @@ def main():
             nouvelles = zones_touchees(coins, largeur, hauteur)
             zones.append(nouvelles)
             couvertes |= nouvelles
-            print(f"  vue {len(points_3d)} capturee   zones {len(couvertes)}/9")
+            portees.append(portee_radiale(coins, largeur, hauteur))
+            print(f"  vue {len(points_3d)} capturee   zones {len(couvertes)}/9   "
+                  f"portee de cette vue {portees[-1]:.0%}   "
+                  f"meilleure {max(portees):.0%}")
         if touche == ord("z") and points_3d:
-            points_3d.pop(); points_2d.pop(); zones.pop()
+            points_3d.pop(); points_2d.pop(); zones.pop(); portees.pop()
             couvertes = set().union(*zones) if zones else set()
             print(f"  derniere vue annulee   ({len(points_3d)} restantes)")
         if touche == ord("k"):
@@ -521,6 +565,16 @@ def main():
                 continue
             if not assez_zones:
                 print(f"  Encore {ZONES_MINI - len(couvertes)} zone(s).")
+                continue
+            if not assez_loin:
+                # Sans coins de damier pres du bord de l'image, la distorsion y
+                # est extrapolee : le polynome s'inverse a l'interieur du cadre
+                # et compense en faussant la focale. Aucun RMS ne le montre.
+                print(f"  REFUS : portee radiale {portee:.0%}, il en faut "
+                      f"{PORTEE_MINI:.0%}.")
+                print("  Un coin du damier doit approcher un COIN de l'image,")
+                print("  pas seulement entrer dans sa zone. Recule le damier")
+                print("  pour qu'il soit petit, et pousse-le vraiment au bord.")
                 continue
             break
 
