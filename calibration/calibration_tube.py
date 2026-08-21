@@ -23,9 +23,15 @@
 #       qui grossit d'environ 0.9 % : le rapport fy_tube/fy_nue MESURE le
 #       retrait de la pupille, qu'on ne sait pas obtenir autrement.
 #
-#   [e] TUBE DANS L'EAU. La lame plane multiplie fx par l'indice de l'eau,
-#       1.33. Le menisque agit differemment sur fy. Les deux axes se separent
-#       nettement : c'est l'anamorphose.
+#       ATTENTION : le bouchon d'extremite n'est PAS dans le chemin optique.
+#       La camera regarde par la paroi LATERALE, donc calibrer tube ouvert ou
+#       ferme revient au meme.
+#
+#   [e] TUBE DANS L'EAU. Les deux axes se separent nettement : c'est
+#       l'anamorphose. Mais le grossissement axial ne vaut PAS simplement
+#       1.33 — il depend de la distance a laquelle on calibre, parce que le
+#       systeme n'a pas de point de vue unique sous l'eau. Voir le bloc
+#       GROSSISSEMENT_AXIAL plus bas : c'est ce qui nous a le plus coute.
 #
 # Une calibration eau ne se juge que contre une calibration air, qui ne se
 # juge que contre la camera nue. Comparer l'eau a une reference en air douteuse
@@ -70,9 +76,44 @@ FX_NUE_DEFAUT = 604.1876
 FY_NUE_DEFAUT = 602.3668
 
 INDICE_EAU = 1.33
+
+# ===========================================================================
+# SOUS L'EAU, LA FOCALE DEPEND DE LA DISTANCE DE CALIBRATION
+# ===========================================================================
+# Le facteur 1.33 est la limite d'un hublot PLAN pour un objet a l'INFINI. Ni
+# l'un ni l'autre ne decrit notre montage : la paroi est CYLINDRIQUE, et le
+# damier est a moins d'un metre.
+#
+# Le trace de rayons a travers la vraie paroi (air -> acrylique -> eau, avec
+# les deux dioptres courbes) montre que le grossissement selon l'axe du tube
+# monte de 0.97 a 0.30 m jusqu'a 1.33 a l'infini. Autrement dit le systeme
+# n'a PAS de point de vue unique sous l'eau : le modele stenope n'y est
+# qu'une approximation, et la focale qu'une calibration en retire depend des
+# distances auxquelles le damier a ete tenu.
+#
+# Il n'existe donc pas UNE focale correcte sous l'eau. Attendre 1.33 x la
+# focale en air faisait rejeter des calibrations parfaitement saines.
+#
+# Table issue du trace, moyennee sur les deux signes de decentrement de
+# pupille (ils different de moins de 2 %, loin devant l'effet decrit).
+GROSSISSEMENT_AXIAL = (
+    (0.30, 0.9735), (0.40, 1.0434), (0.50, 1.0904), (0.60, 1.1241),
+    (0.75, 1.1601), (1.00, 1.1983), (1.25, 1.2225), (1.50, 1.2392),
+    (2.00, 1.2607), (2.50, 1.2740), (3.00, 1.2830), (4.00, 1.2944),
+    (6.00, 1.3061), (10.00, 1.3155),
+)
+
+
 MENISQUE_AIR = 1.00851      # grossissement circonferentiel, tube a l'air
 MENISQUE_EAU = 1.03745      # idem sous l'eau
 ANAMORPHOSE_EAU = 1.268     # fx/fy attendu sous l'eau
+
+
+def grossissement_axial(distance):
+    """Grossissement attendu selon l'axe du tube, a cette distance."""
+    distances = [d for d, _ in GROSSISSEMENT_AXIAL]
+    facteurs = [g for _, g in GROSSISSEMENT_AXIAL]
+    return float(np.interp(distance, distances, facteurs))
 
 RESOLUTION = (640, 480)
 TAILLE_CARREAU = 0.050
@@ -285,8 +326,15 @@ def inversion_distorsion(dist):
     return float(r[creux[0]]) if len(creux) else None
 
 
-def diagnostic(montage, K, dist, rms, vues):
-    """Le resultat tient-il debout ? Les attentes dependent du montage."""
+def diagnostic(montage, K, dist, rms, vues, distance_damier=None):
+    """Le resultat tient-il debout ? Les attentes dependent du montage.
+
+    distance_damier : distance mediane a laquelle le damier a ete tenu, en
+    metres. Sous l'eau elle change ce qu'on doit attendre de la focale (voir
+    GROSSISSEMENT_AXIAL en tete) ; ailleurs elle n'entre pas en jeu.
+    """
+    if distance_damier is None:
+        distance_damier = 0.75
     fx, fy = float(K[0, 0]), float(K[1, 1])
     cx, cy = float(K[0, 2]), float(K[1, 2])
     anamorphose = max(fx, fy) / min(fx, fy)
@@ -346,26 +394,35 @@ def diagnostic(montage, K, dist, rms, vues):
             print("     une calibration eau ne se juge que contre une air.")
             soucis.append("pas de reference tube_air pour comparer")
         else:
-            attendu_fx = fx_air * INDICE_EAU
+            grossissement = grossissement_axial(distance_damier)
+            attendu_fx = fx_air * grossissement
             ecart = 100 * (fx / attendu_fx - 1)
             print(f"     reference tube a l'air : fx {fx_air:.1f}  fy {fy_air:.1f}")
+            print(f"     damier tenu vers {distance_damier:.2f} m (mediane des vues)")
             print(f"\n     fx {fx:.1f}   attendu {attendu_fx:.1f}   ({ecart:+.1f} %)")
-            print(f"     La lame plane multiplie la focale par {INDICE_EAU}.")
+            print(f"     Grossissement axial a cette distance : x{grossissement:.3f}")
+            print(f"     (et non x{INDICE_EAU} : ce chiffre-la vaut pour un hublot")
+            print("     PLAN et un objet a l'INFINI, deux choses que notre montage")
+            print("     n'est pas. Voir le bloc GROSSISSEMENT_AXIAL en tete.)")
             if fx < fx_air:
                 print("     [PROBLEME] fx a BAISSE. L'eau grossit : une baisse est")
                 print("     impossible si la camera regarde vraiment de l'eau.")
                 soucis.append("fx a baisse alors que l'eau doit l'augmenter")
-            elif abs(ecart) > 8:
-                # Le trace de rayons a travers le hublot (air -> acrylique ->
-                # eau) redonne le facteur 1.33 a 0.1 % pres, a toute position
-                # de camera. Un ecart de plus de 8 % ne s'explique donc pas par
-                # l'optique, et se paie directement sur toutes les distances.
-                print(f"     [PROBLEME] {abs(ecart):.0f} % d'ecart. Le facteur {INDICE_EAU}")
-                print("     est verifie par trace de rayons a 0.1 % pres : un tel")
-                print("     ecart se reporte tel quel sur toutes les distances.")
-                print("     La reference en air est-elle sure ? (point 4 de SON")
-                print("     diagnostic : sa distorsion s'inverse-t-elle dans l'image ?)")
+            elif abs(ecart) > 10:
+                print(f"     [PROBLEME] {abs(ecart):.0f} % d'ecart, meme en tenant compte")
+                print("     de la distance de calibration.")
                 soucis.append(f"fx a {abs(ecart):.0f} % de la prevision")
+
+            # -- ce que ca coute en mission ---------------------------------
+            print("\n     PORTEE DE VALIDITE — a lire avant de s'en servir")
+            print("     Sous l'eau le systeme n'a pas de point de vue unique :")
+            print("     la focale depend de la distance observee. Cette")
+            print("     calibration est juste AUTOUR DE SA PROPRE DISTANCE.")
+            print(f"\n     {'distance vue':>13} {'erreur de distance':>20}")
+            for portee in (0.5, 1.0, 1.5, 2.0, 3.0):
+                vrai = fx_air * grossissement_axial(portee)
+                print(f"     {portee:13.1f} m {100*(fx/vrai-1):17.1f} %")
+            print("\n     Calibre a la distance ou l'engin travaillera vraiment.")
 
     # -- 2. anamorphose ------------------------------------------------------
     attendue = ANAMORPHOSE_EAU if montage == "tube_eau" else 1.00
@@ -586,11 +643,19 @@ def main():
         return 1
 
     print(f"\nCalcul sur {len(points_3d)} vues...")
-    rms, K, dist, _, _ = cv2.calibrateCamera(
+    rms, K, dist, _, tvecs = cv2.calibrateCamera(
         points_3d, points_2d, RESOLUTION, None, None)
+    # distance a laquelle le damier a reellement ete tenu : sous l'eau
+    # elle determine la focale que la calibration peut retirer.
+    distance_damier = float(np.median(
+        [float(np.linalg.norm(t)) for t in tvecs]))
+    print(f"Damier tenu entre "
+          f"{min(float(np.linalg.norm(t)) for t in tvecs):.2f} et "
+          f"{max(float(np.linalg.norm(t)) for t in tvecs):.2f} m "
+          f"(mediane {distance_damier:.2f} m)")
 
     enregistrer(montage, K, dist, float(rms), len(points_3d))
-    diagnostic(montage, K, dist, float(rms), len(points_3d))
+    diagnostic(montage, K, dist, float(rms), len(points_3d), distance_damier)
     return 0
 
 
