@@ -1,26 +1,34 @@
 # modele_paroi_cylindrique.py — Trace de rayons a travers la paroi du tube.
 #
-# POURQUOI CE FICHIER EXISTE
-# On a longtemps attendu que la focale sous l'eau vaille 1.33 x la focale en
-# air, et rejete comme fausses des calibrations qui donnaient 1.17. Le 1.33
-# est la limite d'un hublot PLAN pour un objet a l'INFINI. Notre paroi est
-# CYLINDRIQUE et le damier est a moins d'un metre : aucune des deux
-# hypotheses ne tient.
-#
-# Ce module trace les rayons a travers les deux dioptres courbes reels
-# (air -> acrylique -> eau) et montre que le grossissement axial monte de
-# 0.97 a 0.30 m jusqu'a 1.33 seulement a l'infini. Le systeme n'a donc PAS
-# de point de vue unique sous l'eau : la focale qu'une calibration en retire
-# depend des distances auxquelles le damier a ete tenu.
-#
-# La table GROSSISSEMENT_AXIAL de calibration_tube.py en est tiree.
+# A QUOI CA SERT
+# Verifier, par le calcul, ce que la paroi du tube fait a la focale sous
+# l'eau. Ce n'est pas un outil du quotidien : il produit la table
+# GROSSISSEMENT_AXIAL de calibration_tube.py, et sert de justification aux
+# chiffres qui y sont recopies.
 #
 #     python modele_paroi_cylindrique.py     affiche la table
 #
-# CE QUE CE MODELE NE FAIT PAS. Il reproduit fx (mesure 711 a 0.75 m, prevu
-# 703) mais PAS fy : selon le signe du decentrement de pupille il donne 525
-# ou 1040 la ou l'on mesure 596. La partie menisque reste donc a comprendre,
-# et l'anamorphose predite (1.27) ne doit pas etre prise pour acquise.
+# CE QU'IL ETABLIT
+# Selon l'axe du tube, la paroi cylindrique est localement PLANE : un plan
+# contenant l'axe la coupe en deux droites paralleles. C'est donc une lame a
+# faces paralleles, qui sous l'eau multiplie la focale par l'indice, 1.33. Le
+# trace le confirme a 0.5 % pres face a la formule analytique, et montre que
+# la distance de l'objet n'y change presque rien (1.2 % a 0.30 m, 0.4 % a 1 m).
+# Selon la circonference, le menisque donne x1.038 : d'ou une anamorphose
+# prevue de 1.277, en accord avec le 1.268 calcule autrement dans optique.py.
+#
+# CE QU'IL N'EXPLIQUE PAS
+# Les focales mesurees sous l'eau tombent 12.7 % (fx) et 6.6 % (fy) sous ces
+# previsions. Cet ecart reste ouvert.
+#
+# PIEGE CORRIGE ICI, A NE PAS REINTRODUIRE
+# La normale d'un cylindre traverse de l'interieur pointe dans le MEME sens
+# que le rayon. La formule de Snell vectorielle suppose l'inverse : sans
+# retourner la normale, cos(i) sort negatif et la deviation est calculee a
+# l'envers. Ce bug donnait un grossissement de 1.17 au lieu de 1.32, et avait
+# fait conclure a tort que la focale dependait fortement de la distance.
+# Le controle contre la formule de la lame plane est la pour le rattraper :
+# si le trace s'en ecarte de plus de ~1 %, quelque chose cloche.
 import numpy as np, cv2
 
 R1, R2 = 0.02475, 0.02900          # rayons interieur / exterieur du tube
@@ -40,8 +48,17 @@ def _inter_cylindre(o, d, R):
     return o + t*d if t > 1e-12 else None
 
 def _refracter(d, n, eta):
-    """Snell vectoriel. n : normale unitaire sortante. eta = n1/n2."""
+    """Snell vectoriel. eta = n1/n2.
+
+    La formule classique suppose la normale orientee FACE au rayon incident.
+    Sur un cylindre traverse de l'interieur vers l'exterieur, la normale
+    radiale pointe dans le meme sens que le rayon : il faut la retourner,
+    sinon cos(i) sort negatif et la deviation est calculee a l'envers.
+    """
     cosi = -float(d @ n)
+    if cosi < 0.0:                            # normale du meme cote que le rayon
+        n = -n
+        cosi = -cosi
     k = 1 - eta*eta*(1 - cosi*cosi)
     if k < 0: return None                     # reflexion totale
     return eta*d + (eta*cosi - np.sqrt(k))*n
@@ -99,5 +116,17 @@ if __name__ == "__main__":
         g = (p[0] - CX) / (FX_NUE * eps)
         print(f"{Z:13.2f} {g:15.4f} {FX_NUE * g:13.1f}")
     print("-" * 44)
-    print("  A l'infini on retrouve le 1.33 des manuels ; a 0.75 m, 1.16.")
-    print("  C'est tout l'ecart qu'on a passe des jours a chercher.")
+    # Controle : la direction axiale doit redonner la lame a faces paralleles.
+    # C'est ce test qui a rattrape l'erreur de signe sur la normale.
+    n, d0 = N_EAU, R1 - PUPILLE
+    pires = []
+    for Z in (0.3, 0.75, 2.0, 1000.0):
+        p = projeter(np.array([eps * Z, 0.0, Z]))
+        trace = (p[0] - CX) / (FX_NUE * eps)
+        analytique = n * Z / (Z + (d0 + (R2 - R1) * (1 - n / N_AC)) * (n - 1))
+        pires.append(abs(trace / analytique - 1))
+    print(f"  Controle lame plane : ecart max {100*max(pires):.2f} % "
+          f"(doit rester sous ~1.5 %)")
+    print("  Le grossissement axial vaut donc bien ~1.33, quasi independant")
+    print("  de la distance. Les focales mesurees sous l'eau tombent pourtant")
+    print("  12.7 % (fx) et 6.6 % (fy) plus bas : cet ecart reste ouvert.")
