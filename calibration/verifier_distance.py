@@ -1,12 +1,15 @@
 # verifier_distance.py — La calibration donne-t-elle la bonne distance ?
 #
-# SANS FENETRE : tout sort dans le terminal, donc ca marche EN SSH, sur le
-# Raspberry Pi au bord du bassin, sans ecran branche.
-#
-#     python3 verifier_distance.py --reel 1.000
+#     python verifier_distance.py --reel 1.000
 #
 # Tu poses le tag a une distance MESUREE AU METRE, tu donnes cette distance,
 # le script regarde ce que la camera en dit et conclut.
+#
+# AFFICHAGE. Une fenetre s'ouvre si l'ecran le permet, pour voir le cadrage —
+# indispensable au bord du bassin, ou l'on ne sait pas autrement si le tag est
+# vu. En SSH sur le Raspberry Pi il n'y a pas d'affichage : cv2.imshow y leve
+# une exception, qu'on rattrape pour continuer en aveugle. Le resultat tombe
+# dans le terminal dans les deux cas. `--sans-fenetre` force le mode aveugle.
 #
 # ---------------------------------------------------------------------------
 # A QUOI CA SERT
@@ -147,6 +150,8 @@ def main():
                            help="calibration a tester (defaut %(default)s)")
     analyseur.add_argument("--images", type=int, default=60,
                            help="nombre de detections a moyenner (defaut %(default)s)")
+    analyseur.add_argument("--sans-fenetre", action="store_true",
+                           help="ne rien afficher (utile en SSH)")
     options = analyseur.parse_args()
 
     K, dist, fichier = charger_calibration(options.montage)
@@ -173,6 +178,11 @@ def main():
 
     distances, cotes = [], []
     sans_tag = 0
+    # Fenetre si l'affichage existe, terminal sinon. Sur un portable au bord du
+    # bassin, voir le cadrage est indispensable ; en SSH sur le Pi, cv2.imshow
+    # leve une exception qu'on rattrape pour continuer sans rien montrer.
+    fenetre = not options.sans_fenetre
+    titre = "Verification de distance (q pour arreter)"
     print(f"Detection en cours... ({options.images} mesures a accumuler)")
     print("Ne bouge ni la camera ni le tag.\n")
 
@@ -182,26 +192,66 @@ def main():
             continue
         gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         coins, ids, _ = detecteur.detectMarkers(gris)
-        if ids is None or len(ids) == 0:
+
+        vu = ids is not None and len(ids) > 0
+        if vu:
+            sans_tag = 0
+            points = coins[0].reshape(4, 2).astype(np.float64)
+            ok, rvec, tvec = cv2.solvePnP(coins_3d, points, K, dist,
+                                          flags=cv2.SOLVEPNP_IPPE_SQUARE)
+            if ok:
+                distances.append(float(np.linalg.norm(tvec)))
+                # cote apparent : moyenne des quatre aretes du carre detecte
+                cotes.append(float(np.mean(
+                    [np.linalg.norm(points[i] - points[(i + 1) % 4])
+                     for i in range(4)])))
+                if len(distances) % 15 == 0:
+                    print(f"  {len(distances)}/{options.images}   "
+                          f"distance courante {np.median(distances):.3f} m")
+        else:
             sans_tag += 1
             if sans_tag % 120 == 0:
                 print("  aucun tag visible — verifie le cadrage et l'eclairage")
-            continue
-        sans_tag = 0
-        points = coins[0].reshape(4, 2).astype(np.float64)
-        ok, rvec, tvec = cv2.solvePnP(coins_3d, points, K, dist,
-                                      flags=cv2.SOLVEPNP_IPPE_SQUARE)
-        if not ok:
-            continue
-        distances.append(float(np.linalg.norm(tvec)))
-        # cote apparent : moyenne des quatre aretes du carre detecte
-        cotes.append(float(np.mean([np.linalg.norm(points[i] - points[(i + 1) % 4])
-                                    for i in range(4)])))
-        if len(distances) % 15 == 0:
-            print(f"  {len(distances)}/{options.images}   "
-                  f"distance courante {np.median(distances):.3f} m")
+
+        if fenetre:
+            try:
+                affichage = image.copy()
+                if vu:
+                    cv2.aruco.drawDetectedMarkers(affichage, coins, ids)
+                hauteur = affichage.shape[0]
+                cv2.putText(affichage,
+                            f"mesures {len(distances)}/{options.images}",
+                            (10, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                            (255, 255, 255), 2)
+                if distances:
+                    courante = float(np.median(distances))
+                    cv2.putText(affichage,
+                                f"mesure {courante:.3f} m   annonce "
+                                f"{options.reel:.3f} m", (10, 52),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 120), 2)
+                cv2.putText(affichage,
+                            "tag VU" if vu else "aucun tag — cadre-le",
+                            (10, hauteur - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                            (0, 255, 0) if vu else (0, 0, 255), 2)
+                cv2.imshow(titre, affichage)
+                if (cv2.waitKey(1) & 0xFF) == ord("q"):
+                    print("\n  Arrete a la demande.")
+                    break
+            except cv2.error:
+                # Pas d'affichage disponible (SSH sans X) : on continue en
+                # aveugle plutot que de s'arreter.
+                fenetre = False
+                print("  (pas d'affichage disponible, on continue sans fenetre)")
 
     camera.release()
+    if fenetre:
+        cv2.destroyAllWindows()
+
+    if not distances:
+        print("\nAucune mesure : le tag n'a jamais ete detecte.")
+        print("Verifie le cadrage, l'eclairage, et la taille annoncee du tag")
+        print(f"(--tag {options.tag} m).")
+        return 1
 
     # La mediane, pas la moyenne : une detection aberrante ne doit pas peser.
     mesuree = float(np.median(distances))
