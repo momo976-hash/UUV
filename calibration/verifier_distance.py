@@ -275,48 +275,28 @@ def main():
     print(f"  fx deduit    {fx_deduit:8.2f}   (= fx x distance_vraie / mesuree)")
     print(f"  ecart        {100*(fx_deduit/fx-1):+7.1f} %")
 
-    # -- la bonne camera a-t-elle servi ? -----------------------------------
-    # Le controle "flux couleur" ecarte les infrarouges de la D435i, mais pas
-    # la webcam integree d'un portable : elle est en couleur et en 640x480
-    # elle aussi. Une mesure faite avec elle est sans valeur, et le verdict
-    # tombe pourtant au vert si sa focale ressemble par hasard a celle du
-    # montage teste. On confronte donc la focale deduite a TOUS les montages
-    # connus : elle doit ressembler a celui qu'on croit tester, pas a un autre
-    # ni a aucun.
-    connus = []
-    for nom in ("nue_air", "tube_air", "tube_eau"):
-        K_autre, _, _ = charger_calibration(nom)
-        if K_autre is not None:
-            connus.append((nom, float(K_autre[0, 0])))
-    if connus:
-        proche, _ = min(connus, key=lambda c: abs(fx_deduit / c[1] - 1))
-        ecarts = "   ".join(f"{n} {100*(fx_deduit/f-1):+.0f}%" for n, f in connus)
-        print(f"\n  fx deduit face aux montages connus :  {ecarts}")
-        if proche != options.montage:
-            print(f"\n  [ATTENTION] la focale deduite colle mieux a '{proche}'")
-            print(f"  qu'a '{options.montage}', le montage teste. Deux causes")
-            print("  possibles, et la premiere est la plus frequente :")
-            print("    1. CE N'EST PAS LA BONNE CAMERA. Sur un portable, la")
-            print("       webcam integree est souvent prise a la place de la")
-            print("       RealSense — elle est en couleur elle aussi, donc le")
-            print("       controle de flux ne l'ecarte pas. Verifie l'image")
-            print("       dans la fenetre : voit-on bien a travers le tube ?")
-            print("       'python lister_cameras.py' montre chaque index.")
-            print("    2. Le montage physique ne correspond pas a la")
-            print("       calibration demandee (tube dans l'eau vs a l'air).")
-            print("\n  Tant que ce point n'est pas leve, le verdict ci-dessous")
-            print("  ne veut rien dire.")
-        else:
-            # Le test ci-dessus a un angle mort : une webcam dont la focale
-            # ressemble par hasard a celle du montage teste passe inapercue.
-            # Une webcam de portable a 698 px face a un tube_eau a 711 px
-            # donne +1.5 % d'ecart et un verdict au vert, alors que la mesure
-            # ne vaut rien. Seul l'oeil peut lever ce doute-la.
-            print("\n  A CONFIRMER DE VISU : l'image de la fenetre montrait-elle")
-            print("  bien la vue A TRAVERS LE TUBE ? Une webcam de portable dont")
-            print("  la focale ressemble a celle du montage passe ce controle")
-            print("  sans etre detectee. Si tu n'as pas regarde la fenetre,")
-            print("  refais la mesure en la regardant.")
+    # -- ce que ce test peut, et ne peut pas, prouver -----------------------
+    # Piege verifie par simulation : mesurer le tube A SEC avec la calibration
+    # EAU rend 0.97 a 1.02 m pour un tag reellement a 1.000 m. Le verdict tombe
+    # au vert alors que le test n'a rien montre. La raison est que solvePnP
+    # combine fx, fy ET la distorsion : entre nos deux calibrations, fx monte
+    # (606 -> 711) pendant que fy descend (616 -> 596), et les effets se
+    # compensent presque. Deduire une focale par d = fx.S/s est donc un
+    # raccourci qui ne vaut que si la calibration testee est celle du milieu.
+    #
+    # Le test ne discrimine que si le montage annonce correspond au montage
+    # PHYSIQUE. Dans l'eau, les deux hypotheses en presence rendent 1.00 m
+    # contre 0.88 m : la, il tranche pour de bon.
+    print("\n  A VERIFIER AVANT DE LIRE LE VERDICT")
+    print(f"  1. Le montage physique etait-il bien '{options.montage}' ?")
+    print("     tube a sec -> tube_air     tube immerge -> tube_eau")
+    print("     Croiser les deux ne donne pas un resultat faux, mais un")
+    print("     resultat ININTERPRETABLE, qui ressemble a une reussite.")
+    print("  2. La fenetre montrait-elle bien la vue A TRAVERS LE TUBE ?")
+    print("     Une autre camera en couleur passe tous les controles")
+    print("     automatiques. 'python lister_cameras.py' montre chaque index.")
+    print(f"  3. Le tag mesure-t-il bien {options.tag:.3f} m de cote ?")
+    print("     Une erreur de taille se reporte telle quelle sur la distance.")
 
     print("\n" + "=" * 66)
     if abs(ecart) <= 3:
