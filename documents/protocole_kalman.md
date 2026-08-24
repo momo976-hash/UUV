@@ -348,6 +348,46 @@ Sans cette rotation, les axes sont melanges et l'engin derive de travers —
 **sans aucun message d'erreur**. C'est le genre de faute qu'on ne voit qu'au
 bout de plusieurs jours.
 
+### Montrer que l'IMU est lue et exploitee
+
+C'est ce que Thein a demande : *extraire les donnees IMU du SDK Intel, puis
+appliquer les maths pour en tirer position et orientation.*
+
+```
+python localisations/imu_realsense.py
+```
+
+Camera branchee. Le programme ouvre les flux `accel` et `gyro` du SDK, mesure
+le repos pendant 5 s, puis affiche l'orientation en direct. Quatre choses s'y
+montrent, dans l'ordre :
+
+1. **La centrale est lue** — les mesures brutes bougent quand tu bouges.
+2. **L'echelle est juste** — au repos l'accelerometre lit 9.81 m/s2. Si ce
+   n'est pas le cas, les unites sont fausses et tout le reste aussi.
+3. **Les maths marchent** — tourne d'un quart de tour, le lacet affiche 90.
+4. **La derive est la ou on l'attend** — roulis et tangage restent stables
+   (l'accelerometre les tient), le lacet derive. C'est la demonstration
+   visible de pourquoi les tags sont necessaires.
+
+**Sans camera sous la main :**
+
+```
+python localisations/imu_realsense.py --simulation
+```
+
+Les memes maths sur une centrale simulee. La verite etant connue, l'erreur
+est chiffree — ce qu'aucune manip reelle ne permet :
+
+```
+2. UN QUART DE TOUR AUTOUR DE LA VERTICALE
+   lu : roulis +0.00   tangage -0.00   lacet +90.03 deg   (attendu 0, 0, 90)
+   erreur d'orientation : 0.03 deg
+
+3. TRENTE SECONDES IMMOBILE, SANS AUCUN TAG
+   roulis +0.53   tangage -0.46 deg   <- tenus par l'accelerometre
+   lacet  +9.04 deg                   <- derive librement
+```
+
 ### Deux nombres a mesurer, engin IMMOBILE
 
 Une minute sans bouger, puis l'ecart-type des mesures :
