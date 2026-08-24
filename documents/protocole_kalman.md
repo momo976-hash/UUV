@@ -284,6 +284,94 @@ de 3 reprises signale en general des tags mal places dans la carte.
 
 ---
 
+## Etape 6bis — La centrale inertielle (IMU)
+
+La D435i porte une centrale : un gyroscope (vitesses angulaires) et un
+accelerometre. Le filtre sait desormais s'en servir. Rien n'est obligatoire —
+sans IMU il fonctionne comme avant — mais ce qu'elle apporte est mesurable.
+
+### Ce que chaque capteur apporte, et ce qu'il n'apporte pas
+
+| | sans derive | permanent | ce qu'il ne sait pas |
+|---|---|---|---|
+| **Tags** | oui | **non** — intermittents | rien quand aucun tag n'est vu |
+| **Gyro** | non — biais integre | oui | derive sans limite si rien ne le recale |
+| **Accel** | oui pour le bas | oui | **rien du lacet** ; derive trop vite en position |
+
+Leurs defauts sont opposes, et c'est tout l'interet de les fusionner : le
+gyro propage entre deux tags, l'accelerometre tient deux axes d'orientation
+sur trois indefiniment, les tags recalent le lacet et la position — et
+servent au passage a estimer le biais du gyro.
+
+### Ce que ca change, chiffres de l'auto-test
+
+```
+sans gyro : apres 6 s sans tag, erreur de cap  125.0 deg
+avec gyro : apres 6 s sans tag, erreur de cap    4.6 deg
+
+accelerometre seul : roulis -0.01 deg, tangage +0.01 deg  (partis de +12 et -9)
+
+biais du gyro : vrai [0.4 -0.3 0.6] deg/s, estime [0.38 -0.34 0.57] (erreur 0.05)
+
+perte de tags de 1.5 s en pleine acceleration :
+   sans accel 377 mm  ->  avec accel 9 mm
+```
+
+Sans gyro, une seconde sans tag et le cap est perdu. Avec, on traverse
+plusieurs secondes.
+
+### Comment l'utiliser
+
+```python
+filtre.predire(dt, gyro=omega, accel=a)
+```
+
+- `gyro` : vitesse angulaire en **rad/s**, repere IMU
+- `accel` : acceleration en **m/s2**, repere IMU, **pesanteur comprise** —
+  telle que le capteur la rend, sans rien retrancher
+
+Les deux sont facultatifs : `filtre.predire(dt)` reste valable.
+
+### Le piege du repere — a ne pas negliger
+
+Sur la D435i, **la centrale n'est pas alignee avec la camera couleur**. Il
+existe une rotation constante entre les deux, que `pyrealsense2` donne :
+
+```python
+extr = profil.get_stream(rs.stream.gyro).get_extrinsics_to(
+           profil.get_stream(rs.stream.color))
+R = np.array(extr.rotation).reshape(3, 3)
+filtre = FiltrePose(rotation_imu_camera=R)
+```
+
+Sans cette rotation, les axes sont melanges et l'engin derive de travers —
+**sans aucun message d'erreur**. C'est le genre de faute qu'on ne voit qu'au
+bout de plusieurs jours.
+
+### Deux nombres a mesurer, engin IMMOBILE
+
+Une minute sans bouger, puis l'ecart-type des mesures :
+
+```python
+BRUIT_GYRO_DEG_S = 0.15   # ecart-type des vitesses angulaires, deg/s
+BRUIT_ACCEL      = 0.05   # ecart-type des accelerations, m/s2
+```
+
+Ils sont dans le meme bloc que les autres, en tete de `filtre_kalman.py`. Les
+valeurs actuelles sont des ordres de grandeur pour un MEMS de cette classe,
+pas des mesures.
+
+### La limite a annoncer honnetement
+
+L'accelerometre a un biais lentement variable que **rien ici n'estime**. La
+double integration le transforme en erreur quadratique : 0.05 m/s2 font 2.5 cm
+au bout d'une seconde, mais **1 m au bout de dix**.
+
+L'IMU sert donc a traverser une perte de tags de quelques secondes, **pas a
+naviguer a l'estime**. Les tags restent la seule source sans derive.
+
+---
+
 ## Etape 7 — Surveiller que les tags ne bougent pas
 
 **Rien a faire** : c'est inclus dans le verdict de l'etape 6. Si un support a

@@ -185,7 +185,7 @@ FOCALE_EAU = optique.focale_eau()
 TAILLE_TAG = 0.223
 
 # ===========================================================================
-# LES TROIS NOMBRES A MESURER
+# LES NOMBRES A MESURER
 #
 # C'est LE SEUL bloc a modifier apres une session de bassin. Tout le reste du
 # depot vient y puiser : les classes ci-dessous en font leurs valeurs par
@@ -194,6 +194,11 @@ TAILLE_TAG = 0.223
 # et en corriger quatre sur cinq ne produisait aucun message d'erreur.
 #
 # Le protocole (documents/protocole_kalman.md) dit comment mesurer chacun.
+#
+# Les trois premiers gouvernent le filtre alimente par les seuls tags. Les
+# deux derniers ne servent que si la centrale inertielle de la D435i est
+# branchee — et dans ce cas ils remplacent avantageusement SIGMA_ACCELERATION
+# et DERIVE_GYRO_DEG_S, qui decrivent une ignorance plutot qu'une mesure.
 # ===========================================================================
 
 # Bruit de detection d'un coin de tag, en pixels.
@@ -214,7 +219,21 @@ SIGMA_ACCELERATION = 0.4
 
 # A quelle vitesse l'orientation peut changer entre deux images sans mesure,
 # en deg/s. SUPPOSE — meme source que ci-dessus.
+#
+# Ne sert QUE si aucun gyroscope n'alimente le filtre. Des que la centrale de
+# la D435i est branchee, on sait de combien l'engin a tourne et c'est
+# BRUIT_GYRO_DEG_S qui gouverne, deux ordres de grandeur plus bas.
 DERIVE_GYRO_DEG_S = 10.0
+
+# Bruit du gyroscope de la D435i, en deg/s (marche aleatoire angulaire).
+# Ordre de grandeur d'un MEMS de cette classe ; a mesurer en laissant l'engin
+# IMMOBILE une minute et en prenant l'ecart-type des vitesses angulaires.
+BRUIT_GYRO_DEG_S = 0.15
+
+# Bruit de l'accelerometre, en m/s2. Sert quand il alimente la prediction de
+# position a la place de l'hypothese "vitesse constante". Meme methode de
+# mesure : engin immobile, ecart-type des mesures.
+BRUIT_ACCEL = 0.05
 
 # L'echelle du tag, d'ou se deduit la distance, est lue sur QUATRE coins et
 # non un seul : moyenner divise le bruit par racine de 4. Sans ce facteur, le
@@ -279,6 +298,93 @@ def angle_quaternions(q0, q1):
     """Angle en degres entre deux orientations."""
     produit = abs(float(q0 @ q1) / (np.linalg.norm(q0) * np.linalg.norm(q1)))
     return float(np.degrees(2.0 * np.arccos(np.clip(produit, -1.0, 1.0))))
+
+
+def produit_quaternions(a, b):
+    """Compose deux rotations : a PUIS b se lit produit(a, b)."""
+    w0, v0 = a[0], a[1:]
+    w1, v1 = b[0], b[1:]
+    return np.concatenate([[w0 * w1 - v0 @ v1],
+                           w0 * v1 + w1 * v0 + np.cross(v0, v1)])
+
+
+def quaternion_depuis_rotation(vecteur):
+    """Vecteur de rotation (axe x angle, en radians) -> quaternion.
+
+    C'est la brique qui transforme une vitesse angulaire mesuree en increment
+    d'orientation : omega * dt donne exactement un tel vecteur.
+    """
+    angle = float(np.linalg.norm(vecteur))
+    if angle < 1e-12:
+        return np.array([1.0, 0.0, 0.0, 0.0])
+    axe = np.asarray(vecteur, dtype=float) / angle
+    return np.concatenate([[np.cos(angle / 2)], axe * np.sin(angle / 2)])
+
+
+# ===========================================================================
+# Passer d'une representation d'orientation a l'autre
+#
+# POURQUOI CES CONVERSIONS SONT NECESSAIRES
+# Aucune bibliotheque ne rend l'orientation dans le meme format. L'IMU de la
+# D435i donne des vitesses angulaires ; certaines piles IMU donnent un
+# quaternion, d'autres des angles d'Euler ; les detecteurs d'AprilTag rendent
+# soit un rvec (vecteur de Rodrigues), soit une transformation homogene. Il
+# faut savoir naviguer entre les quatre sans se tromper de convention, sinon
+# les erreurs sont silencieuses et l'engin part de travers.
+#
+# CONVENTION RETENUE POUR EULER : Z-Y-X intrinseque, dite lacet-tangage-roulis
+# (yaw-pitch-roll). C'est celle de la robotique et de ROS. On tourne d'abord
+# de `lacet` autour de Z, puis de `tangage` autour du nouveau Y, puis de
+# `roulis` autour du nouveau X. Une autre convention donnerait d'autres
+# nombres pour la MEME rotation : c'est la source d'erreur classique.
+# ===========================================================================
+def quaternion_vers_euler(q):
+    """Quaternion [w,x,y,z] -> (roulis, tangage, lacet) en radians, Z-Y-X."""
+    w, x, y, z = np.asarray(q, dtype=float) / np.linalg.norm(q)
+    roulis = np.arctan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
+    # Le tangage passe par un arcsin : a +/-90 deg les deux autres angles
+    # deviennent indistinguables (blocage de cardan). On borne l'argument
+    # plutot que de laisser sortir un NaN.
+    sinus = np.clip(2 * (w * y - z * x), -1.0, 1.0)
+    tangage = np.arcsin(sinus)
+    lacet = np.arctan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+    return float(roulis), float(tangage), float(lacet)
+
+
+def euler_vers_quaternion(roulis, tangage, lacet):
+    """(roulis, tangage, lacet) en radians, Z-Y-X -> quaternion [w,x,y,z]."""
+    cr, sr = np.cos(roulis / 2), np.sin(roulis / 2)
+    cp, sp = np.cos(tangage / 2), np.sin(tangage / 2)
+    cy, sy = np.cos(lacet / 2), np.sin(lacet / 2)
+    return np.array([cr * cp * cy + sr * sp * sy,
+                     sr * cp * cy - cr * sp * sy,
+                     cr * sp * cy + sr * cp * sy,
+                     cr * cp * sy - sr * sp * cy])
+
+
+def transformation_homogene(rotation, translation):
+    """Assemble la matrice 4x4 : bloc R 3x3, bloc t 3x1, derniere ligne
+    (0,0,0,1). `rotation` accepte une matrice 3x3 ou un quaternion."""
+    R = np.asarray(rotation, dtype=float)
+    if R.shape != (3, 3):
+        R = quaternion_vers_matrice(R)
+    T = np.eye(4)
+    T[:3, :3] = R
+    T[:3, 3] = np.asarray(translation, dtype=float).ravel()
+    return T
+
+
+def decomposer_homogene(T):
+    """Matrice 4x4 -> (rotation 3x3, translation 3)."""
+    T = np.asarray(T, dtype=float)
+    return T[:3, :3].copy(), T[:3, 3].copy()
+
+
+def inverser_homogene(T):
+    """Inverse d'une transformation rigide, sans passer par une inversion
+    numerique : R^-1 = R^T pour une rotation, ce qui est exact et rapide."""
+    R, t = decomposer_homogene(T)
+    return transformation_homogene(R.T, -R.T @ t)
 
 
 # ===========================================================================
@@ -351,10 +457,15 @@ class FiltreKalmanPosition:
     H = np.hstack([np.eye(3), np.zeros((3, 3))])
 
     def __init__(self, sigma_acceleration=None, seuil_chi2=16.27,
-                 max_rejets_consecutifs=5, sigma_vitesse_reprise=0.5):
+                 max_rejets_consecutifs=5, sigma_vitesse_reprise=0.5,
+                 bruit_accel=None):
         if sigma_acceleration is None:
             sigma_acceleration = SIGMA_ACCELERATION
+        if bruit_accel is None:
+            bruit_accel = BRUIT_ACCEL
         self.sigma_a = float(sigma_acceleration)   # m/s^2 d'acceleration non modelisee
+        self.bruit_accel = float(bruit_accel)      # m/s^2 de bruit du capteur
+        self.accel_utilise = False
         self.seuil = float(seuil_chi2)             # chi2 a 3 ddl, seuil 99.9 %
         self.max_rejets_consecutifs = int(max_rejets_consecutifs)
         self.sigma_v_reprise = float(sigma_vitesse_reprise)
@@ -370,17 +481,41 @@ class FiltreKalmanPosition:
         self.P = np.diag([sigma_position ** 2] * 3 + [sigma_vitesse ** 2] * 3)
         self.demarre = True
 
-    def predire(self, dt):
-        """Fait avancer l'etat de dt secondes, sans mesure."""
+    def predire(self, dt, acceleration=None):
+        """Fait avancer l'etat de dt secondes.
+
+        acceleration : celle MESUREE par l'accelerometre, exprimee dans le
+        repere MONDE et debarrassee de la pesanteur. Si elle est fournie, elle
+        entre dans la prediction comme une commande connue au lieu d'etre
+        traitee comme un alea.
+
+        CE QUE L'ACCELEROMETRE CHANGE. Sans lui, on suppose la vitesse
+        constante et on couvre l'ecart par sigma_a, l'acceleration que l'engin
+        peut avoir sans qu'on le sache. Avec lui, cette acceleration est
+        MESUREE : il ne reste que le bruit du capteur, bien plus petit. La
+        prediction suit alors les manoeuvres au lieu de retarder dessus.
+
+        RESERVE HONNETE. Un accelerometre MEMS a un biais lentement variable
+        que rien ici n'estime, et une double integration transforme ce biais
+        en erreur de position quadratique : un biais de 0.05 m/s2 fait 2.5 cm
+        au bout d'une seconde, 1 m au bout de dix. C'est utile pour traverser
+        une perte de tags de quelques instants, pas pour naviguer a l'estime.
+        Les tags restent la seule source sans derive.
+        """
         if not self.demarre or dt <= 0:
             return
         F = np.eye(6)
         F[:3, 3:] = dt * np.eye(3)
-        # G : effet d'une acceleration inconnue pendant dt (cf. en-tete)
+        # G : effet d'une acceleration pendant dt, sur la position et la vitesse
         G = np.vstack([0.5 * dt * dt * np.eye(3), dt * np.eye(3)])
-        Q = self.sigma_a ** 2 * (G @ G.T)
         self.x = F @ self.x
-        self.P = F @ self.P @ F.T + Q
+        if acceleration is None:
+            incertitude = self.sigma_a          # acceleration inconnue
+        else:
+            self.x = self.x + G @ np.asarray(acceleration, dtype=float).ravel()
+            incertitude = self.bruit_accel      # acceleration mesuree
+            self.accel_utilise = True
+        self.P = F @ self.P @ F.T + incertitude ** 2 * (G @ G.T)
 
     def corriger(self, position_mesuree, covariance):
         """Integre une mesure. Retourne (acceptee, distance_mahalanobis)."""
@@ -449,18 +584,31 @@ class FiltreOrientation:
     """
 
     def __init__(self, derive_gyro_deg_s=None, seuil_saut_deg=25.0,
-                 max_rejets_consecutifs=5):
+                 max_rejets_consecutifs=5, bruit_gyro_deg_s=None,
+                 tau_biais=20.0):
         if derive_gyro_deg_s is None:
             derive_gyro_deg_s = DERIVE_GYRO_DEG_S
+        if bruit_gyro_deg_s is None:
+            bruit_gyro_deg_s = BRUIT_GYRO_DEG_S
         self.q = np.array([1.0, 0.0, 0.0, 0.0])
         self.variance = np.radians(180.0) ** 2
         self.derive = np.radians(derive_gyro_deg_s)   # rad/s d'errance non modelisee
+        self.bruit_gyro = np.radians(bruit_gyro_deg_s)  # rad/s de bruit du gyro
         self.seuil_saut = float(seuil_saut_deg)
         self.max_rejets_consecutifs = int(max_rejets_consecutifs)
         self.demarre = False
         self.rejets = 0
         self.rejets_consecutifs = 0
         self.reprises = 0
+        # Biais du gyro, en rad/s, dans le repere de la centrale. Un gyro MEMS
+        # ne mesure jamais zero au repos : ce petit decalage, integre, fait
+        # deriver l'orientation. On l'estime sur les corrections que les tags
+        # apportent, et on le retranche des mesures suivantes.
+        self.biais = np.zeros(3)
+        self.tau_biais = float(tau_biais)   # constante de temps de l'estimation
+        self._temps_depuis_correction = 0.0
+        self._rotation_gyro = np.zeros(3)   # rotation integree depuis la derniere
+        self.gyro_utilise = False
 
     def demarrer(self, R_ou_q, sigma_deg=5.0):
         q = np.asarray(R_ou_q, dtype=float)
@@ -468,12 +616,95 @@ class FiltreOrientation:
         self.variance = np.radians(sigma_deg) ** 2
         self.demarre = True
 
-    def predire(self, dt):
-        """Sans gyroscope, l'orientation est supposee constante et son
-        incertitude grandit avec le temps."""
+    def predire(self, dt, omega=None):
+        """Fait avancer l'orientation de dt secondes.
+
+        omega : vitesse angulaire mesuree par le GYROSCOPE, en rad/s, dans le
+        repere de la camera. Si elle est fournie, l'orientation est reellement
+        propagee au lieu d'etre supposee constante.
+
+        CE QUE LE GYRO CHANGE. Sans lui, on suppose l'engin immobile en
+        rotation et on gonfle l'incertitude de `derive` par seconde, soit
+        10 deg/s dans nos reglages : au bout d'une seconde sans tag, on ne
+        sait plus rien. Avec lui, on SAIT de combien l'engin a tourne, et
+        l'incertitude ne croit plus que du bruit du gyro — deux ordres de
+        grandeur en dessous. C'est ce qui permet de traverser une perte de
+        tags sans perdre le cap.
+        """
         if not self.demarre or dt <= 0:
             return
-        self.variance += (self.derive * dt) ** 2
+        if omega is None:
+            self.variance += (self.derive * dt) ** 2
+            return
+
+        self.gyro_utilise = True
+        vitesse = np.asarray(omega, dtype=float).ravel() - self.biais
+        rotation = vitesse * dt
+        # q PUIS la petite rotation, exprimee dans le repere du corps :
+        # l'increment se compose a DROITE.
+        self.q = produit_quaternions(self.q, quaternion_depuis_rotation(rotation))
+        self.q /= np.linalg.norm(self.q)
+        self.variance += (self.bruit_gyro * dt) ** 2
+        self._temps_depuis_correction += dt
+        self._rotation_gyro = self._rotation_gyro + rotation
+
+    def corriger_gravite(self, acceleration, sigma_deg=8.0,
+                         tolerance_g=0.15, gravite=9.81):
+        """Recale le ROULIS et le TANGAGE sur la verticale vue par l'accelerometre.
+
+        Au repos, un accelerometre mesure la reaction a la pesanteur : sa
+        direction donne le haut. En comparant cette direction a celle que
+        l'orientation courante predit, on corrige les deux axes horizontaux —
+        et EUX SEULS. Le lacet reste inobservable : tourner autour de la
+        verticale ne change pas la direction de la pesanteur. C'est pour cela
+        que l'axe de correction, obtenu par produit vectoriel, est
+        automatiquement perpendiculaire a la verticale.
+
+        Interet : sans aucun tag, le roulis et le tangage restent bornes
+        indefiniment. Seul le lacet derive, et c'est lui que les tags recalent.
+
+        L'accelerometre ne distingue pas la pesanteur d'une acceleration de
+        l'engin. On ne s'en sert donc que quand la norme mesuree est proche de
+        g : sinon l'engin manoeuvre et la mesure ne dit plus ou est le bas.
+        Retourne (utilisee, correction_en_degres).
+        """
+        if not self.demarre:
+            return False, 0.0
+        a = np.asarray(acceleration, dtype=float).ravel()
+        norme = float(np.linalg.norm(a))
+        if norme < 1e-6 or abs(norme / gravite - 1.0) > tolerance_g:
+            return False, 0.0        # l'engin accelere : mesure inexploitable
+
+        mesuree = a / norme
+        # Direction du "haut" telle que l'orientation courante la prevoit,
+        # ramenee dans le repere du corps.
+        R = quaternion_vers_matrice(self.q)
+        attendue = R.T @ np.array([0.0, 0.0, 1.0])
+        axe = np.cross(attendue, mesuree)
+        sinus = float(np.linalg.norm(axe))
+        cosinus = float(np.clip(attendue @ mesuree, -1.0, 1.0))
+        angle = float(np.arctan2(sinus, cosinus))
+        if sinus < 1e-9:
+            return True, 0.0                       # deja aligne
+        axe = axe / sinus
+
+        # Gain de Kalman scalaire, comme pour la correction par les tags.
+        r = np.radians(sigma_deg) ** 2
+        gain = self.variance / (self.variance + r)
+        # SIGNE. `axe, angle` decrit la rotation Delta qui amene la direction
+        # PREVUE sur la direction MESUREE, toutes deux dans le repere du corps.
+        # L'orientation q, elle, va du corps vers le monde : pour que sa
+        # prevision R'^T.ez vaille `mesuree`, il faut R' = R.Delta^T, donc
+        # composer a droite par l'INVERSE de Delta — d'ou le signe moins.
+        # Avec le signe oppose, la correction s'eloigne de la cible et
+        # l'orientation converge vers le point fixe a 180 degres.
+        self.q = produit_quaternions(
+            self.q, quaternion_depuis_rotation(-axe * angle * gain))
+        self.q /= np.linalg.norm(self.q)
+        # L'accelerometre ne renseigne que deux axes sur trois : il ne peut
+        # donc pas resserrer l'incertitude autant qu'une mesure complete.
+        self.variance = (1.0 - gain * 2.0 / 3.0) * self.variance
+        return True, float(np.degrees(angle))
 
     def corriger(self, R_ou_q_mesure, sigma_mesure_rad):
         """Retourne (acceptee, ecart_en_degres)."""
@@ -502,9 +733,60 @@ class FiltreOrientation:
         # gain de Kalman scalaire sur l'angle
         r = float(sigma_mesure_rad) ** 2
         gain = self.variance / (self.variance + r)
+        avant = self.q.copy()
         self.q = slerp(self.q, q, gain)
         self.variance = (1.0 - gain) * self.variance
+        if self.gyro_utilise:
+            # On passe la MESURE, pas l'etat corrige. Le gain de Kalman
+            # n'applique qu'une fraction de l'ecart : estimer le biais sur la
+            # correction appliquee le sous-estimerait d'autant, et d'autant
+            # plus que le filtre est confiant. L'ecart complet — l'innovation —
+            # est la vraie mesure de la derive accumulee depuis le dernier tag.
+            self._reestimer_biais(avant, q)
         return True, ecart
+
+    def _reestimer_biais(self, avant, mesure):
+        """Attribue au biais du gyro la part systematique de l'innovation.
+
+        Entre deux tags, l'orientation n'avance que par integration du gyro.
+        Si le gyro a un biais b, l'orientation derive de b*dt, et le tag la
+        trouve systematiquement decalee du meme cote : cet ecart, divise par
+        le temps ecoule, EST une mesure du biais.
+
+        On la moyenne lentement (constante de temps tau_biais) parce qu'une
+        correction isolee melange le biais et le bruit du tag. Un biais reel
+        est constant, le bruit ne l'est pas : seul le premier survit au
+        moyennage.
+        """
+        dt = self._temps_depuis_correction
+        self._temps_depuis_correction = 0.0
+        rotation_gyro = self._rotation_gyro
+        self._rotation_gyro = np.zeros(3)
+        if dt < 0.05:
+            return                              # trop court pour separer quoi que ce soit
+
+        # Rotation apportee par la correction, exprimee dans le repere du corps.
+        delta = produit_quaternions(np.array([avant[0], -avant[1], -avant[2],
+                                              -avant[3]]), mesure)
+        angle = 2.0 * np.arctan2(float(np.linalg.norm(delta[1:])),
+                                 float(abs(delta[0])))
+        if angle < 1e-9:
+            return
+        axe = delta[1:] / np.linalg.norm(delta[1:])
+        if delta[0] < 0:
+            axe = -axe
+        correction = axe * angle
+
+        # Le gyro a trop tourne de `-correction` pendant dt : c'est un biais
+        # apparent de -correction/dt.
+        mesure = -correction / dt
+        poids = min(dt / self.tau_biais, 0.5)    # jamais plus de la moitie d'un coup
+        self.biais = (1.0 - poids) * self.biais + poids * mesure
+
+    @property
+    def biais_deg_s(self):
+        """Biais estime du gyro, en deg/s sur les trois axes."""
+        return np.degrees(self.biais)
 
     @property
     def matrice(self):
@@ -676,23 +958,82 @@ class FiltrePose:
     """Enveloppe pratique : une pose complete (position + orientation).
 
     Utilisation type, a chaque image :
-        filtre.predire(dt)
+        filtre.predire(dt, gyro=omega, accel=a)     # IMU facultative
         for tag in tags_vus:
             filtre.ajouter_tag(position_estimee, position_tag, incidence, R_mesuree)
         filtre.appliquer()
+
+    ---------------------------------------------------------------------
+    CE QUE LA CENTRALE INERTIELLE APPORTE, ET CE QU'ELLE N'APPORTE PAS
+    ---------------------------------------------------------------------
+    Les tags et l'IMU ont des defauts opposes, et c'est ce qui rend leur
+    fusion interessante :
+
+      TAGS     sans derive, mais bruites, et surtout INTERMITTENTS. Des qu'on
+               ne voit plus de tag, plus aucune information.
+      GYRO     tres precis a court terme, mais son petit biais integre fait
+               deriver l'orientation sans limite.
+      ACCEL    donne la direction du bas en permanence, donc borne le roulis
+               et le tangage pour toujours — mais ne dit RIEN du lacet, et sa
+               double integration derive trop vite pour naviguer a l'estime.
+
+    D'ou le partage : le gyro propage entre deux tags, l'accelerometre tient
+    deux axes d'orientation sur trois, les tags recalent le lacet et la
+    position et servent a estimer le biais du gyro. Chaque capteur couvre le
+    trou de l'autre.
+
+    REPERE DE L'IMU — piege a ne pas negliger. Sur la D435i la centrale n'est
+    pas alignee avec la camera couleur : il existe une rotation constante
+    entre les deux, que pyrealsense2 fournit
+    (get_extrinsics_to). Passer les mesures brutes sans cette rotation
+    melange les axes et fait deriver l'engin de travers, sans message
+    d'erreur. `rotation_imu_camera` est la pour ca.
     """
 
     def __init__(self, sigma_acceleration=None, derive_gyro_deg_s=None,
-                 seuil_deplacement_mm=8.0):
+                 seuil_deplacement_mm=8.0, rotation_imu_camera=None,
+                 gravite=9.81):
         self.position = FiltreKalmanPosition(sigma_acceleration)
         self.orientation = FiltreOrientation(derive_gyro_deg_s)
         self.surveillance = SurveillanceTags(seuil_mm=seuil_deplacement_mm)
+        # Rotation qui amene un vecteur du repere IMU vers le repere camera.
+        # Identite par defaut : vrai seulement si les deux sont alignes.
+        self.R_imu_camera = (np.eye(3) if rotation_imu_camera is None
+                             else np.asarray(rotation_imu_camera, dtype=float))
+        self.gravite = float(gravite)
         self._mesures = []
         self._orientations = []
 
-    def predire(self, dt):
-        self.position.predire(dt)
-        self.orientation.predire(dt)
+    def predire(self, dt, gyro=None, accel=None):
+        """Fait avancer la pose de dt secondes, avec l'IMU si elle est la.
+
+        gyro  : vitesse angulaire, rad/s, repere IMU.
+        accel : acceleration specifique, m/s2, repere IMU — pesanteur
+                COMPRISE, telle que le capteur la rend.
+
+        L'ordre compte : on propage d'abord l'orientation avec le gyro, puis
+        on s'en sert pour retirer la pesanteur de l'accelerometre et exprimer
+        le reste dans le repere monde. Utiliser l'ancienne orientation
+        introduirait une erreur proportionnelle a la rotation faite pendant dt.
+        """
+        omega = None if gyro is None else self.R_imu_camera @ np.asarray(
+            gyro, dtype=float).ravel()
+        self.orientation.predire(dt, omega)
+
+        acceleration_monde = None
+        if accel is not None and self.orientation.demarre:
+            a_camera = self.R_imu_camera @ np.asarray(accel, dtype=float).ravel()
+            # Vers le repere monde, puis on retranche la pesanteur : ce qui
+            # reste est l'acceleration propre de l'engin.
+            a_monde = quaternion_vers_matrice(self.orientation.q) @ a_camera
+            acceleration_monde = a_monde - np.array([0.0, 0.0, self.gravite])
+        self.position.predire(dt, acceleration_monde)
+
+        # L'accelerometre recale le roulis et le tangage, meme sans tag.
+        if accel is not None:
+            self.orientation.corriger_gravite(
+                self.R_imu_camera @ np.asarray(accel, dtype=float).ravel(),
+                gravite=self.gravite)
 
     def ajouter_tag(self, position_camera_estimee, position_tag, incidence_deg,
                     rotation_mesuree=None, distance=None, identifiant=None):
@@ -840,6 +1181,118 @@ def _auto_test():
     print(f"boite deplacee de {1000*np.linalg.norm(pousse):.0f} mm -> detectee a "
           f"{1000*convaincus[11][0]:.0f} mm (erreur {1000*erreur:.1f} mm)")
     assert erreur < 0.004, "le deplacement estime doit etre juste a 4 mm pres"
+
+    # -- conversions entre representations d'orientation --------------------
+    for essai in range(200):
+        angles = generateur.uniform(-np.pi, np.pi, 3)
+        angles[1] = generateur.uniform(-1.4, 1.4)      # hors blocage de cardan
+        q = euler_vers_quaternion(*angles)
+        retour = np.array(quaternion_vers_euler(q))
+        # on compare les ROTATIONS, pas les triplets : deux triplets
+        # differents peuvent decrire la meme orientation.
+        #
+        # Seuil a 1e-4 deg et non zero : `angle_quaternions` passe par un
+        # arccos, dont la derivee explose au voisinage de 1. Deux quaternions
+        # identiques au dernier bit y donnent quelques 1e-6 deg d'ecart
+        # apparent. C'est du bruit de calcul, pas une erreur de conversion —
+        # verifie sur des cas ronds, l'aller-retour rend les memes angles.
+        assert angle_quaternions(q, euler_vers_quaternion(*retour)) < 1e-4
+    print("aller-retour Euler <-> quaternion : 200 orientations, "
+          "ecart max < 1e-4 deg")
+
+    T = transformation_homogene(quaternion_vers_matrice(q_vrai), [1.0, -2.0, 0.5])
+    assert T.shape == (4, 4) and np.allclose(T[3], [0, 0, 0, 1])
+    identite = T @ inverser_homogene(T)
+    assert np.abs(identite - np.eye(4)).max() < 1e-12
+    R_lu, t_lu = decomposer_homogene(T)
+    assert np.allclose(t_lu, [1.0, -2.0, 0.5])
+    print(f"transformation homogene 4x4 : T . T^-1 = I a "
+          f"{np.abs(identite - np.eye(4)).max():.1e} pres")
+
+    # -- le gyroscope tient-il le cap quand les tags disparaissent ? --------
+    # 6 secondes sans aucun tag, l'engin tournant a 20 deg/s.
+    dt, duree = 1 / 200, 6.0
+    vitesse_vraie = np.radians([3.0, -5.0, 20.0])
+    biais_vrai = np.radians([0.4, -0.3, 0.6])
+    for avec_gyro in (False, True):
+        suivi = FiltreOrientation()
+        suivi.demarrer(np.array([1.0, 0.0, 0.0, 0.0]), sigma_deg=2.0)
+        verite = np.array([1.0, 0.0, 0.0, 0.0])
+        for _ in range(int(duree / dt)):
+            verite = produit_quaternions(
+                verite, quaternion_depuis_rotation(vitesse_vraie * dt))
+            mesure = (vitesse_vraie + biais_vrai
+                      + generateur.normal(0, np.radians(0.15), 3))
+            suivi.predire(dt, mesure if avec_gyro else None)
+        ecart = angle_quaternions(suivi.q, verite)
+        etiquette = "avec gyro " if avec_gyro else "sans gyro "
+        print(f"{etiquette}: apres {duree:.0f} s sans tag, erreur de cap "
+              f"{ecart:6.1f} deg   (incertitude annoncee "
+              f"{suivi.incertitude_deg:5.1f} deg)")
+        if avec_gyro:
+            # le biais non estime domine : 0.6 deg/s pendant 6 s = 3.6 deg
+            assert ecart < 8.0, f"le gyro doit tenir le cap, obtenu {ecart:.1f} deg"
+        else:
+            assert ecart > 100.0, "sans gyro on doit avoir tout perdu"
+
+    # -- l'accelerometre borne-t-il roulis et tangage sans aucun tag ? ------
+    suivi = FiltreOrientation()
+    suivi.demarrer(euler_vers_quaternion(np.radians(12.0), np.radians(-9.0), 0.0),
+                   sigma_deg=15.0)
+    for _ in range(400):
+        suivi.predire(1 / 100, np.zeros(3))
+        # engin immobile et horizontal : l'accelerometre voit le haut
+        suivi.corriger_gravite(np.array([0.0, 0.0, 9.81])
+                               + generateur.normal(0, 0.05, 3))
+    roulis, tangage, _ = quaternion_vers_euler(suivi.q)
+    print(f"accelerometre seul : roulis {np.degrees(roulis):+.2f} deg, "
+          f"tangage {np.degrees(tangage):+.2f} deg  (partis de +12 et -9)")
+    assert abs(np.degrees(roulis)) < 2.0 and abs(np.degrees(tangage)) < 2.0
+
+    # une acceleration franche ne doit PAS etre prise pour la pesanteur
+    utilisee, _ = suivi.corriger_gravite(np.array([6.0, 0.0, 9.81]))
+    assert not utilisee, "une mesure loin de g doit etre refusee"
+    print("accelerometre : mesure a 1.2 g refusee, comme attendu")
+
+    # -- le biais du gyro est-il retrouve sur les corrections des tags ? ----
+    pose = FiltrePose()
+    pose.orientation.demarrer(np.array([1.0, 0.0, 0.0, 0.0]), sigma_deg=2.0)
+    verite = np.array([1.0, 0.0, 0.0, 0.0])
+    dt = 1 / 100
+    for pas in range(6000):
+        verite = produit_quaternions(
+            verite, quaternion_depuis_rotation(vitesse_vraie * dt))
+        pose.orientation.predire(
+            dt, vitesse_vraie + biais_vrai + generateur.normal(0, np.radians(0.15), 3))
+        if pas % 50 == 0:                      # un tag toutes les 0.5 s
+            pose.orientation.corriger(verite, np.radians(1.0))
+    erreur_biais = np.degrees(np.linalg.norm(pose.orientation.biais - biais_vrai))
+    print(f"biais du gyro : vrai {np.degrees(biais_vrai).round(2)} deg/s, "
+          f"estime {pose.orientation.biais_deg_s.round(2)} deg/s "
+          f"(erreur {erreur_biais:.2f} deg/s)")
+    assert erreur_biais < 0.35, f"le biais doit etre approche, erreur {erreur_biais:.2f}"
+
+    # -- l'accelerometre aide-t-il la position pendant une perte de tags ? --
+    dt, duree = 1 / 100, 1.5
+    resultats = {}
+    for avec_accel in (False, True):
+        suivi = FiltreKalmanPosition()
+        suivi.demarrer(np.zeros(3), sigma_position=0.01, sigma_vitesse=0.05)
+        suivi.x[3:] = [0.25, 0.0, 0.0]
+        vraie_p, vraie_v = np.zeros(3), np.array([0.25, 0.0, 0.0])
+        # l'engin accelere : c'est le cas ou l'hypothese "vitesse constante"
+        # se trompe, et ou l'accelerometre a quelque chose a apporter.
+        a = np.array([0.30, -0.15, 0.0])
+        for _ in range(int(duree / dt)):
+            vraie_p = vraie_p + vraie_v * dt + 0.5 * a * dt * dt
+            vraie_v = vraie_v + a * dt
+            suivi.predire(dt, (a + generateur.normal(0, 0.05, 3))
+                          if avec_accel else None)
+        resultats[avec_accel] = float(np.linalg.norm(suivi.position - vraie_p))
+    print(f"perte de tags de {duree:.1f} s en pleine acceleration : "
+          f"sans accel {1000*resultats[False]:.0f} mm, "
+          f"avec accel {1000*resultats[True]:.0f} mm")
+    assert resultats[True] < resultats[False] / 3
 
     print("=" * 68)
     print("TOUS LES TESTS PASSENT")
