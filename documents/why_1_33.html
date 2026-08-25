@@ -1,0 +1,506 @@
+<title>The 1.33 Factor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --ground:#f1f5f7; --panel:#ffffff; --ink:#0b2029; --muted:#587380;
+  --line:#d5e2e7; --line-soft:#e6eef1;
+  --water:#12667f; --water-fill:#dceaf0; --water-edge:#a9cbd8;
+  --ray:#bd5d1c; --ray-soft:#f6e6d8;
+  --flag:#a2322a; --flag-soft:#f8eae8;
+  --glass:#b9c6cc;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#071318; --panel:#0d1f27; --ink:#dce9ee; --muted:#8ba7b3;
+    --line:#1d333d; --line-soft:#152a33;
+    --water:#4fadc9; --water-fill:#0e2b36; --water-edge:#1f4d5e;
+    --ray:#e8934a; --ray-soft:#2a1c10;
+    --flag:#e2776d; --flag-soft:#2b1613;
+    --glass:#4a5f68;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#071318; --panel:#0d1f27; --ink:#dce9ee; --muted:#8ba7b3;
+  --line:#1d333d; --line-soft:#152a33;
+  --water:#4fadc9; --water-fill:#0e2b36; --water-edge:#1f4d5e;
+  --ray:#e8934a; --ray-soft:#2a1c10;
+  --flag:#e2776d; --flag-soft:#2b1613;
+  --glass:#4a5f68;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:16.5px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1040px; margin:0 auto; padding:0 clamp(18px,4vw,40px) 88px}
+.col{max-width:64ch}
+
+/* ---------- masthead ---------- */
+header{padding:clamp(40px,7vw,76px) 0 0}
+.eyebrow{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11.5px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--muted); margin:0 0 18px;
+}
+h1{
+  font-family:Spectral,Georgia,serif; font-weight:600;
+  font-size:clamp(38px,6.4vw,62px); line-height:1.04; letter-spacing:-.015em;
+  margin:0 0 20px; text-wrap:balance;
+}
+h1 .n{color:var(--water)}
+.standfirst{
+  font-family:Spectral,Georgia,serif; font-size:clamp(18px,2.3vw,21.5px);
+  line-height:1.5; color:var(--muted); margin:0; max-width:56ch; text-wrap:balance;
+}
+.byline{
+  margin:26px 0 0; padding-top:18px; border-top:1px solid var(--line);
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:12px;
+  color:var(--muted); display:flex; flex-wrap:wrap; gap:8px 22px;
+}
+
+/* ---------- sections ---------- */
+section{margin-top:clamp(44px,6vw,70px)}
+h2{
+  font-family:Spectral,Georgia,serif; font-weight:600;
+  font-size:clamp(23px,3.1vw,29px); line-height:1.22; letter-spacing:-.01em;
+  margin:0 0 6px; text-wrap:balance;
+}
+h2 .num{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.56em;
+  font-weight:500; color:var(--water); margin-right:.7em;
+  vertical-align:.18em; letter-spacing:.04em;
+}
+.sub{color:var(--muted); font-size:14.5px; margin:0 0 22px}
+p{margin:0 0 17px}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--water); text-underline-offset:3px; text-decoration-thickness:1px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--water); outline-offset:3px; border-radius:2px}
+
+/* ---------- lead ---------- */
+.lead{
+  background:var(--panel); border:1px solid var(--line);
+  border-left:3px solid var(--water);
+  padding:26px 30px; margin:34px 0 0; max-width:66ch;
+}
+.lead p{margin:0 0 14px; font-size:17.5px}
+.lead p:last-child{margin-bottom:0}
+
+/* ---------- derivation steps ---------- */
+ol.steps{list-style:none; margin:26px 0 0; padding:0; display:flex; flex-direction:column; gap:20px; max-width:66ch}
+ol.steps li{display:grid; grid-template-columns:30px 1fr; gap:16px; align-items:start}
+ol.steps .k{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:12.5px;
+  color:var(--water); padding-top:3px; font-variant-numeric:tabular-nums;
+}
+ol.steps p{margin:0}
+
+.eq{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  background:var(--panel); border:1px solid var(--line);
+  padding:18px 22px; margin:8px 0 0; font-size:15px; line-height:1.9;
+  overflow-x:auto; white-space:nowrap;
+}
+.eq .hi{color:var(--ray); font-weight:500}
+.eq .cm{color:var(--muted)}
+
+/* ---------- figures ---------- */
+figure{margin:34px 0 0; background:var(--panel); border:1px solid var(--line); padding:22px 22px 18px}
+figure .scroll{overflow-x:auto}
+figure svg{display:block; width:100%; min-width:640px; height:auto}
+figcaption{
+  margin-top:16px; padding-top:14px; border-top:1px solid var(--line-soft);
+  font-size:13.5px; line-height:1.55; color:var(--muted); max-width:78ch;
+}
+figcaption b{color:var(--ink); font-weight:600}
+
+/* svg classes */
+.s-axis{stroke:var(--muted); stroke-width:1; stroke-dasharray:5 5; fill:none; opacity:.7}
+.s-ray{stroke:var(--ray); stroke-width:2.4; fill:none; stroke-linecap:round}
+.s-ray-d{stroke:var(--ray); stroke-width:1.5; fill:none; stroke-dasharray:5 4; opacity:.62}
+.s-ghost{stroke:var(--muted); stroke-width:1.4; fill:none; stroke-dasharray:4 4; opacity:.65}
+.s-water{fill:var(--water-fill)}
+.s-glass{fill:var(--glass); opacity:.8; stroke:var(--water-edge); stroke-width:1}
+.s-edge{stroke:var(--water-edge); stroke-width:1.2; fill:none}
+.s-solid{stroke:var(--ink); stroke-width:1.6; fill:none}
+.s-dim{stroke:var(--muted); stroke-width:1; fill:none}
+.s-arc{stroke:var(--ray); stroke-width:1.4; fill:none}
+.s-dot{fill:var(--ray)}
+.s-dot-i{fill:var(--ink)}
+text{font-family:"IBM Plex Sans",sans-serif; fill:var(--ink)}
+.t-lbl{font-size:12.5px}
+.t-sm{font-size:11.5px; fill:var(--muted)}
+.t-mono{font-family:"IBM Plex Mono",monospace; font-size:12px}
+.t-cap{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.11em; fill:var(--muted)}
+.t-ray{fill:var(--ray); font-weight:500}
+.t-res{font-family:"IBM Plex Mono",monospace; font-size:13px; font-weight:500}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto; margin:26px 0 0; border:1px solid var(--line); background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:520px}
+th,td{padding:11px 16px; text-align:left; border-bottom:1px solid var(--line-soft)}
+thead th{
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); font-weight:500;
+  border-bottom:1px solid var(--line); white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right; font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; white-space:nowrap}
+tr.accent td{background:var(--water-fill)}
+tr.warn td{background:var(--flag-soft)}
+td .tag{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--muted);
+  display:block; margin-top:2px;
+}
+.ok{color:var(--water); font-weight:600}
+.no{color:var(--flag); font-weight:600}
+
+/* ---------- callout ---------- */
+.callout{
+  margin:30px 0 0; padding:22px 26px; background:var(--flag-soft);
+  border:1px solid var(--flag); border-left-width:3px; max-width:66ch;
+}
+.callout .h{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--flag); margin:0 0 10px; font-weight:500;
+}
+.callout p{margin:0 0 12px}
+.callout p:last-child{margin-bottom:0}
+
+/* ---------- code ref ---------- */
+code{
+  font-family:"IBM Plex Mono",monospace; font-size:.9em;
+  background:var(--line-soft); padding:1px 5px; border-radius:2px;
+}
+
+/* ---------- references ---------- */
+.refs{list-style:none; margin:24px 0 0; padding:0; display:flex; flex-direction:column; gap:18px; max-width:70ch}
+.refs li{padding-left:18px; border-left:2px solid var(--line)}
+.refs .t{display:block; font-weight:500}
+.refs .m{display:block; font-size:13.5px; color:var(--muted); margin-top:2px}
+.refs .why{display:block; font-size:13.5px; margin-top:6px}
+.pill{
+  display:inline-block; white-space:nowrap; font-family:"IBM Plex Mono",monospace; font-size:10px;
+  letter-spacing:.09em; text-transform:uppercase; color:var(--water);
+  border:1px solid var(--water); padding:1px 7px; margin-left:8px; vertical-align:1px;
+}
+footer{
+  margin-top:clamp(50px,7vw,84px); padding-top:22px; border-top:1px solid var(--line);
+  font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--muted);
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">UUV &middot; underwater camera calibration</p>
+  <h1>Why the focal length gets multiplied by <span class="n">1.33</span></h1>
+  <p class="standfirst">Nothing changes inside the camera. Water changes the direction every ray arrives from &mdash; and a pinhole model has exactly one parameter that can absorb it.</p>
+  <p class="byline"><span>a note on the &times;1.33 in our calibration</span><span>numbers from <code>calibration/optique.py</code></span><span>D435i in the BR-100230-151 tube</span></p>
+</header>
+
+<div class="col">
+<div class="lead">
+  <p>A camera underwater still forms its image the same way. What changed is outside it: at the window, every ray coming from the water is bent away from the normal before it ever reaches the lens.</p>
+  <p>A pinhole model has one knob that can account for that bend &mdash; the focal length. Through a <strong>flat</strong> window, the value that knob has to take is exactly the refractive index of water, <strong>n&nbsp;=&nbsp;1.33</strong>.</p>
+</div>
+</div>
+
+<section>
+  <div class="col">
+    <h2><span class="num">01</span>Where 1.33 comes from</h2>
+    <p class="sub">Four lines of Snell's law, and no optics beyond it.</p>
+  </div>
+
+  <div class="col">
+  <ol class="steps">
+    <li><span class="k">01</span><p>A ray leaves the target and reaches the window at an angle <strong>&theta;<sub>w</sub></strong> from the normal, travelling through water.</p></li>
+    <li><span class="k">02</span><p>It crosses into the housing. Snell's law across the water&ndash;acrylic&ndash;air stack gives the angle <strong>&theta;<sub>a</sub></strong> inside. The acrylic in the middle cancels out: it shifts the ray sideways but does not change the exit angle. Only the water index survives.</p></li>
+    <li><span class="k">03</span><p>The pinhole model puts the image at radius <strong>r&nbsp;=&nbsp;f&nbsp;&middot;&nbsp;tan&nbsp;&theta;<sub>a</sub></strong>. For small angles, where tan&nbsp;&asymp;&nbsp;sin, substitute step&nbsp;02 into it.</p></li>
+    <li><span class="k">04</span><p>What comes out is a camera in air whose focal length is <strong>n</strong> times longer. That is the whole factor.</p></li>
+  </ol>
+  </div>
+
+  <div class="col">
+  <div class="eq">
+    sin&nbsp;&theta;<sub>a</sub>&nbsp;=&nbsp;n&nbsp;&middot;&nbsp;sin&nbsp;&theta;<sub>w</sub><span class="cm">&nbsp;&nbsp;&nbsp;&nbsp;&larr; Snell, water &rarr; air</span><br>
+    r&nbsp;=&nbsp;f&nbsp;&middot;&nbsp;tan&nbsp;&theta;<sub>a</sub>&nbsp;&asymp;&nbsp;f&nbsp;&middot;&nbsp;n&nbsp;&middot;&nbsp;tan&nbsp;&theta;<sub>w</sub><span class="cm">&nbsp;&nbsp;&nbsp;&nbsp;&larr; small angles</span><br>
+    <span class="hi">f<sub>water</sub>&nbsp;=&nbsp;n&nbsp;&middot;&nbsp;f<sub>air</sub>&nbsp;=&nbsp;1.33&nbsp;&middot;&nbsp;f<sub>air</sub></span>
+  </div>
+  </div>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 780 522" role="img" aria-label="Two rows. Top: a ray from a target in water bends at the flat window and reaches the sensor. Bottom: the same ray drawn unbent, which only reaches the same image point if the focal length is 1.33 times longer.">
+
+      <!-- ============ ROW 1 : what the light does ============ -->
+      <text class="t-cap" x="52" y="18">1 &mdash; WHAT THE LIGHT ACTUALLY DOES</text>
+
+      <rect class="s-water" x="60" y="35" width="270" height="210"/>
+      <rect class="s-glass" x="330" y="35" width="9" height="210"/>
+      <text class="t-cap" x="72" y="235">WATER &nbsp; n = 1.33</text>
+      <text class="t-cap" x="430" y="53" text-anchor="middle">AIR (inside the housing)</text>
+      <text class="t-sm" x="334" y="28" text-anchor="middle">flat window</text>
+
+      <line class="s-axis" x1="60" y1="155" x2="700" y2="155"/>
+      <text class="t-sm" x="694" y="149" text-anchor="end">optical axis</text>
+
+      <!-- the ray: target -> window -> pinhole -> sensor -->
+      <path class="s-ray" d="M 150 39 L 330 95 L 470 155 L 610 215"/>
+      <circle class="s-dot" cx="150" cy="39" r="4.5"/>
+      <text class="t-lbl t-ray" x="150" y="28" text-anchor="middle">target</text>
+
+      <!-- normal at the window, and the two angles -->
+      <line class="s-axis" x1="296" y1="95" x2="374" y2="95"/>
+      <path class="s-arc" d="M 300 95 A 30 30 0 0 1 301.35 86.11"/>
+      <line class="s-dim" x1="311" y1="126" x2="301" y2="97"/>
+      <text class="t-lbl t-ray" x="316" y="132" text-anchor="end">&theta;w = 17.2&deg;</text>
+      <path class="s-arc" d="M 360 95 A 30 30 0 0 1 357.58 106.82"/>
+      <text class="t-lbl t-ray" x="366" y="112">&theta;a = 23.2&deg;</text>
+
+      <!-- pinhole + sensor -->
+      <circle class="s-dot-i" cx="470" cy="155" r="4"/>
+      <text class="t-sm" x="470" y="142" text-anchor="middle">pinhole</text>
+      <line class="s-solid" x1="610" y1="125" x2="610" y2="235" stroke-width="3"/>
+      <text class="t-sm" x="600" y="245" text-anchor="end">sensor</text>
+
+      <!-- image height r -->
+      <line class="s-dim" x1="628" y1="155" x2="628" y2="215"/>
+      <line class="s-dim" x1="624" y1="155" x2="632" y2="155"/>
+      <line class="s-dim" x1="624" y1="215" x2="632" y2="215"/>
+      <text class="t-mono" x="638" y="189">r</text>
+
+      <!-- focal length bracket -->
+      <line class="s-dim" x1="470" y1="255" x2="610" y2="255"/>
+      <line class="s-dim" x1="470" y1="250" x2="470" y2="260"/>
+      <line class="s-dim" x1="610" y1="250" x2="610" y2="260"/>
+      <text class="t-mono" x="540" y="272" text-anchor="middle">f &nbsp;&mdash;&nbsp; focal length in air</text>
+
+      <!-- ============ ROW 2 : what the model must assume ============ -->
+      <text class="t-cap" x="52" y="286">2 &mdash; WHAT THE PINHOLE MODEL MUST ASSUME</text>
+
+      <line class="s-axis" x1="60" y1="400" x2="736" y2="400"/>
+      <path class="s-ray" d="M 150 301 L 470 400 L 663 460"/>
+      <circle class="s-dot" cx="150" cy="301" r="4.5"/>
+      <text class="t-lbl t-ray" x="141" y="318" text-anchor="end">same ray, never bent</text>
+
+      <path class="s-arc" d="M 500 400 A 30 30 0 0 1 498.66 408.89"/>
+      <text class="t-lbl t-ray" x="508" y="416">&theta;w = 17.2&deg;</text>
+
+      <circle class="s-dot-i" cx="470" cy="400" r="4"/>
+      <text class="t-sm" x="470" y="387" text-anchor="middle">pinhole</text>
+      <line class="s-solid" x1="663" y1="370" x2="663" y2="480" stroke-width="3"/>
+      <text class="t-sm" x="653" y="490" text-anchor="end">sensor</text>
+
+      <line class="s-dim" x1="681" y1="400" x2="681" y2="460"/>
+      <line class="s-dim" x1="677" y1="400" x2="685" y2="400"/>
+      <line class="s-dim" x1="677" y1="460" x2="685" y2="460"/>
+      <text class="t-mono" x="691" y="434">same r</text>
+
+      <line class="s-dim" x1="470" y1="497" x2="663" y2="497"/>
+      <line class="s-dim" x1="470" y1="492" x2="470" y2="502"/>
+      <line class="s-dim" x1="663" y1="492" x2="663" y2="502"/>
+      <text class="t-mono t-ray" x="566" y="514" text-anchor="middle">f &times; 1.33 &nbsp;&mdash;&nbsp; the only value that lands on the same pixel</text>
+    </svg>
+    </div>
+    <figcaption><b>The same pixel, two ways.</b> Bend the ray at the window and keep the focal length, or keep the ray straight and lengthen the focal length by n. Nothing physically moves &mdash; the sensor stays where it is; <em>f</em> is a number the calibration returns, and 1.33&nbsp;f is the only value that reproduces the measurement. Drawn at 23&deg; so the angles are readable; at that angle the exact ratio is 1.38 rather than 1.33, which is section&nbsp;03.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="col">
+    <h2><span class="num">02</span>What it changes, on our camera</h2>
+    <p class="sub">Numbers for the D435i, from the bare-camera calibration in <code>optique.py</code>.</p>
+    <p>Two consequences follow from the same factor, and both are checkable. The field of view <strong>narrows</strong>, because a longer focal length sees less. And everything <strong>looks 1.33&times; bigger</strong> &mdash; the effect any diver notices, where objects seem about a quarter closer than they are.</p>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Along the tube axis</th><th class="num">In air</th><th class="num">In water</th><th class="num">Factor</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Focal length f<sub>x</sub><span class="tag">pixels</span></td><td class="num">604.19</td><td class="num">803.6</td><td class="num ok">&times; 1.3300</td></tr>
+        <tr><td>Half-angle<span class="tag">from the optical axis</span></td><td class="num">28.36&deg;</td><td class="num">20.93&deg;</td><td class="num">&minus; 7.4&deg;</td></tr>
+        <tr><td>Full horizontal field</td><td class="num">56.7&deg;</td><td class="num">41.9&deg;</td><td class="num">&minus; 26 %</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <h2><span class="num">03</span>The factor is only paraxial</h2>
+    <p class="sub">It is exact on the optical axis and drifts steadily away from it.</p>
+    <p>Step&nbsp;03 of the derivation swapped a sine for a tangent. That is free at the centre of the image and expensive at the edge: a flat window is <em>not</em> a single-viewpoint system, so no single focal length can be right everywhere. Below, where a ray really lands against where <code>f&nbsp;&times;&nbsp;1.33</code> puts it, for f&nbsp;=&nbsp;604.19&nbsp;px.</p>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Angle in water</th><th class="num">Ray actually lands at</th><th class="num">Model puts it at</th><th class="num">Error</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">5&deg;</td><td class="num">70.51 px</td><td class="num">70.30 px</td><td class="num">0.21 px</td></tr>
+        <tr><td class="num">10&deg;</td><td class="num">143.42</td><td class="num">141.69</td><td class="num">1.73</td></tr>
+        <tr><td class="num">15&deg;</td><td class="num">221.52</td><td class="num">215.32</td><td class="num">6.20</td></tr>
+        <tr><td class="num">20&deg;</td><td class="num">308.62</td><td class="num">292.48</td><td class="num">16.14</td></tr>
+        <tr class="warn"><td class="num">25&deg;</td><td class="num">410.60</td><td class="num">374.71</td><td class="num no">35.89</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p style="margin-top:20px">The model stays inside one pixel only out to <strong>8&deg;</strong> off-axis (<code>optique.angle_modele_fiable()</code>). Past that, what saves the measurement is the distortion coefficients, which soak up the residual &mdash; and they only do so if they were fitted <em>in water</em>. This is the part Treibitz&nbsp;et&nbsp;al. formalise: see the references.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <h2><span class="num">04</span>Where it stops being true &mdash; our tube is not a flat window</h2>
+    <p class="sub">This is the part worth knowing before anyone applies 1.33 to our calibration.</p>
+    <p>Everything above assumes a <strong>flat</strong> port. Our camera does not look through one: the D435i is 90&nbsp;mm wide and only fits lying down inside a 49.5&nbsp;mm bore, so it looks out through the <strong>cylindrical wall</strong> of the tube. A cylinder does not behave the same way in its two directions.</p>
+  </div>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 780 352" role="img" aria-label="Left: along the tube axis the wall acts as a plane-parallel plate and the ray bends from 28.4 degrees to 20.9 degrees, the full 1.33 factor. Right: in cross-section the wall is a meniscus, a ray from the tube axis does not bend at all, and the real pupil sits only 3.15 millimetres off that axis, so 21.96 degrees becomes 21.22 degrees.">
+
+      <!-- ================= LEFT : along the tube axis ================= -->
+      <text class="t-cap" x="30" y="18">ALONG THE TUBE AXIS &nbsp;&rarr;&nbsp; IMAGE X</text>
+
+      <rect class="s-water" x="34" y="32" width="330" height="115"/>
+      <text class="t-cap" x="46" y="48">WATER</text>
+      <rect class="s-glass" x="34" y="147.3" width="330" height="21.4"/>
+      <text class="t-sm" x="358" y="185" text-anchor="end">acrylic wall, 5.5 mm</text>
+
+      <!-- on-axis ray: no bend at all -->
+      <line class="s-ghost" x1="200" y1="250" x2="200" y2="42"/>
+      <text class="t-sm" x="194" y="56" text-anchor="end">on axis:</text>
+      <text class="t-sm" x="194" y="70" text-anchor="end">no bend</text>
+
+      <!-- edge-of-field ray: 28.36 deg in air -> 20.93 deg in water -->
+      <path class="s-ray" d="M 200 250 L 243.9 168.7 L 251.1 147.3 L 286.8 53.9"/>
+      <path class="s-ray-d" d="M 243.9 168.7 L 305.8 53.9"/>
+      <text class="t-sm" x="310" y="48">if it did</text>
+      <text class="t-sm" x="310" y="62">not bend</text>
+
+      <circle class="s-dot" cx="200" cy="250" r="5"/>
+      <text class="t-lbl" x="200" y="272" text-anchor="middle">camera pupil</text>
+
+      <text class="t-lbl t-ray" x="221" y="233">28.4&deg; in air</text>
+      <text class="t-lbl t-ray" x="262" y="82" text-anchor="end">20.9&deg;</text>
+      <text class="t-lbl t-ray" x="262" y="97" text-anchor="end">in water</text>
+
+      <text class="t-res" x="34" y="306" fill="var(--water)">fx &times; 1.3300</text>
+      <text class="t-sm" x="34" y="324">A plane-parallel plate. The acrylic only shifts the</text>
+      <text class="t-sm" x="34" y="338">ray sideways &mdash; only n(water) sets the exit angle.</text>
+
+      <!-- divider -->
+      <line class="s-edge" x1="392" y1="10" x2="392" y2="342" opacity=".45"/>
+
+      <!-- ================= RIGHT : across the section ================= -->
+      <text class="t-cap" x="412" y="18">ACROSS THE SECTION &nbsp;&rarr;&nbsp; IMAGE Y</text>
+
+      <rect class="s-water" x="402" y="30" width="374" height="255"/>
+      <text class="t-cap" x="768" y="46" text-anchor="end">WATER</text>
+      <circle class="s-glass" cx="560" cy="170" r="115.05"/>
+      <circle cx="560" cy="170" r="93.6" fill="var(--panel)" stroke="var(--water-edge)" stroke-width="1"/>
+
+      <!-- ray from the tube axis: perpendicular to both surfaces, never bends -->
+      <line class="s-ghost" x1="560" y1="170" x2="696" y2="77"/>
+      <text class="t-sm" x="646" y="58" text-anchor="end">from the axis: crosses both</text>
+      <text class="t-sm" x="646" y="72" text-anchor="end">surfaces at 90&deg;, never bends</text>
+
+      <!-- the real pupil, 3.15 mm off axis -->
+      <path class="s-ray" d="M 572.3 170 L 648.4 200.7 L 668.5 208.4 L 733.8 233.7"/>
+      <circle class="s-dot" cx="572.3" cy="170" r="4.5"/>
+      <circle class="s-dot-i" cx="560" cy="170" r="2.5"/>
+
+      <text class="t-sm" x="554" y="166" text-anchor="end">tube axis</text>
+      <line class="s-dim" x1="572.3" y1="177" x2="566" y2="206"/>
+      <text class="t-lbl t-ray" x="560" y="220" text-anchor="middle">pupil, +3.15 mm off that axis</text>
+      <text class="t-lbl t-ray" x="700" y="256" text-anchor="middle">21.96&deg; &rarr; 21.22&deg;</text>
+
+      <text class="t-res" x="412" y="306" fill="var(--flag)">fy &times; 1.0375</text>
+      <text class="t-sm" x="412" y="324">A meniscus, curved on both sides. The flat-window</text>
+      <text class="t-sm" x="412" y="338">rule would have predicted 16.33&deg;, and be 5&deg; wrong.</text>
+    </svg>
+    </div>
+    <figcaption><b>The same wall, two different lenses.</b> Along the tube the wall reduces to two parallel faces and the textbook factor applies in full. In cross-section it stays curved on both sides: a ray leaving the tube axis meets both surfaces at 90&deg; and does not bend at all &mdash; that is a dome port. Our pupil sits <b>3.15&nbsp;mm</b> off that axis, and 3.15&nbsp;mm is all the meniscus gets to work with. Traced by <code>optique.sortie_cylindre()</code> at the real dimensions.</figcaption>
+  </figure>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Direction</th><th>Wall behaves as</th><th class="num">In air</th><th class="num">In water</th><th class="num">Factor</th></tr>
+      </thead>
+      <tbody>
+        <tr class="accent"><td>Along the tube axis<span class="tag">image X &mdash; fx</span></td><td>plane-parallel plate</td><td class="num">28.36&deg;</td><td class="num">20.93&deg;</td><td class="num ok">&times; 1.3300</td></tr>
+        <tr class="warn"><td>Around the section<span class="tag">image Y &mdash; fy</span></td><td>meniscus</td><td class="num">21.96&deg;</td><td class="num">21.22&deg;</td><td class="num no">&times; 1.0375</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <p class="h">The mistake this page exists to prevent</p>
+    <p>Applying <strong>&times;1.33 to both axes</strong> would set the vertical focal length <strong>28&nbsp;% too high</strong>. Every distance read from a tag would inherit that error on one axis and not the other, and nothing in the pipeline would complain.</p>
+    <p>Underwater, this camera is <strong>anamorphic by 1.286</strong> &mdash; the two axes of the image simply do not magnify by the same amount. No single number describes it, which is why <code>optique.py</code> returns a pair, and why <code>focale_eau()</code> deliberately hands back the smaller of the two.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <h2><span class="num">05</span>So what do we actually do</h2>
+    <p class="sub">We do not rely on the factor at all.</p>
+    <p>The 1.33 is how you <em>understand</em> the problem, not how you solve it. We calibrate the camera in its final state &mdash; in the tube, immersed &mdash; with <code>python calibration/calibration.py --montage tube_eau</code>, and every script then reads that calibration through <code>MONTAGE_ACTIF</code>. The factor is kept for one job only: as a sanity check that the measured f<sub>x</sub> came back roughly 1.33&times; the in-air value. If it did not, something moved.</p>
+    <p>Which is also why the camera must not slip inside its cradle after calibration: 1&nbsp;mm of slip is about 1&nbsp;% on every distance (<code>optique.sensibilite_glissement()</code>).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <h2><span class="num">06</span>References</h2>
+    <p class="sub">Where the flat-port result is derived, in the literature.</p>
+  </div>
+  <ul class="refs">
+    <li>
+      <span class="t">Calibration Techniques for Accurate Measurements by Underwater Camera Systems<span class="pill">open access</span></span>
+      <span class="m">M. R. Shortis &mdash; <em>Sensors</em> 15(12), 2015 &mdash; <a href="https://doi.org/10.3390/s151229831">doi.org/10.3390/s151229831</a></span>
+      <span class="why">Read this one first: a review, freely readable, and it covers flat ports, dome ports and what each does to the focal length.</span>
+    </li>
+    <li>
+      <span class="t">Underwater Camera Calibration</span>
+      <span class="m">J.-M. Lavest, G. Rives, J.-T. Laprest&eacute; &mdash; <em>ECCV 2000</em>, LNCS 1843 &mdash; <a href="https://doi.org/10.1007/3-540-45053-X_42">doi.org/10.1007/3-540-45053-X_42</a></span>
+      <span class="why">The canonical source for the result itself: with a flat port, in-water calibration is the in-air one with the focal length scaled by the refractive index.</span>
+    </li>
+    <li>
+      <span class="t">Dry camera calibration for underwater applications</span>
+      <span class="m">J.-M. Lavest, G. Rives, J.-T. Laprest&eacute; &mdash; <em>Machine Vision and Applications</em> 13(5&ndash;6), 2003 &mdash; <a href="https://doi.org/10.1007/s00138-002-0112-z">doi.org/10.1007/s00138-002-0112-z</a></span>
+      <span class="why">The follow-up: calibrate in air, convert to water. Useful to know it exists &mdash; and to know why we still chose to calibrate wet.</span>
+    </li>
+    <li>
+      <span class="t">Flat Refractive Geometry</span>
+      <span class="m">T. Treibitz, Y. Y. Schechner, H. Singh &mdash; <em>CVPR 2008</em>; extended in <em>IEEE TPAMI</em> 34(1), 2012 &mdash; <a href="https://doi.org/10.1109/TPAMI.2011.105">doi.org/10.1109/TPAMI.2011.105</a></span>
+      <span class="why">Why section&nbsp;03 happens: a flat interface is provably not a single-viewpoint system, so the scaled focal length is an approximation and not a change of variable.</span>
+    </li>
+    <li>
+      <span class="t">n = 1.333 for water</span>
+      <span class="m">Standard optics value, 589 nm at 20 &deg;C &mdash; any optics text (Hecht, <em>Optics</em>), or the CRC Handbook</span>
+      <span class="why">The 1.33 itself is not a computer-vision result. It is the refractive index of water, and it is the same number that makes a straw look bent in a glass.</span>
+    </li>
+  </ul>
+</section>
+
+<footer>
+  Every figure on this page is computed by <code>calibration/optique.py</code> &mdash; run <code>python calibration/optique.py</code> for the full report.
+</footer>
+
+</div>
