@@ -20,3 +20,6 @@ demo_kalman.png
 bruit_tag.csv
 limites_tag.csv
 calibration/montages/
+
+# Vue 3D du montage etanche (--png), regenerable
+mecanique/montage_3d.png
