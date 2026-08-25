@@ -1,88 +1,87 @@
-# montage_3d.py — Le montage etanche en 3D, qu'on branche et debranche a l'ecran.
+# montage_3d.py - The watertight assembly in 3D, plugged and unplugged on screen.
 #
-# LE CHOIX EST FAIT : OPTION B, LE CONNECTEUR EST DANS L'EAU
-# Le cable ne part plus de la camera jusqu'au caisson d'un seul tenant. Il est
-# coupe en deux troncons, chacun sortant de son tube par une traversee de
-# paroi, et les deux se rejoignent par un connecteur immergeable, DEHORS.
+# THE DECISION IS MADE: OPTION B, THE CONNECTOR SITS IN THE WATER
+# The cable no longer runs from the camera to the electronics housing in one
+# piece. It is cut in two, each half leaving its own tube through a wall
+# penetrator, and the two halves meet at an underwater-mateable connector,
+# OUTSIDE.
 #
-# Ce que cela change, et c'est tout l'interet :
-#   - deposer la camera = debrancher sous l'eau. Le tube camera reste FERME,
-#     ses joints ne sont jamais decomprimes, sa dessication ne repart pas de
-#     zero, et personne n'a a refaire l'etancheite au bord du bassin ;
-#   - en contrepartie il y a DEUX interfaces d'etancheite de plus (les deux
-#     moities du connecteur), qui elles ne s'ouvrent jamais non plus tant
-#     qu'on ne debranche pas ;
-#   - et le connecteur, lui, se manipule mouille : c'est sa raison d'etre,
-#     mais cela impose des regles d'exploitation (voir plus bas).
+# What that buys us, and it is the whole point:
+#   - removing the camera means unplugging under water. The camera tube stays
+#     CLOSED, its o-rings are never decompressed, and nobody has to redo a
+#     seal at the edge of the tank;
+#   - in exchange there are TWO more sealing interfaces (the two halves of the
+#     connector), which likewise never open as long as we do not unplug;
+#   - and the connector itself is handled wet: that is what it is for, but it
+#     comes with operating rules (see below).
 #
-# CE QUE MONTRE LA FENETRE
-# Le montage tel qu'on veut le poser, aux cotes reelles, avec des pieces du
-# commerce :
+# WHAT THE WINDOW SHOWS
+# The assembly as we intend to build it, at true dimensions, from off-the-shelf
+# parts:
 #
-#   - le tube camera Blue Robotics BR-100230-151 (2", acrylique, 150 mm),
-#     pose EN TRAVERS de l'engin. Ce n'est pas un choix esthetique : la D435i
-#     fait 90 mm de large et ne rentre que COUCHEE dans un diametre interieur
-#     de 49.5 mm. Elle regarde donc par la paroi cylindrique, et pour qu'elle
-#     regarde VERS L'AVANT il faut que le tube soit perpendiculaire a la
-#     marche. Tout optique.py est ecrit pour ce montage-la ;
-#   - le caisson electronique 4" avec le Raspberry Pi ;
-#   - deux traversees de paroi WetLink M10 ;
-#   - le connecteur immergeable 8 contacts, entre les deux, dans l'eau ;
-#   - les joints toriques, reperes en rouge quand on les demande.
+#   - the Blue Robotics BR-100230-151 camera tube (2", acrylic, 150 mm),
+#     mounted ACROSS the vehicle. This is not a styling choice: the D435i is
+#     90 mm wide and only fits LYING DOWN inside a 49.5 mm bore. It therefore
+#     looks out through the cylindrical wall, and for it to look FORWARD the
+#     tube has to be perpendicular to the direction of travel. All of
+#     optique.py is written for that mounting;
+#   - the 4" electronics housing with the Raspberry Pi;
+#   - two WetLink M10 wall penetrators;
+#   - the 8-contact underwater connector, between them, in the water;
+#   - the o-rings, flagged in red on request.
 #
-# LE POINT DUR, ET IL EST ELECTRIQUE, PAS MECANIQUE
-# La D435i veut de l'USB 3 (5 Gbit/s) pour ses modes complets. Un connecteur
-# immergeable micro 8 contacts, plus un metre ou deux de cable souple, ne
-# passe PAS 5 Gbit/s de facon fiable : il n'y a ni paires torsadees appairees
-# ni impedance controlee a travers les contacts.
+# THE HARD PART IS ELECTRICAL, NOT MECHANICAL
+# The D435i wants USB 3 (5 Gbit/s) for its full modes. A micro 8-contact
+# underwater connector, plus a metre or two of flexible cable, will NOT carry
+# 5 Gbit/s reliably: there are no matched twisted pairs and no controlled
+# impedance through the contacts.
 #
-# La bonne nouvelle est qu'on n'en a pas besoin. Ce depot localise avec le
-# flux COULEUR en 640x480 et la centrale inertielle, et la D435i sait servir
-# exactement cela en USB 2.0 (elle bascule d'elle-meme dans son descripteur
-# USB2, avec des modes reduits). Donc :
+# The good news is that we do not need it. This repository localises from the
+# COLOUR stream at 640x480 plus the inertial unit, and the D435i serves
+# exactly that over USB 2.0 (it falls back to its USB2 descriptor on its own,
+# with a reduced set of modes). So:
 #
-#   - cabler en USB 2.0 : D+/D- sur une paire, VBUS et GND doubles sur les
-#     autres contacts ;
-#   - soigner l'alimentation plutot que le debit : la D435i tire ~700 mA et
-#     jusqu'a ~2 A quand le projecteur donne. Sur deux metres de cable fin,
-#     c'est la chute de tension qui fait tomber la camera, pas le debit.
-#     Doubler VBUS et GND, viser du 24 AWG au moins ;
-#   - si un jour il faut vraiment l'USB 3, l'option B ne tient plus telle
-#     quelle : il faudra un connecteur haut debit (plus gros, plus cher) et
-#     un cable court, ou rapprocher le calculateur de la camera.
+#   - wire it as USB 2.0: D+/D- on one pair, VBUS and GND doubled up on the
+#     remaining contacts;
+#   - care about the power rail rather than the bandwidth: the D435i draws
+#     ~700 mA and up to ~2 A when the projector fires. Over two metres of thin
+#     cable it is the voltage drop that drops the camera, not the data rate.
+#     Double VBUS and GND, and use 24 AWG at least;
+#   - if USB 3 ever becomes mandatory, option B does not survive as it stands:
+#     it would take a high-speed connector (bigger, dearer) and a short cable,
+#     or moving the computer closer to the camera.
 #
-# LA REGLE D'EXPLOITATION QU'ON OUBLIE TOUJOURS
-# Un connecteur immergeable se mate mouille, oui, mais HORS TENSION. Mater
-# sous tension dans de l'eau, meme douce, c'est de l'electrolyse sur les
-# contacts : ils verdissent, la resistance monte, et la camera tombe par
-# intermittence des semaines plus tard. Couper le 5 V avant de brancher ou de
-# debrancher, graisser les contacts a la graisse silicone, et poser le bouchon
-# d'obturation sur la moitie restee seule.
+# THE OPERATING RULE EVERYONE FORGETS
+# An underwater-mateable connector does mate wet, yes, but DE-ENERGISED.
+# Mating live in water, even fresh water, means electrolysis on the contacts:
+# they go green, resistance climbs, and the camera starts dropping out
+# intermittently weeks later. Cut the 5 V before plugging or unplugging,
+# grease the contacts with silicone grease, and cap the half left on its own
+# with the dummy plug.
 #
-# DEUX VARIANTES DE L'OPTION B, LA TOUCHE 'v' PASSE DE L'UNE A L'AUTRE
-#   PIGTAIL     une traversee de paroi de chaque cote, et le connecteur entre
-#               les deux, au milieu de l'eau. C'est le schema d'origine.
-#   TRAVERSANT  cote camera, le connecteur EST la traversee : sa moitie fixe
-#               se visse dans le bouchon a la place du WetLink. Un raccord de
-#               moins, un joint de moins, un point de rupture de moins, et le
-#               debranchement se fait a la main contre le tube au lieu de
-#               pecher un connecteur qui pendouille. C'est la variante a
-#               retenir si le catalogue a la reference en stock.
+# TWO VARIANTS OF OPTION B, THE 'v' KEY SWITCHES BETWEEN THEM
+#   PIGTAIL     one wall penetrator on each side, and the connector between
+#               them, out in the water. This is the original sketch.
+#   BULKHEAD    on the camera side, the connector IS the penetrator: its fixed
+#               half screws into the end cap in place of the WetLink. One
+#               fitting fewer, one seal fewer, one failure point fewer, and
+#               unplugging happens against the tube instead of fishing for a
+#               connector that dangles. This is the variant to pick if the
+#               catalogue has the part in stock.
 #
-# COMMANDES
-#   les boutons en bas, ou :
-#   b : brancher / debrancher        v : changer de variante
-#   1 : vue d'ensemble               2 : zoom connecteur
-#   3 : zoom traversee de paroi      4 : zoom camera dans son tube
-#   molette ou + / - : zoom          souris glisser : tourner
-#   c : coupe (demi-vue)             e : eclate
-#   j : joints toriques              r : reperes des pieces
-#   w : eau                          p : image PNG    h : aide    q : quitter
+# CONTROLS
+#   the buttons along the bottom, or:
+#   b  plug / unplug                v  switch variant
+#   1  overview                     2  zoom on the connector
+#   3  zoom on the wall penetrator  4  zoom on the camera in its tube
+#   wheel or + / -  zoom            drag with the mouse  rotate
+#   c  section view   e  exploded   j  o-rings   r  part labels
+#   w  water          p  PNG image  h  this help  q  quit
 #
-# LANCEMENT
+# RUNNING IT
 #   python mecanique/montage_3d.py
-#   python mecanique/montage_3d.py --png       trois vues, sans fenetre
-#   python mecanique/montage_3d.py --pieces    la nomenclature seule
+#   python mecanique/montage_3d.py --png       three views, no window
+#   python mecanique/montage_3d.py --pieces    the parts list alone
 import sys
 from pathlib import Path
 
@@ -103,107 +102,108 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
-# 1. La nomenclature — ce qu'il faut commander pour l'option B
+# 1. The parts list - what has to be ordered for option B
 # ---------------------------------------------------------------------------
-# Les references marquees (?) sont a confirmer sur le catalogue au moment de
-# la commande : les fabricants renumerotent, et se tromper de reference de
-# bouchon coute trois semaines de delai. Les COTES, elles, sont sures : elles
-# viennent des fiches produit et de optique.py.
+# References marked (?) must be confirmed against the catalogue at ordering
+# time: manufacturers renumber, and getting an end cap reference wrong costs
+# three weeks of lead time. The DIMENSIONS, on the other hand, are solid: they
+# come from the datasheets and from optique.py.
 NOMENCLATURE = (
-    ("BR-100230-151", "Tube 2\" acrylique coule, 150 mm (deja en stock)", 1,
-     "le tube camera"),
-    ("BR 2\" end cap (?)", "Bouchon alu 2\", 2 trous M10, avec joints", 1,
-     "le bout du tube camera cote connecteur"),
-    ("BR 2\" end cap (?)", "Bouchon alu 2\" plein (ou dome), avec joints", 1,
-     "l'autre bout du tube camera"),
-    ("WLP-M10-6.5", "WetLink Penetrator M10, corps cable 6.5 mm", 2,
-     "traversee de paroi, une par tube (variante PIGTAIL)"),
-    ("MCIL8F / MCIL8M", "Connecteur immergeable 8 contacts, paire inline",  1,
-     "le raccord DANS L'EAU, ce a quoi l'option B tient"),
-    ("MCBH8F (?)", "Meme serie, moitie fixe a visser dans le bouchon", 1,
-     "variante TRAVERSANT, remplace un WetLink"),
-    ("bouchon d'obturation", "Dummy plug de la meme serie", 1,
-     "a poser sur la moitie restee seule, camera deposee"),
-    ("cable USB 2.0 blinde", "4 conducteurs 24 AWG + tresse, gaine PUR, 6.5 mm", 2,
-     "un troncon par tube ; VBUS et GND doubles"),
-    ("BR-100282 (?)", "Tube 4\" acrylique + 2 bouchons alu", 1,
-     "le caisson electronique du Raspberry Pi"),
-    ("colliers 2\" et 4\"", "Colliers de fixation sur le chassis", 4,
-     "tenir les deux tubes sur l'engin"),
-    ("joints + graisse", "Joints toriques de rechange, graisse silicone", 1,
-     "on ne remonte jamais un joint sans graisse propre"),
+    ("BR-100230-151", "2\" cast acrylic tube, 150 mm (already in stock)", 1,
+     "the camera tube"),
+    ("BR 2\" end cap (?)", "2\" aluminium end cap, 2 x M10, with o-rings", 1,
+     "camera tube, connector end"),
+    ("BR 2\" end cap (?)", "2\" aluminium blank end cap (or dome), o-rings", 1,
+     "camera tube, far end"),
+    ("WLP-M10-6.5", "WetLink Penetrator M10, 6.5 mm cable body", 2,
+     "wall penetrator, one per tube (PIGTAIL variant)"),
+    ("MCIL8F / MCIL8M", "8-contact underwater connector, inline pair",  1,
+     "the joint IN THE WATER - option B hangs on it"),
+    ("MCBH8F (?)", "Same series, fixed half, screws into the end cap", 1,
+     "BULKHEAD variant, replaces one WetLink"),
+    ("dummy plug", "Blanking plug from the same series", 1,
+     "goes on the half left alone once the camera is off"),
+    ("shielded USB 2.0 cable", "4 x 24 AWG + braid, PUR jacket, 6.5 mm", 2,
+     "one run per tube; VBUS and GND doubled up"),
+    ("BR-100282 (?)", "4\" acrylic tube + 2 aluminium end caps", 1,
+     "the Raspberry Pi electronics housing"),
+    ("2\" and 4\" clamps", "Mounting clamps for the frame", 4,
+     "hold both tubes on the vehicle"),
+    ("o-rings + grease", "Spare o-rings, silicone grease", 1,
+     "never refit a seal without clean grease"),
 )
 
 
 def nomenclature():
-    """La liste des pieces, telle qu'on la lit avant de commander."""
-    lignes = ["", "NOMENCLATURE - option B, connecteur dans l'eau", ""]
+    """The parts list, as it reads just before ordering."""
+    lignes = ["", "PARTS LIST - option B, connector in the water", ""]
     largeur = max(len(r) for r, _, _, _ in NOMENCLATURE)
     for reference, designation, quantite, role in NOMENCLATURE:
         lignes.append(f"  {quantite} x  {reference:<{largeur}}  {designation}")
         lignes.append(f"     {'':<{largeur}}     {role}")
     lignes.append("")
-    lignes.append("  (?) = reference a confirmer au catalogue avant commande.")
+    lignes.append("  (?) = reference to confirm against the catalogue before ordering.")
     return "\n".join(lignes)
 
 
 # ---------------------------------------------------------------------------
-# 2. Les cotes du montage, en metres
+# 2. The dimensions of the assembly, in metres
 # ---------------------------------------------------------------------------
-# Le tube camera et la camera viennent de optique.py : c'est la meme piece que
-# celle qui sert a calibrer, et il n'y a aucune raison qu'elle ait deux jeux
-# de cotes dans le meme depot.
+# The camera tube and the camera come from optique.py: it is the very part we
+# calibrate with, and there is no reason for it to carry two sets of
+# dimensions in the same repository.
 TUBE_DE = optique.TUBE_DE                  # 58.0 mm
 TUBE_DI = optique.TUBE_DI                  # 49.5 mm
 TUBE_LONG = optique.TUBE_LONGUEUR          # 150 mm
-CAM_L = optique.CAMERA_LARGEUR             # 90 mm, portes par l'axe du tube
+CAM_L = optique.CAMERA_LARGEUR             # 90 mm, carried by the tube axis
 CAM_H = optique.CAMERA_HAUTEUR             # 25 mm
 CAM_P = optique.CAMERA_PROFONDEUR          # 25 mm
 
-# Le caisson electronique : serie 4", de quoi loger un Raspberry Pi a plat.
+# The electronics housing: 4" series, room for a Raspberry Pi lying flat.
 CAISSON_DE, CAISSON_DI, CAISSON_LONG = 0.1143, 0.1016, 0.300
 
-# Les bouchons. ENFONCEMENT est la partie qui entre dans le tube et porte les
-# joints ; c'est elle qui mange de la longueur utile, et c'est la seule cote
-# de ce fichier qu'il faut re-mesurer au pied a coulisse sur la piece reelle.
+# The end caps. ENFONCEMENT (insertion depth) is the part that goes inside
+# the tube and carries the o-rings; it is what eats into the usable length,
+# and it is the one dimension in this file that must be re-measured with
+# callipers on the real part.
 BOUCHON_LONG = 0.020
 BOUCHON_ENFONCEMENT = 0.014
-JOINT_SECTION = 0.0018                     # joint torique nitrile, 1.78 mm
+JOINT_SECTION = 0.0018                     # nitrile o-ring, 1.78 mm cord
 
-# La traversee de paroi WetLink M10 : filetage dans le bouchon, corps six pans
-# dehors, presse-etoupe qui serre la gaine du cable.
+# The WetLink M10 wall penetrator: thread into the end cap, hex body outside,
+# gland squeezing the cable jacket.
 TRAVERSEE_R_FILET = 0.005
 TRAVERSEE_R_CORPS = 0.0075
 TRAVERSEE_DEHORS = 0.026
 TRAVERSEE_DEDANS = 0.010
 
-# Le connecteur immergeable, serie micro circulaire 8 contacts.
+# The underwater connector, 8-contact micro circular series.
 CONN_R = 0.0095
-CONN_FEMELLE_L = 0.048                     # moitie inline, cable a l'arriere
+CONN_FEMELLE_L = 0.048                     # inline half, cable at the back
 CONN_MALE_L = 0.042
-CONN_BULKHEAD_L = 0.020                    # moitie fixe vissee dans le bouchon
+CONN_BULKHEAD_L = 0.020                    # fixed half screwed into the cap
 CONN_BROCHE_L = 0.007
 CONN_BROCHE_R = 0.0008
 CONN_CERCLE_BROCHES = 0.0038
-CONN_COURSE = 0.055                        # de combien on tire pour degager
+CONN_COURSE = 0.055                        # how far it is pulled to clear
 
-CABLE_R = 0.0033                           # gaine de 6.5 mm de diametre
+CABLE_R = 0.0033                           # 6.5 mm diameter jacket
 
-# Ou tout cela se pose sur l'engin. Le caisson est couche selon x (la marche),
-# le tube camera EN TRAVERS selon y, devant, un peu plus bas.
+# Where all this sits on the vehicle. The housing lies along x (the direction
+# of travel), the camera tube ACROSS it along y, further forward and lower.
 CAISSON_AXE = np.array([1.0, 0.0, 0.0])
 CAISSON_X0 = -CAISSON_LONG / 2
 TUBE_AXE = np.array([0.0, 1.0, 0.0])
 TUBE_CENTRE = np.array([0.320, 0.0, -0.030])
 
-# Sorties de cable : la ou la gaine quitte le presse-etoupe, de chaque cote.
+# Cable exits: where the jacket leaves the gland, on each side.
 SORTIE_CAM = TUBE_CENTRE + np.array(
     [0.0, TUBE_LONG / 2 + BOUCHON_LONG + TRAVERSEE_DEHORS, 0.012])
 SORTIE_PI = np.array(
     [CAISSON_LONG / 2 + BOUCHON_LONG + TRAVERSEE_DEHORS, 0.0, 0.030])
 
-# Le jeu qui reste au bout du tube, une fois la camera dedans et les bouchons
-# enfonces. C'est ce chiffre qui decide de la forme de la fiche USB.
+# The clearance left at the end of the tube once the camera is inside and the
+# end caps are seated. This number decides the shape of the USB plug.
 JEU_BOUT = TUBE_LONG / 2 - BOUCHON_ENFONCEMENT - CAM_L / 2
 
 COULEURS = {
@@ -227,19 +227,19 @@ COULEURS = {
 
 
 # ---------------------------------------------------------------------------
-# 3. De quoi fabriquer des pieces : cylindres, couronnes, tores, paves
+# 3. The shape toolbox: cylinders, annuli, tori, boxes
 # ---------------------------------------------------------------------------
-# Tout est rendu en facettes (des quadrilateres), parce que c'est la seule
-# chose que matplotlib sache dessiner en 3D. Le nombre de facettes suit le
-# zoom et l'animation : de pres on veut voir les filets, en mouvement on veut
-# que ca suive.
+# Everything is rendered as facets (quadrilaterals), because that is all
+# matplotlib can draw in 3D. The facet count follows the zoom and the
+# animation: up close we want to see the threads, in motion we want it to
+# keep up.
 def _unitaire(v):
     v = np.asarray(v, dtype=float)
     return v / np.linalg.norm(v)
 
 
 def _base(axe):
-    """L'axe, et deux vecteurs unitaires perpendiculaires a lui."""
+    """The axis, plus two unit vectors perpendicular to it."""
     a = _unitaire(axe)
     ref = np.array([0.0, 0.0, 1.0]) if abs(a[2]) < 0.9 else np.array([1.0, 0.0, 0.0])
     u = _unitaire(np.cross(a, ref))
@@ -254,7 +254,7 @@ def _cercle(centre, axe, rayon, segments):
 
 
 def cylindre(p0, axe, rayon, longueur, segments=24):
-    """La peau d'un cylindre, sans ses bouts."""
+    """The skin of a cylinder, without its ends."""
     a = _unitaire(axe)
     A = _cercle(p0, a, rayon, segments)
     B = A + a * longueur
@@ -262,7 +262,7 @@ def cylindre(p0, axe, rayon, longueur, segments=24):
 
 
 def couronne(centre, axe, r_int, r_ext, segments=24):
-    """Un disque, perce si r_int > 0. Sert de tranche et de fond."""
+    """A disc, holed if r_int > 0. Serves as end face and as rim."""
     A = _cercle(centre, axe, r_ext, segments)
     if r_int <= 1e-9:
         c = np.asarray(centre, dtype=float)
@@ -272,11 +272,11 @@ def couronne(centre, axe, r_int, r_ext, segments=24):
 
 
 def manchon(p0, axe, r_int, r_ext, longueur, segments=24):
-    """Un tube a paroi epaisse : deux peaux et deux tranches.
+    """A thick-walled tube: two skins and two rims.
 
-    C'est ce qu'il faut pour un tube acrylique : en coupe, on veut VOIR les
-    4.25 mm de paroi, parce que c'est par la que la camera regarde et que
-    toute la refraction se joue dedans.
+    This is what an acrylic tube needs: in section we want to SEE the 4.25 mm
+    of wall, because that is what the camera looks through and where all the
+    refraction happens.
     """
     a = _unitaire(axe)
     p1 = np.asarray(p0, dtype=float) + a * longueur
@@ -287,7 +287,7 @@ def manchon(p0, axe, r_int, r_ext, longueur, segments=24):
 
 
 def bloc(p0, axe, rayon, longueur, segments=24):
-    """Un cylindre plein, bouts compris."""
+    """A solid cylinder, ends included."""
     a = _unitaire(axe)
     p1 = np.asarray(p0, dtype=float) + a * longueur
     return (cylindre(p0, a, rayon, longueur, segments)
@@ -296,7 +296,7 @@ def bloc(p0, axe, rayon, longueur, segments=24):
 
 
 def tore(centre, axe, rayon, section, n_grand=16, n_petit=6):
-    """Un joint torique."""
+    """An o-ring."""
     a, u, v = _base(axe)
     c = np.asarray(centre, dtype=float)
     grand = np.linspace(0.0, 2 * np.pi, n_grand + 1)
@@ -314,7 +314,7 @@ def tore(centre, axe, rayon, section, n_grand=16, n_petit=6):
 
 
 def pave(centre, ex, ey, ez):
-    """Un pave defini par ses trois DEMI-vecteurs."""
+    """A box defined by its three HALF-vectors."""
     c, ex, ey, ez = (np.asarray(t, dtype=float) for t in (centre, ex, ey, ez))
     s = [c + i * ex + j * ey + k * ez
          for i in (-1.0, 1.0) for j in (-1.0, 1.0) for k in (-1.0, 1.0)]
@@ -324,7 +324,7 @@ def pave(centre, ex, ey, ez):
 
 
 def courbe(controles, points=56):
-    """Une courbe de Bezier — sert a router les cables sans les faire casser."""
+    """A Bezier curve - used to route cables without kinking them."""
     pts = np.array([np.asarray(p, dtype=float) for p in controles])
     t = np.linspace(0.0, 1.0, points)[:, None, None]
     lisse = np.tile(pts, (len(t), 1, 1))
@@ -339,7 +339,7 @@ def deplacer(facettes, vecteur):
 
 
 def cone(p0, axe, r0, r1, longueur, segments=24):
-    """Un troncon conique — les presse-etoupes et les capots en sont pleins."""
+    """A conical section - glands and boots are full of them."""
     a = _unitaire(axe)
     A = _cercle(p0, a, r0, segments)
     B = _cercle(np.asarray(p0, dtype=float) + a * longueur, a, r1, segments)
@@ -347,23 +347,23 @@ def cone(p0, axe, r0, r1, longueur, segments=24):
 
 
 # ---------------------------------------------------------------------------
-# 4. Les sous-ensembles reels
+# 4. The real sub-assemblies
 # ---------------------------------------------------------------------------
-# Chaque fonction rend des facettes placees dans le repere de l'engin :
-#   x = la marche (l'avant est vers les x positifs)
-#   y = en travers      z = vers le haut
+# Each function returns facets placed in the vehicle frame:
+#   x = direction of travel (forward is +x)
+#   y = across      z = up
 FACE_TRAVERSEE_CAM = TUBE_CENTRE + np.array(
     [0.0, TUBE_LONG / 2 + BOUCHON_LONG, 0.012])
 FACE_TRAVERSEE_PI = np.array([CAISSON_LONG / 2 + BOUCHON_LONG, 0.0, 0.030])
 
 
 class Assemblage:
-    """Le tas de pieces qu'on va donner a dessiner.
+    """The pile of parts that will be handed over for drawing.
 
-    `poser` accepte deux choses que le reste du fichier n'a plus a gerer :
-    l'ECLATE (chaque piece sait dans quelle direction elle s'ecarte) et la
-    COUPE (on jette les facettes situees au-dessus de l'axe de la piece, ce
-    qui donne une vraie demi-vue sans avoir a modeliser une section).
+    `poser` takes care of two things the rest of the file no longer has to:
+    the EXPLODED view (each part knows which way it moves apart) and the
+    SECTION view (facets above the part's own axis are dropped, which gives a
+    real half-view without having to model a cut face).
     """
 
     def __init__(self, etat):
@@ -392,8 +392,8 @@ class Assemblage:
                             "epaisseur": epaisseur, "rang": 2})
 
     def trait(self, points, couleur=None, epaisseur=1.0, annotation=False):
-        # Une annotation (reglette, fleche) passe DEVANT les pieces ; un cable
-        # est une piece et se cache derriere les autres comme il se doit.
+        # An annotation (scale bar, arrow) draws IN FRONT of the parts; a cable
+        # is a part and hides behind the others as it should.
         self.cables.append({"points": np.asarray(points, dtype=float),
                             "couleur": couleur or COULEURS["cable"],
                             "epaisseur": epaisseur,
@@ -410,11 +410,11 @@ class Assemblage:
 
 
 def bouchon(a, face, r_tube_int, r_tube_ext, seg, sac, ecart, nom_joint):
-    """Un bouchon aluminium : la partie enfoncee, ses joints, et le collet.
+    """An aluminium end cap: the inserted plug, its o-rings, and the collar.
 
-    `face` est le point de l'AXE du tube au niveau du plan de joint du tube ;
-    `a` pointe vers l'exterieur. C'est la piece qui, en option A, devrait etre
-    demontee a chaque depose de camera — et qu'on ne touchera plus.
+    `face` is the point on the tube AXIS at the tube's sealing plane; `a`
+    points outwards. This is the part that, under option A, would have to come
+    off every time the camera is removed - and that we will now never touch.
     """
     face = np.asarray(face, dtype=float)
     dedans = face - a * BOUCHON_ENFONCEMENT
@@ -435,11 +435,11 @@ def bouchon(a, face, r_tube_int, r_tube_ext, seg, sac, ecart, nom_joint):
 
 
 def traversee(a, face, seg, sac, ecart):
-    """Une traversee de paroi WetLink M10 : filetage, six pans, presse-etoupe.
+    """A WetLink M10 wall penetrator: thread, hex body, gland.
 
-    C'est un cable qui traverse une paroi sous pression, serre par un cone de
-    caoutchouc que la pression elle-meme resserre. Rien ne se demonte ici : la
-    gaine est prise dedans une fois pour toutes.
+    A cable crossing a pressure boundary, squeezed by a rubber cone that the
+    pressure itself tightens. Nothing here comes apart: the jacket is gripped
+    once and for all.
     """
     face = np.asarray(face, dtype=float)
     epaisseur = BOUCHON_LONG + BOUCHON_ENFONCEMENT
@@ -454,15 +454,15 @@ def traversee(a, face, seg, sac, ecart):
                    max(10, seg // 2)),
               COULEURS["noir_clair"], coupe_z=face[2], ecart=ecart)
     sac.joint(face + np.asarray(ecart, dtype=float) * sac.etat["eclate"],
-              a, TRAVERSEE_R_CORPS, "traversee de paroi")
+              a, TRAVERSEE_R_CORPS, "wall penetrator")
 
 
 def repere_connecteur(etat):
-    """Le plan de contact du connecteur, et l'axe selon lequel on tire dessus.
+    """The connector's mating plane, and the axis it is pulled along.
 
-    PIGTAIL     il pend dans l'eau, entre les deux traversees.
-    TRAVERSANT  il EST la traversee du tube camera : la moitie femelle se
-                visse dans le bouchon, et on debranche contre le tube.
+    PIGTAIL   it hangs in the water, between the two penetrators.
+    BULKHEAD  it IS the camera tube's penetrator: the female half screws into
+              the end cap, and unplugging happens against the tube.
     """
     if etat["variante"] == "traversant":
         axe = np.array([0.0, 1.0, 0.0])
@@ -472,18 +472,18 @@ def repere_connecteur(etat):
 
 
 def connecteur(etat, seg, fin, sac):
-    """Les deux moities du connecteur immergeable, et l'ecart entre elles.
+    """The two halves of the underwater connector, and the gap between them.
 
-    La femelle porte des contacts NOYES dans un caoutchouc plein ; le male des
-    broches qui les ecartent en entrant. C'est ce qui permet de mater mouille :
-    l'eau est chassee par le caoutchouc, pas par un joint plat. Debranche, ce
-    qu'on voit briller sur le male, ce sont les huit broches en or.
+    The female carries contacts BURIED in solid rubber; the male carries pins
+    that spread the rubber apart as they enter. That is what makes wet mating
+    possible: the water is displaced by the rubber itself, not by a face seal.
+    Unplugged, what glints on the male half is the eight gold pins.
     """
     contact, a = repere_connecteur(etat)
     course = a * CONN_COURSE * etat["debranche"]
     z_coupe = contact[2]
 
-    # --- moitie fixe, cote camera ---
+    # --- fixed half, camera side ---
     if etat["variante"] == "traversant":
         base = contact - a * CONN_BULKHEAD_L
         epaisseur = BOUCHON_LONG + BOUCHON_ENFONCEMENT
@@ -494,7 +494,7 @@ def connecteur(etat, seg, fin, sac):
                   COULEURS["alu"], coupe_z=z_coupe)
         sac.poser(bloc(base + a * 0.008, a, CONN_R, CONN_BULKHEAD_L - 0.008,
                        seg), COULEURS["caoutchouc"], coupe_z=z_coupe)
-        sac.joint(base, a, 0.0085, "moitie fixe du connecteur")
+        sac.joint(base, a, 0.0085, "connector, fixed half")
     else:
         arriere = contact - a * CONN_FEMELLE_L
         sac.poser(bloc(arriere + a * 0.016, a, CONN_R, CONN_FEMELLE_L - 0.016,
@@ -507,8 +507,8 @@ def connecteur(etat, seg, fin, sac):
                 sac.poser(tore(contact - a * pas, a, CONN_R, 0.0009, 14, 5),
                           COULEURS["noir"], coupe_z=z_coupe)
 
-    # La face de contact de la femelle, et ses huit alveoles : on ne les voit
-    # que debranche, et c'est precisement ce qu'on veut regarder de pres.
+    # The female's mating face and its eight sockets: they are only visible
+    # once unplugged, and that is exactly what we want to look at up close.
     sac.poser(couronne(contact - a * 0.0006, a, 0.0, CONN_R, seg),
               COULEURS["caoutchouc"], coupe_z=z_coupe)
     if etat["debranche"] > 0.04:
@@ -521,7 +521,7 @@ def connecteur(etat, seg, fin, sac):
             sac.poser(couronne(centre, a, 0.0, CONN_BROCHE_R + 0.0004,
                                8), "#0b0d0f", coupe_z=None)
 
-    # --- moitie mobile, cote caisson : c'est elle qu'on tire ---
+    # --- moving half, housing side: this is the one that gets pulled ---
     sac.poser(bloc(contact + course, a, CONN_R, CONN_MALE_L - 0.014, seg),
               COULEURS["caoutchouc"], coupe_z=z_coupe)
     sac.poser(cone(contact + course + a * (CONN_MALE_L - 0.014), a, CONN_R,
@@ -545,7 +545,7 @@ def connecteur(etat, seg, fin, sac):
 
 
 def tube_camera(etat, seg, fin, sac):
-    """Le tube 2", ses deux bouchons, et la D435i couchee dedans."""
+    """The 2" tube, its two end caps, and the D435i lying inside."""
     a = TUBE_AXE
     r_int, r_ext = TUBE_DI / 2, TUBE_DE / 2
     sac.poser(manchon(TUBE_CENTRE - a * TUBE_LONG / 2, a, r_int, r_ext,
@@ -556,12 +556,12 @@ def tube_camera(etat, seg, fin, sac):
         sac.trait(_cercle(TUBE_CENTRE + a * bout * TUBE_LONG / 2, a, r_ext, 40),
                   couleur="#6fa6c4", epaisseur=1.0)
     bouchon(a, TUBE_CENTRE + a * TUBE_LONG / 2, r_int, r_ext, seg, sac,
-            ecart=a * 0.075, nom_joint="tube camera")
+            ecart=a * 0.075, nom_joint="camera tube")
     bouchon(-a, TUBE_CENTRE - a * TUBE_LONG / 2, r_int, r_ext, seg, sac,
-            ecart=-a * 0.075, nom_joint="tube camera")
+            ecart=-a * 0.075, nom_joint="camera tube")
 
-    # La camera : plaquee au fond du tube (JEU_ARRIERE = 0 dans optique.py),
-    # ses 90 mm selon l'axe, son regard vers l'avant a travers la paroi.
+    # The camera: pressed against the bottom of the tube (JEU_ARRIERE = 0 in
+    # optique.py), its 90 mm along the axis, looking forward through the wall.
     ecart = np.array([0.0, -0.26, 0.0])
     dos = TUBE_CENTRE[0] - r_int + optique.JEU_ARRIERE
     avant = dos + CAM_P
@@ -580,16 +580,16 @@ def tube_camera(etat, seg, fin, sac):
                            rayon, max(8, seg // 2)),
                   teinte, coupe_z=None, ecart=ecart)
 
-    # La fiche USB-C. Elle est COUDEE, et ce n'est pas un detail : il ne reste
-    # que JEU_BOUT au bout du tube une fois le bouchon enfonce.
+    # The USB-C plug. It is a RIGHT-ANGLE one, and that is not a detail: only
+    # JEU_BOUT is left at the end of the tube once the cap is seated.
     fiche = np.array([TUBE_CENTRE[0] - 0.012, TUBE_CENTRE[1] + CAM_L / 2 + 0.004,
                       TUBE_CENTRE[2]])
     sac.poser(pave(fiche, (0.0045, 0, 0), (0, 0.004, 0), (0, 0, 0.0035)),
               COULEURS["noir_clair"], coupe_z=None, ecart=ecart)
 
-    # Les flasques du support imprime, qui tiennent la camera en place. Tant
-    # qu'elle ne glisse pas, la calibration reste vraie ; 1 mm de glissement,
-    # c'est 1 % sur toutes les distances (optique.sensibilite_glissement).
+    # The end plates of the printed cradle, which hold the camera in place. As
+    # long as it does not slip, the calibration stays true; 1 mm of slip is 1 %
+    # on every distance (see optique.sensibilite_glissement).
     for cote in (-1.0, 1.0):
         sac.poser(pave(np.array([TUBE_CENTRE[0] - 0.008,
                                  TUBE_CENTRE[1] + cote * (CAM_L / 2 + 0.004),
@@ -597,8 +597,9 @@ def tube_camera(etat, seg, fin, sac):
                        (0.014, 0, 0), (0, 0.0025, 0), (0, 0, 0.016)),
                   "#cfc7b6", alpha=0.55, coupe_z=None, ecart=ecart)
 
-    # Le cable interne, de la fiche a la traversee. Il n'a que JEU_BOUT pour
-    # tourner : c'est la cote qui condamne les fiches USB-C droites.
+    # The internal cable, from the plug to the penetrator. It has only
+    # JEU_BOUT to turn in: that is the dimension that rules out straight
+    # USB-C plugs.
     interne = FACE_TRAVERSEE_CAM - a * (BOUCHON_LONG + BOUCHON_ENFONCEMENT
                                         + TRAVERSEE_DEDANS)
     sac.cable([fiche + np.array([0.0, 0.005, 0.0]),
@@ -608,7 +609,7 @@ def tube_camera(etat, seg, fin, sac):
 
 
 def caisson(etat, seg, fin, sac):
-    """Le caisson 4" et le Raspberry Pi dedans."""
+    """The 4" housing and the Raspberry Pi inside it."""
     a = CAISSON_AXE
     r_int, r_ext = CAISSON_DI / 2, CAISSON_DE / 2
     sac.poser(manchon(np.array([CAISSON_X0, 0.0, 0.0]), a, r_int, r_ext,
@@ -618,9 +619,9 @@ def caisson(etat, seg, fin, sac):
         sac.trait(_cercle(np.array([CAISSON_X0 + bout * CAISSON_LONG, 0.0, 0.0]),
                           a, r_ext, 40), couleur="#6fa6c4", epaisseur=1.0)
     bouchon(a, np.array([CAISSON_LONG / 2, 0.0, 0.0]), r_int, r_ext, seg, sac,
-            ecart=a * 0.075, nom_joint="caisson electronique")
+            ecart=a * 0.075, nom_joint="electronics housing")
     bouchon(-a, np.array([-CAISSON_LONG / 2, 0.0, 0.0]), r_int, r_ext, seg,
-            sac, ecart=-a * 0.075, nom_joint="caisson electronique")
+            sac, ecart=-a * 0.075, nom_joint="electronics housing")
 
     carte = np.array([0.0, 0.0, -0.028])
     sac.poser(pave(carte, (0.0425, 0, 0), (0, 0.028, 0), (0, 0, 0.0008)),
@@ -645,11 +646,11 @@ def caisson(etat, seg, fin, sac):
 
 
 def champ_de_vue(etat, sac):
-    """Le cone que la camera voit, a travers la paroi, dans l'eau.
+    """The cone the camera sees, through the wall, in water.
 
-    Les demi-angles ne sont pas les memes dans les deux directions : selon
-    l'AXE du tube la paroi est une lame plane (facteur 1.33), dans la SECTION
-    c'est un menisque. optique.py sait faire les deux ; on ne recopie rien.
+    The half-angles differ between the two directions: along the tube AXIS the
+    wall is a plane-parallel plate (the 1.33 factor), in the SECTION it is a
+    meniscus. optique.py knows how to do both; nothing is copied here.
     """
     demi_h_air, demi_v_air, _ = optique.demi_champs()
     demi_axe = np.radians(optique.demi_champ_eau(demi_h_air, "axe"))
@@ -668,7 +669,7 @@ def champ_de_vue(etat, sac):
 
 
 def eau(sac):
-    """La surface, juste pour rappeler de quel cote est le haut."""
+    """The surface, just to remind us which way is up."""
     x0, x1, y0, y1, z = -0.22, 0.46, -0.20, 0.22, 0.145
     sac.poser([np.array([[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]])],
               COULEURS["eau"], alpha=0.07, coupe_z=None)
@@ -679,10 +680,10 @@ def eau(sac):
 
 
 # ---------------------------------------------------------------------------
-# 5. La scene complete
+# 5. The complete scene
 # ---------------------------------------------------------------------------
 def construire(etat):
-    """Toutes les pieces du montage, dans l'etat ou l'utilisateur les a mises."""
+    """Every part of the assembly, in the state the user has put it in."""
     fin = etat["demi"] < 0.13 and not etat["anime"]
     seg = 10 if etat["anime"] else (28 if fin else 20)
 
@@ -694,16 +695,16 @@ def construire(etat):
     if not etat["anime"]:
         champ_de_vue(etat, sac)
 
-    # Cote camera, la traversee de paroi n'existe que dans la variante
-    # PIGTAIL : dans l'autre, c'est le connecteur lui-meme qui traverse.
+    # On the camera side the wall penetrator only exists in the PIGTAIL
+    # variant: in the other one, the connector itself crosses the wall.
     if etat["variante"] == "pigtail":
         traversee(TUBE_AXE, FACE_TRAVERSEE_CAM, seg, sac, ecart=TUBE_AXE * 0.075)
 
     contact, a, course = connecteur(etat, seg, fin, sac)
     debranche = etat["debranche"]
 
-    # Les cables exterieurs. Debranche, le troncon du caisson se detend : sa
-    # longueur ne change pas, c'est la corde qui raccourcit.
+    # The outside cables. Once unplugged, the housing-side run goes slack: its
+    # length has not changed, the chord between its ends has shortened.
     if etat["variante"] == "pigtail":
         arriere = contact - a * CONN_FEMELLE_L
         sac.cable([SORTIE_CAM,
@@ -722,18 +723,18 @@ def construire(etat):
                    bout + a * 0.055 + np.array([-0.030, 0.0, 0.055 + 0.05 * debranche]),
                    bout])
 
-    # Le repere de l'engin : une fleche vers l'avant, sinon on ne sait plus
-    # de quel cote la camera regarde. Elle n'a de sens que de loin.
+    # The vehicle reference: a forward arrow, or nobody can tell which way the
+    # camera is looking. It only makes sense from far out.
     if not fin:
         sac.trait([np.array([0.44, -0.13, -0.075]),
                    np.array([0.52, -0.13, -0.075])],
                   couleur=COULEURS["repere"], epaisseur=1.6, annotation=True)
-        sac.repere(np.array([0.52, -0.13, -0.075]), "vers l'avant",
+        sac.repere(np.array([0.52, -0.13, -0.075]), "forward",
                    np.array([0.045, 0.0, 0.0]))
 
-    # La reglette. Elle se pose dans le coin de la vue COURANTE et prend la
-    # plus grande longueur ronde qui y tienne : une vue 3D zoomee sans
-    # reglette ne dit plus rien de la taille des pieces.
+    # The scale bar. It sits in the corner of the CURRENT view and takes the
+    # largest round length that fits: a zoomed 3D view without a scale bar says
+    # nothing about how big the parts are.
     demi = etat["demi"]
     longueur = next((l for l in (0.10, 0.05, 0.02, 0.01, 0.005)
                      if l <= demi * 0.55), 0.002)
@@ -753,43 +754,43 @@ def construire(etat):
 
     if etat["reperes"]:
         sac.repere(TUBE_CENTRE + np.array([0.0, -0.045, TUBE_DE / 2]),
-                   'tube camera 2" acrylique\nBR-100230-151, 150 mm',
+                   'camera tube, 2" acrylic\nBR-100230-151, 150 mm',
                    np.array([0.030, -0.085, 0.105]))
         sac.repere(TUBE_CENTRE + np.array([-0.010, 0.0, 0.0]),
-                   "D435i couchee : elle regarde\npar la PAROI cylindrique",
+                   "D435i lying down: it looks out\nthrough the CYLINDRICAL WALL",
                    np.array([0.020, -0.055, -0.115]))
         sac.repere(TUBE_CENTRE + np.array([0.0, TUBE_LONG / 2 + 0.010, 0.0]),
-                   "bouchon alu + 2 joints\n(il ne s'ouvre plus)",
+                   "aluminium end cap + 2 o-rings\n(never opened again)",
                    np.array([0.070, 0.050, -0.075]))
         if etat["debranche"] > 0.5:
             sac.repere(contact + course,
-                       "8 broches en or\ncouper le 5 V AVANT de mater",
+                       "8 gold pins\ncut the 5 V BEFORE mating",
                        np.array([0.035, -0.010, -0.055]))
         sac.repere(contact + course * 0.5,
-                   ("connecteur immergeable\n8 contacts, DANS L'EAU"
+                   ("underwater connector\n8 contacts, IN THE WATER"
                     if etat["variante"] == "pigtail"
-                    else "connecteur immergeable\nvisse DANS le bouchon"),
+                    else "underwater connector\nscrewed INTO the end cap"),
                    np.array([-0.020, 0.075, 0.070]))
         sac.repere(TUBE_CENTRE + np.array([0.055, 0.0, -0.020]),
-                   "champ de vue dans l'eau\n(voir optique.py)",
+                   "field of view in water\n(see optique.py)",
                    np.array([0.055, 0.020, -0.070]))
         sac.repere(np.array([-0.060, 0.0, CAISSON_DE / 2]),
-                   'caisson electronique 4"',
+                   'electronics housing, 4"',
                    np.array([-0.080, -0.035, 0.080]))
         sac.repere(np.array([0.0, 0.0, -0.028]), "Raspberry Pi",
                    np.array([-0.090, 0.070, -0.070]))
         if etat["variante"] == "pigtail":
             sac.repere(FACE_TRAVERSEE_CAM + np.array([0.0, 0.010, 0.0]),
-                       "traversee WetLink M10",
+                       "WetLink M10 penetrator",
                        np.array([0.090, 0.020, -0.010]))
         sac.repere(FACE_TRAVERSEE_PI + np.array([0.010, 0.0, 0.0]),
-                   "traversee WetLink M10",
+                   "WetLink M10 penetrator",
                    np.array([-0.035, -0.075, 0.075]))
     return sac
 
 
 def bilan(etat, sac):
-    """Ce que l'option B coute et ce qu'elle evite, chiffres a l'appui."""
+    """What option B costs and what it avoids, with the numbers."""
     permanents = len(sac.joints)
     return {
         "joints_permanents": permanents,
@@ -799,12 +800,12 @@ def bilan(etat, sac):
 
 
 # ---------------------------------------------------------------------------
-# 6. Le rendu
+# 6. Rendering
 # ---------------------------------------------------------------------------
-# matplotlib ne sait pas eclairer une scene 3D : il remplit les facettes d'une
-# couleur plate, et un cylindre plat ressemble a un rectangle. On calcule donc
-# nous-memes l'eclairement de chaque facette a partir de sa normale. C'est dix
-# lignes, et cela change tout a la lisibilite des pieces cylindriques.
+# matplotlib cannot light a 3D scene: it fills each facet with a flat colour,
+# and a flat cylinder looks like a rectangle. So we compute the illumination
+# of every facet ourselves from its normal. Ten lines, and it changes
+# everything about how readable the cylindrical parts are.
 LUMIERE = _unitaire([0.40, -0.78, 0.48])
 
 
@@ -824,30 +825,30 @@ def _teintes(tableau, couleur, alpha):
 
 
 def _boite(etat, marge=1.25):
-    """Les deux coins de la boite de vue."""
+    """The two corners of the view box."""
     demi = np.array([etat["demi"], etat["demi"],
                      max(etat["demi"] * 0.62, 0.045)]) * marge
     return etat["cible"] - demi, etat["cible"] + demi
 
 
 def _empiler(facettes):
-    """Les facettes en un seul tableau (n, 4, 3).
+    """The facets as a single (n, 4, 3) array.
 
-    Les triangles sont completes par leur dernier sommet : cela ne change rien
-    au trace, et cela permet de trier et d'eclairer toute une piece d'un coup
-    de numpy au lieu d'une boucle Python par facette. Sur 1600 facettes, c'est
-    la difference entre une fenetre qui repond et une qui traine.
+    Triangles are padded with their own last vertex: this changes nothing in
+    the drawing, and it lets a whole part be culled and shaded in one numpy
+    pass instead of a Python loop per facet. Over 1600 facets, that is the
+    difference between a window that responds and one that drags.
     """
     return np.array([f if len(f) == 4 else np.vstack([f, f[-1:]])
                      for f in facettes])
 
 
 def _retenues(tableau, mini, maxi):
-    """Jette les facettes entierement hors du cadre.
+    """Drops the facets that lie entirely outside the frame.
 
-    matplotlib ne coupe pas la 3D aux limites des axes : sans ce tri, une vue
-    rapprochee du connecteur reste encombree du caisson et du tube, dessines
-    par-dessus le titre.
+    matplotlib does not clip 3D content at the axis limits: without this pass,
+    a close-up of the connector stays cluttered with the housing and the tube,
+    drawn straight over the title.
     """
     dehors = (np.any(np.all(tableau > maxi, axis=1), axis=1)
               | np.any(np.all(tableau < mini, axis=1), axis=1))
@@ -855,7 +856,7 @@ def _retenues(tableau, mini, maxi):
 
 
 def dessiner(ax, etat):
-    """Vide la vue et la refait dans l'etat courant."""
+    """Clears the view and rebuilds it in the current state."""
     sac = construire(etat)
     mini, maxi = _boite(etat)
     elevation, azimut = ax.elev, ax.azim
@@ -889,9 +890,9 @@ def dessiner(ax, etat):
             ax.plot(cercle[:, 0], cercle[:, 1], cercle[:, 2],
                     color=COULEURS["joint"], linewidth=1.9)
 
-    # Les etiquettes suivent le zoom : un decalage de 8 cm est juste dans la
-    # vue d'ensemble et absurde a 5 cm de champ. Et une etiquette dont la
-    # piece est hors cadre deborde sur la vue d'a cote : on la jette.
+    # Labels follow the zoom: an 8 cm offset is right in the overview and
+    # absurd at 5 cm of field. And a label whose part is out of frame spills
+    # over the neighbouring view, so it gets dropped.
     echelle = min(1.0, etat["demi"] / 0.250)
     for r in sac.reperes:
         p, d = r["point"], r["decalage"] * echelle
@@ -911,12 +912,11 @@ def dessiner(ax, etat):
 
 
 def cadrer(ax, etat):
-    """La boite de vue autour de la cible.
+    """The view box around the target.
 
-    Un CUBE donnerait des proportions justes mais gacherait la moitie de la
-    hauteur : le montage est long et plat. On aplatit donc la boite ET le
-    rapport d'aspect du meme facteur, ce qui garde les proportions vraies tout
-    en remplissant la fenetre.
+    A CUBE would give true proportions but waste half the height: the assembly
+    is long and flat. So we flatten the box AND the aspect ratio by the same
+    factor, which keeps the proportions honest while filling the window.
     """
     c, d = etat["cible"], etat["demi"]
     dz = max(d * 0.62, 0.045)
@@ -925,12 +925,12 @@ def cadrer(ax, etat):
     ax.set_zlim(c[2] - dz, c[2] + dz)
     try:
         ax.set_box_aspect((d, d, dz), zoom=1.25)
-    except TypeError:          # matplotlib ancien : pas de zoom
+    except TypeError:          # older matplotlib: no zoom argument
         ax.set_box_aspect((d, d, dz))
 
 
 def viser(etat, nom):
-    """Les vues pretes a l'emploi."""
+    """The ready-made views."""
     if nom == "ensemble":
         etat["cible"] = np.array([0.115, 0.020, 0.010])
         etat["demi"] = 0.250
@@ -949,80 +949,79 @@ def viser(etat, nom):
 
 
 # ---------------------------------------------------------------------------
-# 7. Ce que le panneau raconte
+# 7. What the side panel says
 # ---------------------------------------------------------------------------
 def panneau(etat, sac):
     compte = bilan(etat, sac)
     branche = etat["debranche"] < 0.5
-    variante = ("PIGTAIL — une traversee de chaque cote"
+    variante = ("PIGTAIL - one penetrator per side"
                 if etat["variante"] == "pigtail"
-                else "TRAVERSANT — le connecteur EST la traversee")
+                else "BULKHEAD - the connector IS the penetrator")
     lignes = [
-        "OPTION B — LE CONNECTEUR EST DANS L'EAU",
-        f"variante : {variante}",
+        "OPTION B - THE CONNECTOR SITS IN THE WATER",
+        f"variant: {variante}",
         "",
-        ("ETAT : BRANCHE" if branche else "ETAT : DEBRANCHE"),
+        ("STATE: PLUGGED IN" if branche else "STATE: UNPLUGGED"),
     ]
     if branche:
         lignes += [
-            "  la liaison passe, tout est ferme.",
+            "  the link is up, everything is closed.",
             "",
-            "Pour deposer la camera on debranche",
-            "SOUS L'EAU : le tube camera n'est",
-            "jamais ouvert.",
+            "To remove the camera we unplug",
+            "UNDER WATER: the camera tube is",
+            "never opened.",
         ]
     else:
         lignes += [
-            "  la camera peut partir avec son tube.",
+            "  the camera can leave with its tube.",
             "",
-            "Le tube camera est reste FERME :",
-            f"  joints a rouvrir ........ {compte['joints_a_rouvrir']}",
-            f"  joints en place ......... {compte['joints_permanents']}",
+            "The camera tube stayed CLOSED:",
+            f"  seals to reopen ......... {compte['joints_a_rouvrir']}",
+            f"  seals left undisturbed .. {compte['joints_permanents']}",
             "",
-            "AVANT de rebrancher :",
-            "  - couper le 5 V (mater sous",
-            "    tension dans l'eau ronge les",
-            "    contacts par electrolyse) ;",
-            "  - graisse silicone sur les",
-            "    broches ;",
-            "  - bouchon d'obturation sur la",
-            "    moitie restee seule.",
+            "BEFORE plugging back in:",
+            "  - cut the 5 V (mating live in",
+            "    water eats the contacts by",
+            "    electrolysis);",
+            "  - silicone grease on the pins;",
+            "  - dummy plug on the half left",
+            "    on its own.",
         ]
     lignes += [
         "",
-        "-" * 34,
-        "LE MONTAGE, EN CHIFFRES",
-        f"  tube camera ... {TUBE_DE*1000:.0f} mm dehors,",
-        f"                  {TUBE_DI*1000:.1f} dedans, {TUBE_LONG*1000:.0f} de long",
+        "-" * 36,
+        "THE ASSEMBLY, IN NUMBERS",
+        f"  camera tube ... {TUBE_DE*1000:.0f} mm outside,",
+        f"                  {TUBE_DI*1000:.1f} bore, {TUBE_LONG*1000:.0f} long",
         f"  D435i ......... {CAM_L*1000:.0f} x {CAM_H*1000:.0f} x {CAM_P*1000:.0f} mm,",
-        "                  couchee, regard radial",
-        f"  jeu au bout ... {JEU_BOUT*1000:.0f} mm",
-        "                  -> fiche USB-C COUDEE",
-        f"  raccords ...... {compte['raccords']} sur le chemin",
+        "                  lying down, radial view",
+        f"  end clearance . {JEU_BOUT*1000:.0f} mm",
+        "                  -> RIGHT-ANGLE USB-C plug",
+        f"  fittings ...... {compte['raccords']} on the path",
         "                  camera -> Raspberry Pi",
         "",
-        "LIAISON : USB 2.0, pas USB 3.",
-        "  8 contacts ne passent pas 5 Gbit/s.",
-        "  La D435i sert le 640x480 couleur",
-        "  et la centrale en USB2 : c'est",
-        "  tout ce que ce depot consomme.",
-        "  Doubler VBUS et GND, 24 AWG mini.",
+        "LINK: USB 2.0, not USB 3.",
+        "  8 contacts will not carry 5 Gbit/s.",
+        "  The D435i serves 640x480 colour",
+        "  and the IMU over USB2, which is all",
+        "  this repository consumes.",
+        "  Double VBUS and GND, 24 AWG min.",
     ]
     return "\n".join(lignes)
 
 
 AIDE = """
-  b  brancher / debrancher        v  variante pigtail <-> traversant
-  1  vue d'ensemble               2  zoom connecteur
-  3  zoom traversee de paroi      4  zoom camera dans son tube
-  molette, + / -  zoom            souris glisser  tourner
-  c  coupe        e  eclate       j  joints        r  reperes
-  w  eau          p  image PNG    h  cette aide    q  quitter
+  b  plug / unplug                 v  variant  pigtail <-> bulkhead
+  1  overview                      2  zoom on the connector
+  3  zoom on the wall penetrator   4  zoom on the camera in its tube
+  wheel, + / -  zoom               drag with the mouse  rotate
+  c  section    e  exploded        j  o-rings     r  part labels
+  w  water      p  PNG image       h  this help   q  quit
 """
 
 
 # ---------------------------------------------------------------------------
-# 8. La fenetre, ses boutons, et l'animation du branchement
+# 8. The window, its buttons, and the plug/unplug animation
 # ---------------------------------------------------------------------------
 def etat_neuf():
     return {"debranche": 0.0, "variante": "pigtail", "coupe": False,
@@ -1032,10 +1031,10 @@ def etat_neuf():
 
 
 def animer(fig, etat, rafraichir, cle, cible, images=9):
-    """Fait glisser une valeur de l'etat, en baissant le detail pendant.
+    """Slides one value of the state, dropping the level of detail meanwhile.
 
-    Sans cette baisse de detail, chaque image coute une demi-seconde et le
-    debranchement se joue en diaporama.
+    Without that drop, every frame costs half a second and the unplugging
+    plays out as a slideshow.
     """
     if etat["timer"] is not None:
         return
@@ -1075,16 +1074,16 @@ def main():
             plt.rcParams[cle] = []
 
     etat = etat_neuf()
-    fig = plt.figure("UUV — montage etanche, option B", figsize=(13.6, 8.0))
+    fig = plt.figure("UUV - watertight assembly, option B", figsize=(13.6, 8.0))
     fig.patch.set_facecolor("#f2f6f8")
     ax = fig.add_axes([0.005, 0.085, 0.70, 0.885], projection="3d")
     ax.set_facecolor("#f2f6f8")
     ax.view_init(elev=21, azim=-56)
 
-    fig.text(0.018, 0.972, "OPTION B — le connecteur est dans l'eau",
+    fig.text(0.018, 0.972, "OPTION B - the connector sits in the water",
              fontsize=13, weight="bold", color="#12222e", va="top")
     fig.text(0.018, 0.938,
-             "demonter la camera = debrancher sous l'eau ; le tube reste ferme",
+             "removing the camera = unplugging under water; the tube stays closed",
              fontsize=9.5, color="#41525e", va="top")
     panneau_texte = fig.text(0.722, 0.972, "", fontsize=8.1, family="monospace",
                              va="top", ha="left", color="#12222e")
@@ -1093,7 +1092,7 @@ def main():
         sac = dessiner(ax, etat)
         panneau_texte.set_text(panneau(etat, sac))
         boutons["branchement"].label.set_text(
-            "Brancher" if etat["debranche"] > 0.5 else "Debrancher")
+            "Plug in" if etat["debranche"] > 0.5 else "Unplug")
         fig.canvas.draw_idle()
 
     def basculer_branchement(_=None):
@@ -1126,16 +1125,16 @@ def main():
         rafraichir()
 
     etiquettes = (
-        ("branchement", "Debrancher", basculer_branchement, "#f6d9d2"),
-        ("ensemble", "Ensemble", vers("ensemble"), "#e6edf2"),
-        ("connecteur", "Connecteur", vers("connecteur"), "#e6edf2"),
-        ("traversee", "Traversee", vers("traversee"), "#e6edf2"),
+        ("branchement", "Unplug", basculer_branchement, "#f6d9d2"),
+        ("ensemble", "Overview", vers("ensemble"), "#e6edf2"),
+        ("connecteur", "Connector", vers("connecteur"), "#e6edf2"),
+        ("traversee", "Penetrator", vers("traversee"), "#e6edf2"),
         ("camera", "Camera", vers("camera"), "#e6edf2"),
-        ("coupe", "Coupe", bascule("coupe"), "#eaf0e6"),
-        ("eclate", "Eclate", basculer_eclate, "#eaf0e6"),
-        ("joints", "Joints", bascule("joints"), "#eaf0e6"),
-        ("reperes", "Reperes", bascule("reperes"), "#eaf0e6"),
-        ("variante", "Variante", changer_variante, "#e8e4f2"),
+        ("coupe", "Section", bascule("coupe"), "#eaf0e6"),
+        ("eclate", "Exploded", basculer_eclate, "#eaf0e6"),
+        ("joints", "O-rings", bascule("joints"), "#eaf0e6"),
+        ("reperes", "Labels", bascule("reperes"), "#eaf0e6"),
+        ("variante", "Variant", changer_variante, "#e8e4f2"),
     )
     boutons = {}
     largeur, gauche = 0.0925, 0.028
@@ -1152,7 +1151,7 @@ def main():
         facteur = 0.86 if evenement.button == "up" else 1 / 0.86
         etat["demi"] = float(np.clip(etat["demi"] * facteur, 0.020, 0.60))
         if (etat["demi"] < 0.13) == detail_avant:
-            cadrer(ax, etat)          # rien de neuf a montrer : on recadre
+            cadrer(ax, etat)          # nothing new to show: just reframe
             fig.canvas.draw_idle()
         else:
             rafraichir()
@@ -1184,7 +1183,7 @@ def main():
             etat["demi"] = float(np.clip(etat["demi"] / 0.82, 0.020, 0.60))
         elif touche == "p":
             fig.savefig(IMAGE, dpi=200, facecolor=fig.get_facecolor())
-            print(f"Image enregistree : {IMAGE}")
+            print(f"Image written: {IMAGE}")
             return
         elif touche == "h":
             print(AIDE)
@@ -1202,31 +1201,31 @@ def main():
 
 
 def resume():
-    """Les trois chiffres qu'on veut avoir en tete avant de commander."""
+    """The handful of numbers to have in mind before ordering anything."""
     return "\n".join([
         "",
-        "MONTAGE ETANCHE - option B, connecteur dans l'eau",
-        f"  tube camera .......... {TUBE_DE*1000:.0f} / {TUBE_DI*1000:.1f} mm, "
-        f"{TUBE_LONG*1000:.0f} mm de long",
-        f"  camera couchee ....... {CAM_L*1000:.0f} mm sur les "
-        f"{TUBE_LONG*1000:.0f} mm du tube",
-        f"  jeu restant au bout .. {JEU_BOUT*1000:.0f} mm par cote "
-        f"(bouchon enfonce de {BOUCHON_ENFONCEMENT*1000:.0f} mm)",
-        "     -> fiche USB-C COUDEE obligatoire, une fiche droite ne rentre pas",
-        "  liaison .............. USB 2.0 (8 contacts ne passent pas 5 Gbit/s)",
-        "  joints a rouvrir pour deposer la camera : 0",
+        "WATERTIGHT ASSEMBLY - option B, connector in the water",
+        f"  camera tube .......... {TUBE_DE*1000:.0f} / {TUBE_DI*1000:.1f} mm, "
+        f"{TUBE_LONG*1000:.0f} mm long",
+        f"  camera lying down .... {CAM_L*1000:.0f} mm out of the tube's "
+        f"{TUBE_LONG*1000:.0f} mm",
+        f"  clearance left ....... {JEU_BOUT*1000:.0f} mm per end "
+        f"(end cap seated {BOUCHON_ENFONCEMENT*1000:.0f} mm deep)",
+        "     -> a RIGHT-ANGLE USB-C plug is mandatory, a straight one will not fit",
+        "  link ................. USB 2.0 (8 contacts will not carry 5 Gbit/s)",
+        "  seals to reopen in order to remove the camera: 0",
         "",
-        "  python mecanique/montage_3d.py --pieces   pour la nomenclature",
+        "  python mecanique/montage_3d.py --pieces   for the parts list",
     ])
 
 
 def exporter():
-    """Quatre vues fixes, pour le rapport et pour la reunion."""
+    """Four fixed views, for the report and for the meeting."""
     vues = (
-        ("Ensemble, branche", "pigtail", 0.0, "ensemble", (21, -56)),
-        ("Connecteur branche", "pigtail", 0.0, "connecteur", (17, -62)),
-        ("Connecteur DEBRANCHE", "pigtail", 1.0, "connecteur", (17, -62)),
-        ("Variante TRAVERSANT, debranche", "traversant", 1.0, "connecteur",
+        ("Overview, plugged in", "pigtail", 0.0, "ensemble", (21, -56)),
+        ("Connector plugged in", "pigtail", 0.0, "connecteur", (17, -62)),
+        ("Connector UNPLUGGED", "pigtail", 1.0, "connecteur", (17, -62)),
+        ("BULKHEAD variant, unplugged", "traversant", 1.0, "connecteur",
          (14, -18)),
     )
     figure = plt.figure(figsize=(15.0, 9.6))
@@ -1243,14 +1242,14 @@ def exporter():
         ax.view_init(elev=angles[0], azim=angles[1])
         dessiner(ax, etat)
         ax.set_title(titre, fontsize=11, weight="bold", color="#12222e")
-    figure.suptitle("UUV — option B : le connecteur est dans l'eau, "
-                    "le tube camera ne s'ouvre plus",
+    figure.suptitle("UUV - option B: the connector sits in the water, "
+                    "the camera tube never opens again",
                     fontsize=13.5, weight="bold", color="#12222e")
     figure.subplots_adjust(left=0.0, right=1.0, top=0.93, bottom=0.0,
                            wspace=0.0, hspace=0.06)
     figure.savefig(IMAGE, dpi=150, facecolor=figure.get_facecolor())
     print(resume())
-    print(f"Image enregistree : {IMAGE}")
+    print(f"Image written: {IMAGE}")
 
 
 if __name__ == "__main__":
