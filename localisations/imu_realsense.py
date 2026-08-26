@@ -69,23 +69,51 @@ class CentraleRealSense:
     paierait directement en derive.
     """
 
-    def __init__(self, avec_couleur=False):
+    def __init__(self, avec_couleur=False, bavard=True):
         if rs is None:
             raise RuntimeError(
                 "pyrealsense2 n'est pas installe.\n"
                 "  pip install pyrealsense2\n"
                 "C'est la bibliotheque du SDK Intel qui donne acces a l'IMU.")
+
+        offerts = self._profils_offerts()
+        if rs.stream.gyro not in offerts or rs.stream.accel not in offerts:
+            raise RuntimeError(
+                "l'appareil branche n'offre pas accel + gyro.\n"
+                "Lance 'python lister_realsense.py' pour voir ce qu'il a.")
+        if bavard:
+            for flux, nom in ((rs.stream.accel, "accel"), (rs.stream.gyro, "gyro")):
+                cadences = sorted({fps for _, fps in offerts[flux]})
+                print(f"  {nom:5} : cadences offertes {cadences} Hz")
+
         self.pipeline = rs.pipeline()
-        config = rs.config()
-        config.enable_stream(rs.stream.accel, rs.format.motion_xyz32f)
-        config.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f)
-        if avec_couleur:
-            config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-        self.profil = self.pipeline.start(config)
+        # On demande EXACTEMENT ce que l'appareil annonce, au lieu de supposer
+        # un format et une cadence. Coder ces valeurs en dur donne l'erreur
+        # "Couldn't resolve requests" des que le SDK ou le micrologiciel
+        # change ses profils — et le message ne dit pas lequel manque.
+        self.profil = None
+        derniere_erreur = None
+        for essai_couleur in ([True, False] if avec_couleur else [False]):
+            config = rs.config()
+            for flux in (rs.stream.accel, rs.stream.gyro):
+                format_, fps = max(offerts[flux], key=lambda couple: couple[1])
+                config.enable_stream(flux, format_, fps)
+            if essai_couleur:
+                config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+            try:
+                self.profil = self.pipeline.start(config)
+                self.avec_couleur = essai_couleur
+                break
+            except Exception as souci:
+                derniere_erreur = souci
+                if bavard and essai_couleur:
+                    print(f"  couleur + IMU refuse ({souci}) — IMU seule")
+        if self.profil is None:
+            raise RuntimeError(f"impossible d'ouvrir les flux : {derniere_erreur}")
 
         self.R_imu_camera = np.eye(3)
         self.extrinseques_lues = False
-        if avec_couleur:
+        if self.avec_couleur:
             try:
                 extr = (self.profil.get_stream(rs.stream.gyro)
                         .get_extrinsics_to(self.profil.get_stream(rs.stream.color)))
@@ -98,6 +126,21 @@ class CentraleRealSense:
         self._gyro = np.zeros(3)
         self._accel = np.zeros(3)
         self._t_gyro = None
+
+    @staticmethod
+    def _profils_offerts():
+        """Ce que le Motion Module annonce vraiment : {flux: [(format, fps)]}."""
+        offerts = {}
+        for appareil in rs.context().query_devices():
+            for capteur in appareil.sensors:
+                for profil in capteur.get_stream_profiles():
+                    flux = profil.stream_type()
+                    if flux in (rs.stream.accel, rs.stream.gyro):
+                        offerts.setdefault(flux, []).append(
+                            (profil.format(), profil.fps()))
+            if offerts:
+                break            # premier appareil qui en a
+        return offerts
 
     def lire(self, timeout_ms=5000):
         """Rend (gyro, accel, dt) ou None. dt est l'intervalle depuis la
