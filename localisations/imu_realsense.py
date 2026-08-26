@@ -35,9 +35,18 @@
 # Passer les mesures brutes au filtre sans cette rotation melange les axes et
 # fait deriver l'engin de travers, sans aucun message d'erreur.
 #
-# On ne suppose rien non plus sur l'orientation de depart : la direction du
-# bas est MESUREE au repos, au lieu d'etre supposee selon un axe. Le montage
-# peut donc etre pose n'importe comment.
+# On ne suppose rien non plus sur l'orientation de depart : elle est DEDUITE
+# de l'accelerometre au repos, au lieu d'etre supposee selon un axe. Le
+# montage peut donc etre pose n'importe comment — sur sa base, sur le cote,
+# dans le tube.
+#
+# CONVENTION DU VECTEUR MESURE. On le traite comme pointant vers le HAUT : au
+# repos un accelerometre mesure la force specifique, la reaction du support,
+# pas la pesanteur. `orientation_initiale` et `corriger_gravite` font la meme
+# hypothese, et c'est indispensable — une version ou l'une inversait le signe
+# et pas l'autre fait converger l'orientation a 180 degres de la verite, sans
+# aucun message. La demonstration verifie ce point automatiquement, d'une
+# facon qui ne depend pas de la pose.
 import sys
 import time
 from collections import deque
@@ -86,42 +95,50 @@ class CentraleRealSense:
                 cadences = sorted({fps for _, fps in offerts[flux]})
                 print(f"  {nom:5} : cadences offertes {cadences} Hz")
 
-        self.pipeline = rs.pipeline()
         # On demande EXACTEMENT ce que l'appareil annonce, au lieu de supposer
         # un format et une cadence. Coder ces valeurs en dur donne l'erreur
         # "Couldn't resolve requests" des que le SDK ou le micrologiciel
         # change ses profils — et le message ne dit pas lequel manque.
-        self.profil = None
-        derniere_erreur = None
-        for essai_couleur in ([True, False] if avec_couleur else [False]):
+        def _config_mouvement():
             config = rs.config()
             for flux in (rs.stream.accel, rs.stream.gyro):
                 format_, fps = max(offerts[flux], key=lambda couple: couple[1])
                 config.enable_stream(flux, format_, fps)
-            if essai_couleur:
-                config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-            try:
-                self.profil = self.pipeline.start(config)
-                self.avec_couleur = essai_couleur
-                break
-            except Exception as souci:
-                derniere_erreur = souci
-                if bavard and essai_couleur:
-                    print(f"  couleur + IMU refuse ({souci}) — IMU seule")
-        if self.profil is None:
-            raise RuntimeError(f"impossible d'ouvrir les flux : {derniere_erreur}")
+            return config
 
+        # ETAPE 1 — extrinseques IMU -> camera couleur, puis on referme.
+        #
+        # POURQUOI NE PAS GARDER LA COULEUR OUVERTE. Le pipeline synchronise
+        # tous ses flux sur le plus lent : avec la couleur a 30 Hz,
+        # wait_for_frames ne rend plus que ~27 jeux par seconde, alors que le
+        # gyro en produit 200 a 400. On perd 86 % des mesures, et l'integration
+        # suppose alors omega constant sur 37 ms au lieu de 5 — a 100 deg/s
+        # cela fait 3.7 deg d'erreur par pas. La couleur ne sert qu'a lire une
+        # rotation constante : on la prend, puis on s'en debarrasse.
         self.R_imu_camera = np.eye(3)
         self.extrinseques_lues = False
-        if self.avec_couleur:
+        if avec_couleur:
             try:
-                extr = (self.profil.get_stream(rs.stream.gyro)
-                        .get_extrinsics_to(self.profil.get_stream(rs.stream.color)))
+                config = _config_mouvement()
+                config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+                pipeline = rs.pipeline()
+                profil = pipeline.start(config)
+                extr = (profil.get_stream(rs.stream.gyro)
+                        .get_extrinsics_to(profil.get_stream(rs.stream.color)))
                 # Le SDK range la rotation en COLONNES ; numpy lit en lignes.
                 self.R_imu_camera = np.array(extr.rotation).reshape(3, 3).T
                 self.extrinseques_lues = True
-            except Exception:
-                pass          # on reste sur l'identite, signalee a l'appelant
+                pipeline.stop()
+            except Exception as souci:
+                if bavard:
+                    print(f"  extrinseques non lues ({souci}) — identite utilisee")
+
+        # ETAPE 2 — IMU seule, a pleine cadence.
+        self.pipeline = rs.pipeline()
+        try:
+            self.profil = self.pipeline.start(_config_mouvement())
+        except Exception as souci:
+            raise RuntimeError(f"impossible d'ouvrir accel + gyro : {souci}")
 
         self._gyro = np.zeros(3)
         self._accel = np.zeros(3)
@@ -200,21 +217,40 @@ def mesurer_au_repos(centrale, duree=5.0):
     bruit_gyro = float(np.degrees(gyros.std(axis=0).mean()))
     norme = float(np.linalg.norm(accels.mean(axis=0)))
     bruit_accel = float(accels.std(axis=0).mean())
-    bas = accels.mean(axis=0) / max(norme, 1e-9)
+    # Direction du vecteur mesure. On le nomme "haut" et non "bas" : au repos
+    # un accelerometre mesure la force specifique, la reaction du support,
+    # dirigee vers le HAUT. Le nom compte — c'est en l'appelant "bas" qu'on
+    # finit par l'inverser quelque part et pas ailleurs.
+    haut = accels.mean(axis=0) / max(norme, 1e-9)
     return {"biais": biais, "bruit_gyro_deg_s": bruit_gyro, "norme_accel": norme,
-            "bruit_accel": bruit_accel, "bas": bas, "echantillons": len(gyros)}
+            "bruit_accel": bruit_accel, "haut": haut, "echantillons": len(gyros),
+            "cadence": len(gyros) / duree}
 
 
-def orientation_initiale(bas_mesure):
-    """Orientation de depart deduite de la direction du bas MESUREE.
+def orientation_initiale(accel_repos):
+    """Orientation de depart deduite de l'accelerometre AU REPOS.
 
-    On ne suppose pas comment le montage est pose : on prend la rotation la
-    plus courte qui amene la verticale du monde sur le bas observe. Le lacet
-    reste arbitraire — la pesanteur n'en dit rien — et c'est justement ce que
-    les tags apporteront.
+    CONVENTION, ET C'EST LE POINT DELICAT. On traite le vecteur mesure comme
+    pointant vers le HAUT. C'est la convention physique de l'accelerometre :
+    au repos il mesure la force specifique, c'est-a-dire la reaction du
+    support, dirigee vers le haut — et non la pesanteur elle-meme.
+
+    `corriger_gravite` fait exactement la meme hypothese. Les deux DOIVENT
+    s'accorder : une version qui inversait le vecteur ici et pas la, ce qui
+    etait le cas, fait que l'initialisation et la correction se combattent.
+    Le symptome est un roulis qui se stabilise vers 180 degres au lieu de
+    zero — silencieux, et facile a prendre pour un probleme d'axes.
+
+    Si un capteur rendait la convention opposee, le controle automatique de
+    la demonstration le dirait : juste apres l'initialisation, roulis et
+    tangage doivent lire zero, puisqu'on part precisement de cette pose.
+
+    On prend la rotation la plus courte qui amene le haut mesure sur la
+    verticale du monde. Le lacet reste arbitraire — la pesanteur n'en dit
+    rien — et c'est justement ce que les tags apporteront.
     """
     haut_monde = np.array([0.0, 0.0, 1.0])
-    haut_mesure = -np.asarray(bas_mesure, dtype=float)
+    haut_mesure = np.asarray(accel_repos, dtype=float)
     haut_mesure = haut_mesure / max(np.linalg.norm(haut_mesure), 1e-9)
     axe = np.cross(haut_mesure, haut_monde)
     sinus = float(np.linalg.norm(axe))
@@ -251,16 +287,62 @@ def _demonstration():
     print("\n" + "-" * 70)
     print("1. LES MESURES SONT-ELLES SAINES ?")
     print("-" * 70)
-    print(f"  echantillons              {repos['echantillons']}")
+    print(f"  echantillons              {repos['echantillons']}"
+          f"   soit {repos['cadence']:.0f} Hz")
+    cadence_gyro = max(fps for _, fps in
+                       CentraleRealSense._profils_offerts()[rs.stream.gyro])
+    if repos["cadence"] < 0.5 * cadence_gyro:
+        # Symptome connu : un flux video ouvert en meme temps force le
+        # pipeline a se synchroniser sur lui, et les mesures de mouvement
+        # sont jetees entre deux images.
+        print(f"  [PROBLEME] le gyro tourne a {cadence_gyro} Hz mais on n'en "
+              f"lit que {repos['cadence']:.0f}.")
+        print("     L'integration suppose alors omega constant sur des")
+        print("     intervalles trop longs, et la rotation est sous-estimee.")
+    else:
+        print(f"  [OK] on lit bien la cadence du capteur ({cadence_gyro} Hz).")
+
     print(f"  norme de l'accelerometre  {repos['norme_accel']:.3f} m/s2   "
           f"(doit valoir {GRAVITE})")
     ecart_g = abs(repos["norme_accel"] / GRAVITE - 1)
     if ecart_g > 0.05:
         print("  [PROBLEME] loin de la pesanteur : echelle ou unites fausses.")
+    elif ecart_g > 0.01:
+        print(f"  [OK] c'est la pesanteur, a {100*ecart_g:.1f} % pres.")
+        print("     Cet ecart est un biais d'echelle de l'accelerometre. Sans")
+        print("     consequence ici : on n'utilise que la DIRECTION du vecteur")
+        print("     pour le roulis et le tangage, pas sa norme.")
     else:
         print("  [OK] c'est bien la pesanteur : l'echelle est juste.")
-    print(f"  direction du bas mesuree  {repos['bas'].round(3)}")
+
+    print(f"  direction mesuree         {repos['haut'].round(3)}")
     print("     (on ne la suppose pas : le montage peut etre pose n'importe comment)")
+
+    # -- la convention de signe de l'accelerometre est-elle la bonne ? ------
+    # On NE peut PAS verifier que roulis et tangage valent zero : le montage a
+    # parfaitement le droit d'etre pose sur le cote, et ils vaudraient alors
+    # 90 a juste titre. Le controle doit donc etre independant de la pose.
+    #
+    # Ce qui doit tenir quelle que soit la pose : l'orientation initialisee
+    # PREVOIT une direction pour le haut, et cette prevision doit coincider
+    # avec le vecteur mesure. Si les deux sont opposes, le capteur rend la
+    # pesanteur la ou on attend la force specifique — initialisation et
+    # correction se combattent alors, et l'orientation se stabilise a 180
+    # degres de la verite sans que rien ne le signale.
+    q0 = orientation_initiale(repos["haut"])
+    prevu = quaternion_vers_matrice(q0).T @ np.array([0.0, 0.0, 1.0])
+    accord = float(prevu @ repos["haut"])
+    ecart_conv = float(np.degrees(np.arccos(np.clip(accord, -1.0, 1.0))))
+    roulis0, tangage0, _ = np.degrees(quaternion_vers_euler(q0))
+    print(f"\n  pose de depart deduite : roulis {roulis0:+.1f}, "
+          f"tangage {tangage0:+.1f} deg")
+    print(f"  controle de convention : ecart prevu / mesure {ecart_conv:.2f} deg")
+    if ecart_conv > 5.0:
+        print("  [PROBLEME] devrait valoir zero quelle que soit la pose.")
+        print("     Proche de 180 : le vecteur mesure pointe vers le BAS et non")
+        print("     vers le haut. Il faut inverser son signe a la lecture.")
+    else:
+        print("  [OK] l'accelerometre pointe bien vers le haut, comme suppose.")
 
     print("\n" + "-" * 70)
     print("2. LES DEUX NOMBRES A RECOPIER DANS filtre_kalman.py")
@@ -281,7 +363,7 @@ def _demonstration():
     print("  Ctrl+C pour arreter.\n")
 
     suivi = FiltreOrientation()
-    suivi.demarrer(orientation_initiale(repos["bas"]), sigma_deg=5.0)
+    suivi.demarrer(orientation_initiale(repos["haut"]), sigma_deg=5.0)
     depart = time.time()
     derniers = deque(maxlen=50)
     try:
@@ -339,21 +421,23 @@ def _simulation():
     print("=" * 70)
     print("Sans camera branchee. La verite etant connue, l'erreur est chiffree.")
 
-    print("\n1. ORIENTATION DEDUITE DE LA SEULE DIRECTION DU BAS")
+    print("\n1. ORIENTATION DEDUITE DU SEUL ACCELEROMETRE")
+    print("   Le haut PREVU par l'orientation doit coincider avec le haut")
+    print("   MESURE, et ce pour n'importe quelle pose du montage.")
     pires = []
     for _ in range(300):
         v = generateur.normal(size=3)
-        bas = v / np.linalg.norm(v)
-        haut = quaternion_vers_matrice(orientation_initiale(bas)).T @ np.array(
-            [0.0, 0.0, 1.0])
-        pires.append(np.degrees(np.arccos(np.clip(haut @ (-bas), -1, 1))))
+        haut_mesure = v / np.linalg.norm(v)
+        prevu = quaternion_vers_matrice(
+            orientation_initiale(haut_mesure)).T @ np.array([0.0, 0.0, 1.0])
+        pires.append(np.degrees(np.arccos(np.clip(prevu @ haut_mesure, -1, 1))))
     print(f"   300 poses quelconques, erreur max {max(pires):.1e} deg")
     assert max(pires) < 1e-4      # bruit d'arccos, pas d'erreur de calcul
 
     print("\n2. UN QUART DE TOUR AUTOUR DE LA VERTICALE")
     print("   30 deg/s pendant 3 s, gyro bruite, accelerometre bruite.")
     suivi = FiltreOrientation()
-    suivi.demarrer(orientation_initiale(np.array([0.0, 0.0, -1.0])), sigma_deg=5.0)
+    suivi.demarrer(orientation_initiale(np.array([0.0, 0.0, 1.0])), sigma_deg=5.0)
     verite = np.array([1.0, 0.0, 0.0, 0.0])
     for _ in range(int(3.0 / dt)):
         omega = np.array([0.0, 0.0, np.radians(30.0)])
@@ -371,7 +455,7 @@ def _simulation():
     print("\n3. TRENTE SECONDES IMMOBILE, SANS AUCUN TAG")
     print("   Le biais residuel du gyro travaille librement.")
     suivi = FiltreOrientation()
-    suivi.demarrer(orientation_initiale(np.array([0.0, 0.0, -1.0])), sigma_deg=5.0)
+    suivi.demarrer(orientation_initiale(np.array([0.0, 0.0, 1.0])), sigma_deg=5.0)
     residuel = np.radians([0.05, -0.04, 0.30])
     for _ in range(int(30.0 / dt)):
         suivi.predire(dt, residuel + generateur.normal(0, bruit, 3))
