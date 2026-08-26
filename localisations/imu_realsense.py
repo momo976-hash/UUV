@@ -47,6 +47,7 @@
 # et pas l'autre fait converger l'orientation a 180 degres de la verite, sans
 # aucun message. La demonstration verifie ce point automatiquement, d'une
 # facon qui ne depend pas de la pose.
+import csv
 import sys
 import time
 from collections import deque
@@ -65,6 +66,7 @@ except ImportError:
     rs = None
 
 GRAVITE = 9.81
+ICI = Path(__file__).resolve().parent
 
 
 class CentraleRealSense:
@@ -362,29 +364,57 @@ def _demonstration():
     print("  Repose-la : roulis et tangage doivent revenir vers zero.")
     print("  Ctrl+C pour arreter.\n")
 
+    # Les mesures sont ENREGISTREES, pas seulement affichees. C'est ce qui
+    # rend l'extraction montrable : un fichier qu'on ouvre et qu'on relit,
+    # plutot que des chiffres qui defilent et disparaissent. Chaque ligne
+    # porte les mesures BRUTES du SDK et l'orientation qu'on en tire, donc le
+    # calcul est refaisable par un tiers.
+    fichier_csv = ICI / "imu_donnees.csv"
     suivi = FiltreOrientation()
     suivi.demarrer(orientation_initiale(repos["haut"]), sigma_deg=5.0)
     depart = time.time()
     derniers = deque(maxlen=50)
-    try:
-        while True:
-            gyro, accel, dt = centrale.lire()
-            if dt is None:
-                continue
-            omega = centrale.R_imu_camera @ (gyro - repos["biais"])
-            suivi.predire(dt, omega)
-            suivi.corriger_gravite(centrale.R_imu_camera @ accel, gravite=GRAVITE)
-            derniers.append(np.linalg.norm(omega))
+    lignes = 0
+    with open(fichier_csv, "w", newline="") as sortie:
+        ecrivain = csv.writer(sortie)
+        ecrivain.writerow(["t_s",
+                           "gyro_x_rad_s", "gyro_y_rad_s", "gyro_z_rad_s",
+                           "accel_x_m_s2", "accel_y_m_s2", "accel_z_m_s2",
+                           "roulis_deg", "tangage_deg", "lacet_deg",
+                           "qw", "qx", "qy", "qz"])
+        try:
+            while True:
+                gyro, accel, dt = centrale.lire()
+                if dt is None:
+                    continue
+                omega = centrale.R_imu_camera @ (gyro - repos["biais"])
+                suivi.predire(dt, omega)
+                suivi.corriger_gravite(centrale.R_imu_camera @ accel,
+                                       gravite=GRAVITE)
+                derniers.append(np.linalg.norm(omega))
 
-            roulis, tangage, lacet = np.degrees(quaternion_vers_euler(suivi.q))
-            print(f"\r  roulis {roulis:+7.1f}   tangage {tangage:+7.1f}   "
-                  f"lacet {lacet:+7.1f} deg    "
-                  f"|omega| {np.degrees(np.mean(derniers)):5.1f} deg/s   "
-                  f"({time.time()-depart:4.0f} s)", end="", flush=True)
-    except KeyboardInterrupt:
-        print("\n")
-    finally:
-        centrale.arreter()
+                roulis, tangage, lacet = np.degrees(quaternion_vers_euler(suivi.q))
+                instant = time.time() - depart
+                ecrivain.writerow(
+                    [f"{instant:.4f}"]
+                    + [f"{v:.6f}" for v in gyro]
+                    + [f"{v:.6f}" for v in accel]
+                    + [f"{roulis:.3f}", f"{tangage:.3f}", f"{lacet:.3f}"]
+                    + [f"{v:.6f}" for v in suivi.q])
+                lignes += 1
+
+                print(f"\r  roulis {roulis:+7.1f}   tangage {tangage:+7.1f}   "
+                      f"lacet {lacet:+7.1f} deg    "
+                      f"|omega| {np.degrees(np.mean(derniers)):5.1f} deg/s   "
+                      f"({instant:4.0f} s, {lignes} lignes)", end="", flush=True)
+        except KeyboardInterrupt:
+            print("\n")
+        finally:
+            centrale.arreter()
+
+    print(f"  {lignes} mesures enregistrees dans : {fichier_csv}")
+    print("     colonnes : temps, gyro brut (rad/s), accel brut (m/s2),")
+    print("     puis l'orientation calculee en angles et en quaternion.")
 
     print("-" * 70)
     print("CE QUE TU VIENS DE MONTRER")
