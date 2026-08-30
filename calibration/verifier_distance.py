@@ -48,7 +48,7 @@ except ImportError:
     rs = None
 
 RESOLUTION = (640, 480)
-TAILLES_CONNUES = (0.223, 0.115)     # les deux tags du bassin, en metres
+TAILLES_CONNUES = (0.223, 0.1175)     # les deux tags du bassin, en metres
 ICI = Path(__file__).resolve().parent
 
 
