@@ -5,6 +5,17 @@
 # Tu poses le tag a une distance MESUREE AU METRE, tu donnes cette distance,
 # le script regarde ce que la camera en dit et conclut.
 #
+# CAMERA SUR LE PI, MESURE SUR LE PC :
+#
+#     python verifier_distance.py --reel 1.000 --pi
+#
+# Le Pi tient la camera au bord du bassin et pousse les images ; ce PC les
+# recoit, mesure, et affiche la fenetre. Utile quand la camera ne se laisse
+# pas ouvrir sous Windows. Le protocole est celui du script de Josiah, repris
+# tel quel : le PC est le SERVEUR (il ecoute, port 5000 par defaut) et le
+# noeud ROS du Pi s'y connecte. Lance donc CE script en premier, le noeud du
+# Pi ensuite.
+#
 # AFFICHAGE. Une fenetre s'ouvre si l'ecran le permet, pour voir le cadrage —
 # indispensable au bord du bassin, ou l'on ne sait pas autrement si le tag est
 # vu. En SSH sur le Raspberry Pi il n'y a pas d'affichage : cv2.imshow y leve
@@ -36,6 +47,8 @@
 # retirer. On valide donc l'echelle globale, ce qui est ce qui compte pour la
 # localisation.
 import argparse
+import socket
+import struct
 import sys
 from pathlib import Path
 
@@ -82,6 +95,96 @@ class CameraOpenCV:
 
     def release(self):
         self.cap.release()
+
+
+class CameraReseau:
+    """Images envoyees par le Raspberry Pi, sur le reseau.
+
+    Le Pi tient la camera au bord du bassin, le PC fait tourner la mesure et
+    affiche la fenetre. C'est le protocole du script de Josiah, repris tel
+    quel : le PC est le SERVEUR (il ecoute), le noeud ROS du Pi s'y connecte.
+    Chaque message porte un entete de 5 octets — 1 pour le type, 4 pour la
+    taille — puis sa charge utile. Le type 1 est une image JPEG, le type 2
+    une pose que l'on ignore ici.
+
+    LATENCE. Si le Pi emet plus vite qu'on ne consomme, les images
+    s'accumulent dans le tampon et l'on finit par mesurer une scene vieille
+    de plusieurs secondes — sans que rien ne le signale. On vide donc ce qui
+    est deja arrive et on ne garde que la derniere image.
+    """
+
+    TYPE_IMAGE, TYPE_POSE = 1, 2
+    TAILLE_ENTETE = struct.calcsize(">BI")
+
+    def __init__(self, port=5000, attente_s=120):
+        self.serveur = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.serveur.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.serveur.bind(("0.0.0.0", port))
+        self.serveur.listen(1)
+        self.serveur.settimeout(attente_s)
+        print(f"En attente du Raspberry Pi sur le port {port}...")
+        print("  (lance le noeud d'emission sur le Pi maintenant)")
+        try:
+            self.conn, adresse = self.serveur.accept()
+        except socket.timeout:
+            self.serveur.close()
+            raise RuntimeError(
+                f"aucune connexion en {attente_s} s.\n"
+                "  - le noeud tourne-t-il sur le Pi ?\n"
+                "  - le Pi vise-t-il la bonne adresse IP de ce PC ?\n"
+                "  - le pare-feu Windows laisse-t-il passer le port ?")
+        print(f"Pi connecte depuis {adresse[0]}")
+        self.tampon = b""
+
+    def _recevoir(self, taille):
+        while len(self.tampon) < taille:
+            paquet = self.conn.recv(65536)
+            if not paquet:
+                return False
+            self.tampon += paquet
+        return True
+
+    def _un_message(self):
+        """Rend (type, charge) ou None si la connexion est fermee."""
+        if not self._recevoir(self.TAILLE_ENTETE):
+            return None
+        type_, taille = struct.unpack(">BI", self.tampon[:self.TAILLE_ENTETE])
+        self.tampon = self.tampon[self.TAILLE_ENTETE:]
+        if not self._recevoir(taille):
+            return None
+        charge, self.tampon = self.tampon[:taille], self.tampon[taille:]
+        return type_, charge
+
+    def read(self):
+        derniere = None
+        while True:
+            message = self._un_message()
+            if message is None:
+                return derniere
+            type_, charge = message
+            if type_ == self.TYPE_IMAGE:
+                image = cv2.imdecode(np.frombuffer(charge, np.uint8),
+                                     cv2.IMREAD_COLOR)
+                if image is not None:
+                    derniere = image
+                    # Reste-t-il des images en attente ? Si oui on continue a
+                    # vider, pour mesurer la scene actuelle et non le passe.
+                    self.conn.setblocking(False)
+                    try:
+                        self.tampon += self.conn.recv(1 << 20)
+                    except (BlockingIOError, OSError):
+                        pass
+                    finally:
+                        self.conn.setblocking(True)
+                    if len(self.tampon) < self.TAILLE_ENTETE:
+                        return derniere
+            # type 2 : une pose, dont on n'a pas besoin ici. On boucle.
+
+    def release(self):
+        try:
+            self.conn.close()
+        finally:
+            self.serveur.close()
 
 
 def _est_en_couleur(cap, essais=5):
@@ -150,6 +253,11 @@ def main():
                            help="calibration a tester (defaut %(default)s)")
     analyseur.add_argument("--images", type=int, default=60,
                            help="nombre de detections a moyenner (defaut %(default)s)")
+    analyseur.add_argument("--pi", nargs="?", const=5000, type=int,
+                           metavar="PORT",
+                           help="recevoir les images du Raspberry Pi sur le "
+                                "reseau au lieu d'une camera locale "
+                                "(port %(const)s par defaut)")
     analyseur.add_argument("--sans-fenetre", action="store_true",
                            help="ne rien afficher (utile en SSH)")
     options = analyseur.parse_args()
@@ -164,9 +272,17 @@ def main():
     print(f"  fx {fx:.2f}   fy {fy:.2f}")
     print(f"Tag de {options.tag:.3f} m, annonce a {options.reel:.3f} m\n")
 
-    camera = ouvrir_camera()
-    if camera is None:
-        return 1
+    if options.pi is not None:
+        # Le Pi tient la camera, ce PC fait la mesure et affiche la fenetre.
+        try:
+            camera = CameraReseau(options.pi)
+        except Exception as souci:
+            print(f"\nERREUR : {souci}")
+            return 1
+    else:
+        camera = ouvrir_camera()
+        if camera is None:
+            return 1
 
     demi = options.tag / 2
     coins_3d = np.array([[-demi, demi, 0], [demi, demi, 0],
