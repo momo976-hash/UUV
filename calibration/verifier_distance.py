@@ -47,9 +47,11 @@
 # retirer. On valide donc l'echelle globale, ce qui est ce qui compte pour la
 # localisation.
 import argparse
+import csv
 import socket
 import struct
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import cv2
@@ -433,6 +435,56 @@ def main():
     print("\n  Tag bien EN FACE de la camera ? Vu de biais, la distance mesuree")
     print("  reste juste (solvePnP gere l'inclinaison) mais elle est plus")
     print("  bruitee. En cas de doute, refais-la de face.")
+
+    # -- enregistrement : plus jamais une mesure perdue ---------------------
+    # Des mesures faites et jamais notees ont deja coute deux semaines de
+    # travail. Chaque lancement s'ajoute desormais a un fichier, avec tout ce
+    # qu'il faut pour reconstruire l'analyse plus tard : distance vraie,
+    # distance mesuree, montage, focale utilisee.
+    fichier_historique = ICI / "verifier_distance_historique.csv"
+    nouveau = not fichier_historique.exists()
+    with open(fichier_historique, "a", newline="") as f:
+        ecrivain = csv.writer(f)
+        if nouveau:
+            ecrivain.writerow(["horodatage", "montage", "distance_vraie_m",
+                               "distance_mesuree_m", "ecart_pct", "fx_utilise",
+                               "fx_deduit", "tag_m", "dispersion_mm"])
+        ecrivain.writerow([datetime.now().isoformat(timespec="seconds"),
+                           options.montage, f"{options.reel:.4f}",
+                           f"{mesuree:.4f}", f"{ecart:+.2f}", f"{fx:.2f}",
+                           f"{fx_deduit:.2f}", f"{options.tag:.4f}",
+                           f"{1000*dispersion:.1f}"])
+    print(f"\n  Mesure ajoutee a : {fichier_historique}")
+
+    # -- si plusieurs mesures du meme montage existent, verifier la forme ---
+    # UN SEUL point ne peut distinguer une focale fausse (erreur en pourcentage
+    # CONSTANT) d'un decalage fixe (erreur en METRES constante) — deux causes
+    # differentes qui appellent des corrections differentes. d = fx.S/s est
+    # une loi d'ECHELLE PURE : aucun choix de fx ne peut produire une
+    # ordonnee a l'origine non nulle. Si l'historique contient au moins 3
+    # mesures de CE montage, on ajuste une droite et on le dit.
+    with open(fichier_historique, newline="") as f:
+        lignes = [l for l in csv.DictReader(f) if l["montage"] == options.montage]
+    if len(lignes) >= 3:
+        vrais = np.array([float(l["distance_vraie_m"]) for l in lignes])
+        mesures = np.array([float(l["distance_mesuree_m"]) for l in lignes])
+        pente, decalage = np.polyfit(vrais, mesures, 1)
+        residus = mesures - (pente * vrais + decalage)
+        print("\n" + "-" * 66)
+        print(f"FORME DE L'ERREUR SUR {len(lignes)} MESURES DE '{options.montage}'")
+        print("-" * 66)
+        print(f"  d_mesuree = {pente:.3f} x d_vraie + {decalage:+.3f} m")
+        print(f"  residu max : {1000*np.abs(residus).max():.1f} mm")
+        if abs(decalage) > 0.02 and np.abs(residus).max() < 0.15 * vrais.mean():
+            print(f"\n  [DECALAGE FIXE DETECTE] {1000*decalage:+.0f} mm, quasi")
+            print("  independant de la distance. AUCUN reglage de focale ne peut")
+            print("  corriger cela : changer fx ne change que la pente, jamais")
+            print("  cette ordonnee a l'origine. C'est la signature d'un")
+            print("  deplacement APPARENT (coherent avec une camera qui n'a pas")
+            print("  de centre de projection unique derriere un hublot courbe).")
+            print(f"\n  CORRECTION EMPIRIQUE A APPLIQUER EN AVAL :")
+            print(f"      d_corrigee = (d_mesuree - ({decalage:+.4f})) / {pente:.4f}")
+        print("-" * 66)
     return 0
 
 
