@@ -37,6 +37,11 @@ import optique  # noqa: E402
 
 from filtre_kalman import FiltrePose
 
+try:
+    import pyrealsense2 as rs
+except ImportError:
+    rs = None          # pas de centrale : le filtre tourne sans elle
+
 CAMERA_INDEX = None
 RESOLUTION = optique.RESOLUTION
 
@@ -75,7 +80,125 @@ def angle_entre(R1, R2):
     return float(np.degrees(np.arccos(np.clip(cos, -1.0, 1.0))))
 
 
+# ===========================================================================
+# Source d'images : couleur SEULE, ou couleur + centrale inertielle
+#
+# POURQUOI UNE SEULE CONNEXION. La D435i ne se laisse pas ouvrir deux fois :
+# si OpenCV tient le flux couleur, pyrealsense2 ne peut plus atteindre le
+# module de mouvement, et l'IMU reste muette sans qu'aucune erreur ne le
+# dise. On prend donc TOUT par pyrealsense2 quand il est la, et on retombe
+# sur OpenCV sans IMU sinon — le filtre fonctionne dans les deux cas, avec ou
+# sans centrale.
+#
+# CADENCE DE L'IMU. Le pipeline se cale sur son flux le plus lent, ici la
+# couleur a 30 Hz. On ne lit donc qu'une mesure de gyro par image. Ce n'est
+# pas une perte : le filtre avance d'un pas par image, et integrer omega sur
+# les 33 ms de ce pas est exactement ce qu'il faut. La haute cadence ne
+# servirait qu'a capter des transitoires plus rapides que les images.
+# ===========================================================================
+class SourceRealSense:
+    """Couleur et centrale inertielle, depuis une seule connexion."""
+
+    def __init__(self):
+        self.pipeline = rs.pipeline()
+        config = rs.config()
+        config.enable_stream(rs.stream.color, RESOLUTION[0], RESOLUTION[1],
+                             rs.format.bgr8, 30)
+        # On demande les profils de mouvement que l'appareil ANNONCE, plutot
+        # qu'un format suppose : c'est ce qui evite "Couldn't resolve requests"
+        # quand le SDK ou le micrologiciel change ses profils.
+        offerts = {}
+        for appareil in rs.context().query_devices():
+            for capteur in appareil.sensors:
+                for profil in capteur.get_stream_profiles():
+                    flux = profil.stream_type()
+                    if flux in (rs.stream.accel, rs.stream.gyro):
+                        offerts.setdefault(flux, []).append(
+                            (profil.format(), profil.fps()))
+            if offerts:
+                break
+        self.avec_imu = (rs.stream.accel in offerts and rs.stream.gyro in offerts)
+        if self.avec_imu:
+            for flux in (rs.stream.accel, rs.stream.gyro):
+                format_, fps = max(offerts[flux], key=lambda couple: couple[1])
+                config.enable_stream(flux, format_, fps)
+        self.profil = self.pipeline.start(config)
+
+        # Rotation centrale -> camera couleur. La D435i ne les aligne pas, et
+        # passer les mesures brutes sans elle fait deriver l'engin de travers
+        # sans aucun message d'erreur.
+        self.R_imu_camera = np.eye(3)
+        if self.avec_imu:
+            try:
+                extr = (self.profil.get_stream(rs.stream.gyro)
+                        .get_extrinsics_to(self.profil.get_stream(rs.stream.color)))
+                self.R_imu_camera = np.array(extr.rotation).reshape(3, 3).T
+            except Exception:
+                pass
+        self._gyro = np.zeros(3)
+        self._accel = np.zeros(3)
+        self._imu_vue = False
+
+    def read(self):
+        images = self.pipeline.wait_for_frames()
+        for image in images:
+            if not image.is_motion_frame():
+                continue
+            motion = image.as_motion_frame()
+            d = motion.get_motion_data()
+            valeur = np.array([d.x, d.y, d.z], dtype=float)
+            if motion.get_profile().stream_type() == rs.stream.gyro:
+                self._gyro = valeur
+                self._imu_vue = True
+            else:
+                self._accel = valeur
+        couleur = images.get_color_frame()
+        if not couleur:
+            return False, None
+        return True, np.asanyarray(couleur.get_data())
+
+    def imu(self):
+        """(gyro, accel) dans le repere CAMERA, ou (None, None)."""
+        if not (self.avec_imu and self._imu_vue):
+            return None, None
+        return self.R_imu_camera @ self._gyro, self.R_imu_camera @ self._accel
+
+    def release(self):
+        self.pipeline.stop()
+
+
+class SourceOpenCV:
+    """Couleur seule : le filtre tourne, sans apport inertiel."""
+
+    avec_imu = False
+
+    def __init__(self, cap):
+        self.cap = cap
+
+    def read(self):
+        return self.cap.read()
+
+    def imu(self):
+        return None, None
+
+    def release(self):
+        self.cap.release()
+
+
 def ouvrir_camera():
+    if rs is not None:
+        try:
+            source = SourceRealSense()
+            ok, img = source.read()
+            if ok and img is not None:
+                hh, ww = img.shape[:2]
+                etat = "AVEC centrale inertielle" if source.avec_imu else "sans IMU"
+                print(f"Camera : RealSense {ww}x{hh}, {etat}")
+                return source, ww, hh
+            source.release()
+        except Exception as souci:
+            print(f"RealSense indisponible ({souci}) — essai par OpenCV, sans IMU")
+
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
     for index in indices:
@@ -87,8 +210,8 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera utilisee : index={index}, backend={nom}, {ww}x{hh}")
-                    return cap, ww, hh
+                    print(f"Camera : OpenCV index={index}, {nom}, {ww}x{hh}, sans IMU")
+                    return SourceOpenCV(cap), ww, hh
             cap.release()
     return None, 0, 0
 
@@ -273,8 +396,12 @@ while True:
     maintenant = time.time()
     dt = 0.0 if dernier_temps is None else maintenant - dernier_temps
     dernier_temps = maintenant
+    gyro_mesure, accel_mesure = cam.imu()
     if filtre_actif and connus_vus:
-        filtre.predire(dt)
+        # Le gyro propage l'orientation entre deux tags, l'accelerometre tient
+        # le roulis et le tangage. Sans centrale les deux valent None, et la
+        # prediction retombe sur l'hypothese "vitesse constante" d'avant.
+        filtre.predire(dt, gyro=gyro_mesure, accel=accel_mesure)
         for i in connus_vus:
             T_i = carte[i] @ inverse(poses[i])           # pose camera vue par le tag i
             filtre.ajouter_tag(T_i[:3, 3], carte[i][:3, 3],
@@ -315,8 +442,12 @@ while True:
     # --- affichage ---
     unite = "m" if mode == 0 else "deg"
     etat_filtre = "ON" if filtre_actif else "OFF"
+    # L'etat de l'IMU est affiche en permanence : une centrale absente ou
+    # muette n'empeche rien de tourner, et sans ce temoin on croirait la
+    # fusion active alors qu'elle ne l'est pas.
+    etat_imu = "IMU" if gyro_mesure is not None else "sans IMU"
     cv2.putText(image, f"MODE : {MODES[mode]}   monde : {sorted(carte)}   "
-                       f"filtre(f) : {etat_filtre}", (10, 26),
+                       f"filtre(f) : {etat_filtre}   {etat_imu}", (10, 26),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
     y = 52
     for B in list(candidats):
