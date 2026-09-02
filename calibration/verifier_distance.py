@@ -525,28 +525,82 @@ def main():
     # une loi d'ECHELLE PURE : aucun choix de fx ne peut produire une
     # ordonnee a l'origine non nulle. Si l'historique contient au moins 3
     # mesures de CE montage, on ajuste une droite et on le dit.
+    # On ne garde que les mesures faites avec LA MEME FOCALE. Melanger deux
+    # calibrations du meme montage — avant et apres une correction — donne une
+    # droite qui ne decrit aucune des deux, et un decalage apparent qui n'est
+    # que la marche entre elles. C'est arrive : les trois mesures a fx 711 et
+    # les trois a fx 791 ajustees ensemble annoncaient un decalage de 28 mm
+    # qui n'existait pas.
     with open(fichier_historique, newline="") as f:
-        lignes = [l for l in csv.DictReader(f) if l["montage"] == options.montage]
+        lignes = [l for l in csv.DictReader(f)
+                  if l["montage"] == options.montage
+                  and abs(float(l["fx_utilise"]) - fx) < 0.01]
     if len(lignes) >= 3:
         vrais = np.array([float(l["distance_vraie_m"]) for l in lignes])
         mesures = np.array([float(l["distance_mesuree_m"]) for l in lignes])
-        pente, decalage = np.polyfit(vrais, mesures, 1)
-        residus = mesures - (pente * vrais + decalage)
+        # La dispersion image-a-image, enregistree a chaque mesure, sert de
+        # barre d'erreur. Sans elle on ne peut pas dire si un decalage est
+        # reel ou s'il tient dans le bruit — et avec 3 points et 2 parametres,
+        # une droite passe TOUJOURS bien.
+        sigmas = np.array([max(float(l["dispersion_mm"]), 1.0) for l in lignes])
+        sigmas = sigmas / 1000.0
+
         print("\n" + "-" * 66)
-        print(f"FORME DE L'ERREUR SUR {len(lignes)} MESURES DE '{options.montage}'")
+        print(f"FORME DE L'ERREUR SUR {len(lignes)} MESURES DE "
+              f"'{options.montage}' A fx {fx:.2f}")
         print("-" * 66)
-        print(f"  d_mesuree = {pente:.3f} x d_vraie + {decalage:+.3f} m")
-        print(f"  residu max : {1000*np.abs(residus).max():.1f} mm")
-        if abs(decalage) > 0.02 and np.abs(residus).max() < 0.15 * vrais.mean():
-            print(f"\n  [DECALAGE FIXE DETECTE] {1000*decalage:+.0f} mm, quasi")
-            print("  independant de la distance. AUCUN reglage de focale ne peut")
-            print("  corriger cela : changer fx ne change que la pente, jamais")
-            print("  cette ordonnee a l'origine. C'est la signature d'un")
-            print("  deplacement APPARENT (coherent avec une camera qui n'a pas")
-            print("  de centre de projection unique derriere un hublot courbe).")
+
+        # Ajustement pondere, avec l'incertitude sur les deux parametres.
+        A = np.vstack([vrais, np.ones_like(vrais)]).T
+        W = np.diag(1.0 / sigmas ** 2)
+        try:
+            covariance = np.linalg.inv(A.T @ W @ A)
+        except np.linalg.LinAlgError:
+            covariance = None
+        if covariance is None or len(lignes) < 3:
+            pente, decalage = np.polyfit(vrais, mesures, 1)
+            sigma_decalage = float("inf")
+        else:
+            pente, decalage = covariance @ A.T @ W @ mesures
+            sigma_decalage = float(np.sqrt(covariance[1, 1]))
+
+        # Modele le plus simple : pure echelle, sans decalage.
+        echelle = float(np.sum(vrais * mesures / sigmas ** 2)
+                        / np.sum(vrais ** 2 / sigmas ** 2))
+
+        print(f"  pure echelle : d_mesuree = {echelle:.4f} x d_vraie")
+        print(f"                 -> fx ideal = {fx / echelle:.1f} "
+              f"(utilise : {fx:.2f})")
+        print(f"  avec decalage: d_mesuree = {pente:.4f} x d_vraie "
+              f"{decalage:+.4f} m")
+        if np.isfinite(sigma_decalage):
+            print(f"                 decalage = {1000*decalage:+.0f} "
+                  f"+/- {1000*sigma_decalage:.0f} mm  "
+                  f"({abs(decalage)/sigma_decalage:.1f} sigma)")
+
+        significatif = (np.isfinite(sigma_decalage)
+                        and abs(decalage) > 2.0 * sigma_decalage
+                        and abs(decalage) > 0.02)
+        if significatif:
+            print(f"\n  [DECALAGE FIXE, SIGNIFICATIF] {1000*decalage:+.0f} mm.")
+            print("  AUCUN reglage de focale ne peut corriger cela : changer fx")
+            print("  ne change que la pente, jamais cette ordonnee a l'origine.")
+            print("  C'est la signature d'un deplacement APPARENT (coherent avec")
+            print("  une camera sans centre de projection unique derriere un")
+            print("  hublot courbe).")
             print(f"\n  CORRECTION EMPIRIQUE A APPLIQUER EN AVAL :")
             print(f"      d_corrigee = (d_mesuree - ({decalage:+.4f})) / {pente:.4f}")
+        elif np.isfinite(sigma_decalage):
+            print(f"\n  Le decalage tient dans le bruit des mesures : une pure")
+            print(f"  erreur d'echelle suffit a tout expliquer, donc la focale")
+            print(f"  seule. Pour le trancher pour de bon, mesurer A COURTE")
+            print(f"  DISTANCE (0.5 m) : c'est la qu'un decalage fixe se voit le")
+            print(f"  plus en pourcentage, alors qu'une erreur d'echelle donne")
+            print(f"  le meme pourcentage a toutes les distances.")
         print("-" * 66)
+    elif len(lignes) > 0:
+        print(f"\n  ({len(lignes)} mesure(s) a cette focale ; il en faut 3 a des")
+        print("   distances differentes pour distinguer echelle et decalage)")
     return 0
 
 

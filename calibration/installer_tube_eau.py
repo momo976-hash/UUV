@@ -153,6 +153,39 @@ def main():
     np.savez(fichier, K=K, dist=DIST, rms=RMS, vues=VUES,
              largeur=640, hauteur=480)
     print(f"\nInstallee dans : {fichier}")
+
+    # Le fichier ROS doit suivre, sinon le noeud continue de publier les
+    # anciennes intrinseques dans /camera_info et tout ce qui ecoute ce topic
+    # mesure faux — sans qu'aucun des deux cotes ne s'en apercoive.
+    yaml = DOSSIER / "tube_eau_ros.yaml"
+    lignes = [
+        f"# montage : tube_eau  ({nom.lower()}, ecrit par installer_tube_eau.py)",
+        "image_width: 640",
+        "image_height: 480",
+        "camera_name: realsense_color",
+        "camera_matrix:",
+        "  rows: 3",
+        "  cols: 3",
+        "  data: [" + ", ".join(f"{v:.8f}" for v in K.flatten()) + "]",
+        "distortion_model: plumb_bob",
+        "distortion_coefficients:",
+        "  rows: 1",
+        f"  cols: {DIST.size}",
+        "  data: [" + ", ".join(f"{v:.8f}" for v in DIST) + "]",
+        "rectification_matrix:",
+        "  rows: 3",
+        "  cols: 3",
+        "  data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]",
+        "projection_matrix:",
+        "  rows: 3",
+        "  cols: 4",
+        "  data: [" + ", ".join(
+            f"{v:.8f}" for v in np.hstack([K, np.zeros((3, 1))]).flatten()) + "]",
+    ]
+    yaml.write_text("\n".join(lignes) + "\n", encoding="utf-8")
+    print(f"Fichier ROS ecrit : {yaml}")
+    print("  ros2 run <pkg> camera_info_relay --ros-args \\")
+    print(f"      -p calibration_file:={yaml}")
     print("\nA verifier au bassin, aux memes distances qu'avant :")
     print("  python verifier_distance.py --reel 1.0 --tag 0.11732 --pi")
     print("  python verifier_distance.py --reel 1.5 --tag 0.11732 --pi")

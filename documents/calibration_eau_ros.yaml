@@ -1,12 +1,22 @@
-# montage : tube_eau  (genere par calibration_eau.py)
-# 15 vues, RMS 0.7793 px
+# montage : tube_eau  (focale corrigee par mesure sur distances connues)
+#
+# La calibration au damier du 02/09 donnait fx 711.28, fy 595.86. Elle
+# mesurait toutes les distances 10 % trop courtes, et son fy etait plus
+# petit qu'en air (602.37), ce que la refraction interdit.
+#
+# fx : deduit de trois mesures sur distances connues (1.0, 1.5, 2.0 m).
+# fy : fx / anamorphose predite par optique.py (1.2859) — NON mesure.
+# distorsion : celle du damier, inchangee (polynome monotone verifie).
+#
+# Verifie au bassin apres correction : -1.6 %, -0.9 %, -0.3 % aux trois
+# distances, contre -11.1 %, -9.6 %, -10.0 % avant.
 image_width: 640
 image_height: 480
 camera_name: realsense_color
 camera_matrix:
   rows: 3
   cols: 3
-  data: [711.28204841, 0.00000000, 320.75619547, 0.00000000, 595.85847624, 267.37226529, 0.00000000, 0.00000000, 1.00000000]
+  data: [791.34000000, 0.00000000, 320.75619547, 0.00000000, 615.40000000, 267.37226529, 0.00000000, 0.00000000, 1.00000000]
 distortion_model: plumb_bob
 distortion_coefficients:
   rows: 1
@@ -19,4 +29,4 @@ rectification_matrix:
 projection_matrix:
   rows: 3
   cols: 4
-  data: [711.28204841, 0.00000000, 320.75619547, 0.00000000, 0.00000000, 595.85847624, 267.37226529, 0.00000000, 0.00000000, 0.00000000, 1.00000000, 0.00000000]
+  data: [791.34000000, 0.00000000, 320.75619547, 0.00000000, 0.00000000, 615.40000000, 267.37226529, 0.00000000, 0.00000000, 0.00000000, 1.00000000, 0.00000000]
