@@ -56,6 +56,26 @@
 # et distance mesuree, on DEDUIT la focale correcte.
 #
 # ---------------------------------------------------------------------------
+# CALIBRATION EN SERVICE : 838.45 / 652.10 — NE PAS LA REAJUSTER SUR CE SCRIPT
+# ---------------------------------------------------------------------------
+# Ce script et le pipeline de Josiah (apriltag_ros, sur l'image rectifiee par
+# calibrator_node) mesurent le MEME tag, aux MEMES distances vraies, avec la
+# MEME matrice K — et divergent d'un facteur constant de 1.047 (verifie a
+# 33 sigma, voir l'historique du 02/09). Josiah obtient les bonnes distances ;
+# ce script en deduit "fx devrait valoir 801", ce qui est FAUX : fx est
+# identique des deux cotes, donc l'ecart ne peut venir que de d = fx.S/s, et
+# uniquement de S (taille de tag declaree) ou de s (la ou CE detecteur
+# — cv2.aruco — pose les coins, different de la bibliotheque AprilTag de
+# Josiah). Rejouer une correction de focale a partir de CE script reproduirait
+# l'erreur d'installer_tube_eau.py qui a suivi les premieres mesures du bassin
+# a la lettre et a du etre annulee.
+#
+# Josiah garde 838.45 / 652.10. Ce script sert a EPROUVER une focale
+# candidate (--focale) et a comparer des COTES APPARENTS (colonne cote_px de
+# l'historique) entre les deux chaines — pas a corriger fx tout seul tant que
+# ce facteur 1.047 n'est pas explique.
+#
+# ---------------------------------------------------------------------------
 # CE QUE LE SCRIPT NE PEUT PAS FAIRE
 # ---------------------------------------------------------------------------
 # Il valide fx, pas fy. La distance vient surtout de la taille apparente du
@@ -547,11 +567,20 @@ def main():
         print("  Refais la mesure a une AUTRE distance. Si l'ecart en pourcent")
         print("  reste le meme, il est reel ; s'il change, il vient de la mesure")
         print("  au metre ou de l'inclinaison du tag.")
+        print("\n  AVANT DE TOUCHER A fx : compare le cote_px de cette mesure a")
+        print("  celui du pipeline en service (apriltag_ros). Le 02/09, les deux")
+        print("  chaines divergeaient d'un facteur constant de 1.047 avec LA")
+        print("  MEME calibration : ce n'etait pas fx, c'etait S ou s. Voir")
+        print("  l'en-tete de ce fichier.")
     else:
-        print("VERDICT : la calibration se trompe nettement de distance.")
-        print(f"  La focale correcte serait plutot {fx_deduit:.0f} que {fx:.0f}.")
-        print("  Refais la mesure a une autre distance pour confirmer avant")
-        print("  de changer quoi que ce soit.")
+        print("VERDICT : la calibration se trompe nettement de distance —")
+        print("  SI cette mesure est fiable.")
+        print(f"  Le calcul d = fx.S/s donnerait fx {fx_deduit:.0f} au lieu de "
+              f"{fx:.0f}, mais ce n'est")
+        print("  valable que si S (taille de tag) et s (detection des coins)")
+        print("  sont les memes que ceux du pipeline en service. Ce n'etait pas")
+        print("  le cas le 02/09 : NE CHANGE PAS fx sur la seule foi de ce")
+        print("  script tant que cet ecart n'est pas explique (voir en-tete).")
     print("=" * 66)
     print("\n  Tag bien EN FACE de la camera ? Vu de biais, la distance mesuree")
     print("  reste juste (solvePnP gere l'inclinaison) mais elle est plus")
