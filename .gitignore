@@ -20,3 +20,9 @@ demo_kalman.png
 bruit_tag.csv
 limites_tag.csv
 calibration/montages/
+
+# Le montage physique de CETTE machine (nue_air / tube_air / tube_eau).
+# Volontairement pas versionne : le PC du bassin et le portable de bureau
+# n'ont pas la meme camera dans le meme milieu, et il ne faut surtout pas
+# qu'un git pull vienne changer le reglage de l'autre.
+calibration/montage_local.txt

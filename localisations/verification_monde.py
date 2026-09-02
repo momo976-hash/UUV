@@ -52,8 +52,12 @@ LISSAGE = 15
 
 MONTAGE = optique.MONTAGE_ACTIF
 # L'optique vient de optique.py : camera, tube, hublot, milieu. Le montage
-# n'est plus ecrit ici : il se regle en UN seul endroit, optique.MONTAGE_ACTIF
-# (ou pour une seule commande : UUV_MONTAGE=tube_eau python ce_script.py).
+# n'est ecrit nulle part dans le code : optique.py le lit dans le fichier
+# montage_local.txt propre a CETTE machine, et le demande une fois s'il
+# n'existe pas encore. Pour le changer :
+#     python calibration/regler_montage.py
+# Pour une seule commande, sans rien deregler :
+#     UUV_MONTAGE=nue_air python ce_script.py
 # Tant qu'il n'est pas calibre, optique.py retombe sur la camera nue en le
 # disant.
 K_CALIB, DIST_CALIB = optique.charger(MONTAGE)
@@ -313,6 +317,7 @@ if not os.path.exists(CSV):
         csv.writer(fic).writerow(ENTETE)
 
 print("=" * 66)
+optique.annoncer_montage("MONTAGE :")
 print("VERIFICATION DANS UN REPERE MONDE (deplacement libre entre tags)")
 print("  1. regarde le tag de reference, appuie sur 'o'")
 print("  2. bouge vers le 2e tag : la liaison se fait TOUTE SEULE en chemin")
@@ -324,6 +329,13 @@ while True:
     ok, image = cam.read()
     if not ok:
         continue
+    # Garde-fou : l'image contredit-elle le montage declare ? Ne se declenche
+    # qu'une fois, et seulement quand le doute n'est pas permis (voir
+    # optique.controler_image).
+    alerte = optique.controler_image(image, MONTAGE)
+    if alerte:
+        print(f"\n*** MONTAGE SUSPECT : {alerte}\n")
+
     gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     coins, ids, _ = detecteur.detectMarkers(gris)
 

@@ -243,6 +243,28 @@ def charger_calibration(nom):
     return None, None, None
 
 
+# Le montage physique de la machine, ecrit une fois par regler_montage.py.
+# On le relit ici a la main plutot que d'importer optique.py : ce script part
+# souvent seul sur le PC du bassin, sans le reste du depot, et il doit
+# continuer a marcher tel quel.
+MONTAGES_CONNUS = ("nue_air", "tube_air", "tube_eau")
+
+
+def montage_de_la_machine(defaut="tube_eau"):
+    """Ce que montage_local.txt dit de CETTE machine, ou `defaut`."""
+    for dossier in (ICI, ICI / "calibration", ICI.parent / "calibration"):
+        fichier = dossier / "montage_local.txt"
+        try:
+            texte = fichier.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for ligne in texte.splitlines():
+            ligne = ligne.split("#", 1)[0].strip()
+            if ligne in MONTAGES_CONNUS:
+                return ligne
+    return defaut
+
+
 def main():
     analyseur = argparse.ArgumentParser(
         description="Verifie une calibration sur une distance connue, sans fenetre.")
@@ -251,8 +273,9 @@ def main():
     analyseur.add_argument("--tag", type=float, default=TAILLES_CONNUES[0],
                            help=f"cote du tag en metres (defaut %(default)s ; "
                                 f"l'autre tag fait {TAILLES_CONNUES[1]})")
-    analyseur.add_argument("--montage", default="tube_eau",
-                           help="calibration a tester (defaut %(default)s)")
+    analyseur.add_argument("--montage", default=montage_de_la_machine(),
+                           help="calibration a tester (defaut %(default)s, lu "
+                                "dans montage_local.txt)")
     analyseur.add_argument("--images", type=int, default=60,
                            help="nombre de detections a moyenner (defaut %(default)s)")
     analyseur.add_argument("--pi", nargs="?", const=5000, type=int,
@@ -268,6 +291,20 @@ def main():
     if K is None:
         print(f"ERREUR : calibration '{options.montage}' introuvable.")
         print("Cherchee dans montages/ a cote de ce script.")
+        trouvees = sorted(
+            {f.stem for dossier in (ICI / "montages",
+                                    ICI / "calibration" / "montages", ICI)
+             if dossier.is_dir() for f in dossier.glob("*.npz")})
+        if trouvees:
+            print(f"\nCalibrations presentes ici : {', '.join(trouvees)}")
+            print(f"  soit tu voulais l'une d'elles :  --montage {trouvees[0]}")
+            print(f"  soit '{options.montage}' n'a pas encore ete calibre sur")
+            print("  cette machine :")
+            print(f"      python calibration.py --montage {options.montage}")
+        else:
+            print("\nAucune calibration n'est presente a cote de ce script.")
+            print("Il manque le dossier montages/ — il n'est pas versionne,")
+            print("il faut le copier depuis la machine qui a calibre.")
         return 1
     fx, fy = float(K[0, 0]), float(K[1, 1])
     print(f"Calibration : {fichier}")

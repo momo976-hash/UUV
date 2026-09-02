@@ -229,6 +229,39 @@ def relire_le_montage(K, erreur_rms):
     print("  eleve qu'en air est attendu — pas forcement une mauvaise calibration.")
 
 
+def retenir_le_montage_de_la_machine():
+    """Proposer que cette machine se souvienne du montage qu'on vient de calibrer.
+
+    Qui vient de calibrer 'tube_eau' est, neuf fois sur dix, l'ordinateur du
+    bord du bassin. Le lui faire retenir tout de suite evite le scenario qui
+    nous a deja coute : quelqu'un lance une mesure sur ce PC des semaines plus
+    tard, personne ne pense a preciser le montage, et les distances sortent
+    fausses d'un quart sans le moindre message.
+
+    On propose, on n'impose pas : on peut tres bien calibrer un montage depuis
+    une machine qui n'est pas celle qui mesurera.
+    """
+    if optique.MONTAGE_ACTIF == MONTAGE:
+        return
+    print(f"\nCette machine est reglee sur '{optique.MONTAGE_ACTIF}' "
+          f"({optique.MONTAGE_ORIGINE}),")
+    print(f"mais tu viens de calibrer '{MONTAGE}'.")
+    try:
+        if not sys.stdin.isatty():
+            print(f"  -> reglage inchange. Pour le changer : "
+                  f"python calibration/regler_montage.py {MONTAGE}")
+            return
+        reponse = input(f"  Cette machine devient-elle '{MONTAGE}' ? [O/n] ")
+    except (EOFError, KeyboardInterrupt, AttributeError, ValueError):
+        print()
+        return
+    if reponse.strip().lower() in ("", "o", "oui", "y", "yes"):
+        fichier = optique.ecrire_montage_local(MONTAGE)
+        print(f"  -> retenu dans {fichier}. Plus rien a preciser ensuite.")
+    else:
+        print(f"  -> reglage inchange ('{optique.MONTAGE_ACTIF}').")
+
+
 def calibrer(points_3d, points_2d, taille_image):
     """Calcule les parametres de la camera et l'erreur de reprojection."""
     erreur_rms, K, dist, rvecs, tvecs = cv2.calibrateCamera(
@@ -265,6 +298,7 @@ def calibrer(points_3d, points_2d, taille_image):
     print(f"distorsion = {dist.ravel()}")
 
     print(f"\nParametres sauves dans {fichier}")
+    retenir_le_montage_de_la_machine()
     relire_le_montage(K, erreur_rms)
 
     # Export au format YAML standard ROS (camera_calibration_parsers).

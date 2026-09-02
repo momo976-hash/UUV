@@ -14,18 +14,18 @@ attend, et qui sont pour l'instant supposes ou mesures en air.
 | `SIGMA_ACCELERATION` | 0.4 m/s2, **suppose** | `verification_monde.py` | 5 |
 | `DERIVE_GYRO_DEG_S` | 10 deg/s, **suppose** | `verification_monde.py` | 5 |
 
-## En tout : 4 lignes a changer, dans 2 fichiers
+## En tout : 3 lignes a changer, dans 1 seul fichier
 
-Rien d'autre. Les scripts qui les utilisent vont tous puiser a ces deux
-endroits.
+Rien d'autre. Les scripts qui les utilisent vont tous y puiser.
 
-**1. `calibration/optique.py`** — le montage (etape 2)
+**Le montage (etape 2) ne se change plus a la main du tout.** Il se regle
+une fois par ordinateur, avec une commande :
 
-```python
-MONTAGE_ACTIF = os.environ.get("UUV_MONTAGE", "tube_air")
+```
+python calibration/regler_montage.py
 ```
 
-**2. `localisations/filtre_kalman.py`** — bloc « LES TROIS NOMBRES A
+**`localisations/filtre_kalman.py`** — bloc « LES TROIS NOMBRES A
 MESURER », vers la ligne 190 (etapes 4 et 5)
 
 ```python
@@ -69,21 +69,32 @@ il faut comprendre pourquoi avant d'aller plus loin.
 
 ## Etape 2 — Basculer sur `tube_eau`
 
-**Une seule ligne**, dans `calibration/optique.py` :
-
-```python
-MONTAGE_ACTIF = os.environ.get("UUV_MONTAGE", "tube_air")
-                                              ^^^^^^^^^^
-                                              mettre "tube_eau"
-```
-
-Tous les scripts lisent cette valeur. Il n'y a rien d'autre a editer.
-
-Variante sans rien modifier, pratique au bord du bassin ou pour comparer
-deux montages sur la meme manip :
+**Aucun fichier Python a editer.** Sur l'ordinateur qui va mesurer :
 
 ```
-UUV_MONTAGE=tube_eau python localisations/verification_monde.py
+python calibration/regler_montage.py tube_eau
+```
+
+C'est a faire **une fois par machine**, pas une fois par manip. Le reglage
+est ecrit dans `calibration/montage_local.txt`, qui n'est **pas** versionne :
+le PC du bord du bassin reste sur `tube_eau` et le portable de bureau sur
+`nue_air`, sans que l'un vienne deregler l'autre au prochain `git pull`.
+
+Si personne n'a encore repondu sur cette machine, le premier script lance
+pose la question tout seul et retient la reponse. Il n'y a donc rien a se
+transmettre par message.
+
+Pour verifier a tout moment :
+
+```
+python calibration/regler_montage.py --montrer
+```
+
+Variante le temps d'une seule commande, pour comparer deux montages sur la
+meme manip sans rien deregler :
+
+```
+UUV_MONTAGE=tube_air python localisations/verification_monde.py
 ```
 
 Verifier tout de suite que la bascule a pris :
@@ -439,21 +450,25 @@ defaut. Rien ne distingue alors « la camera a bouge » de « le tag a bouge ».
 
 ## Recapitulatif — une seule session de bassin
 
-Tout se fait dans l'eau, dans cet ordre. Les etapes 2, 4 et 5 demandent
+Tout se fait dans l'eau, dans cet ordre. Seules les etapes 4 et 5 demandent
 d'ouvrir un fichier ; les autres, rien du tout.
 
 | # | Sur place | A editer ensuite |
 |---|---|---|
 | 1 | `calibration.py --montage tube_eau` — damier, 30 vues | — |
-| 2 | *(au bord du bassin, sur le portable)* | `optique.py` : **1 ligne** |
+| 2 | `regler_montage.py tube_eau` — **une fois par machine** | — (aucun fichier) |
 | 3 | Poser les tags, `o` puis se deplacer pour la carte | — |
 | 4 | `mesurer_bruit_tag.py` — captures mode `d` | `filtre_kalman.py` : **1 ligne** |
 | 5 | `verification_monde.py` — parcours type mission, `q` | `filtre_kalman.py` : **2 lignes** |
 | 6 | `verification_monde.py` — 15 mesures au metre, `q` | — (le verdict s'affiche) |
 | 7 | — | — (inclus dans le verdict de 6) |
 
-**Total : 4 lignes, dans 2 fichiers.** Et les scripts des etapes 4 et 5
+**Total : 3 lignes, dans 1 seul fichier.** Et les scripts des etapes 4 et 5
 affichent la ligne exacte a recopier.
 
 L'etape 2 ne peut pas attendre : sans elle, les etapes 3 a 6 sont mesurees
 avec la focale de l'air, et le bilan de l'etape 6 ne veut plus rien dire.
+A la fin de l'etape 1, `calibration.py` propose d'ailleurs de la faire tout
+seul — repondre « oui » suffit. Et si personne n'a rien regle sur cette
+machine, le premier script lance pose la question et retient la reponse :
+rien a se transmettre entre les deux PC.

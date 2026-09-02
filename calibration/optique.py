@@ -53,6 +53,7 @@
 #   python optique.py            le rapport complet du montage
 #   from optique import ...      dans les autres scripts
 import os
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -127,24 +128,181 @@ DOSSIER_MONTAGES = next(
      if d.is_dir()),
     _ICI / "montages")
 
-# LE MONTAGE ACTIF — l'unique ligne a changer le jour ou l'engin entre dans
-# l'eau. Tous les scripts lisent cette valeur au lieu de la recopier.
+# LE MONTAGE ACTIF — trouve tout seul, sans que personne n'ait a editer de
+# fichier Python.
 #
-# Avant ce reglage, le nom du montage etait ecrit en dur dans dix fichiers.
-# En oublier un ne fait rien planter : le script continue avec la focale de
-# l'air, les distances sont fausses de pres d'un tiers, et aucun message ne
-# le dit. C'est exactement le genre d'erreur qu'on ne trouve qu'apres avoir
-# mesure pendant des semaines.
+# Le probleme concret : deux ordinateurs travaillent sur le meme depot. Le
+# portable de bureau a la camera nue sur une table ; le PC du bord du bassin
+# a la camera dans le tube, sous l'eau. Le bon montage n'est donc pas une
+# propriete du CODE, c'est une propriete de la MACHINE. Ecrire le nom en dur
+# dans un fichier versionne oblige les deux a se contredire a chaque git pull,
+# et surtout oblige a se prevenir par message — le jour ou personne ne previent,
+# les distances sont fausses d'un tiers et rien ne le signale.
 #
-# On peut aussi la forcer le temps d'une seule commande, sans rien editer —
-# pratique au bord du bassin, ou pour comparer deux montages sur la meme
-# manip :
-#     UUV_MONTAGE=tube_eau python localisations/verification_monde.py
-MONTAGE_ACTIF = os.environ.get("UUV_MONTAGE", "tube_air")
-if MONTAGE_ACTIF not in MONTAGES:
-    raise SystemExit(
-        f"[optique] UUV_MONTAGE='{MONTAGE_ACTIF}' inconnu. "
-        f"Montages possibles : {', '.join(MONTAGES)}")
+# La chaine de decision, du plus fort au plus faible :
+#
+#   1. la variable d'environnement UUV_MONTAGE. Elle ne dure que le temps
+#      d'une commande : c'est la derogation ponctuelle, pour comparer deux
+#      montages sur la meme manip sans rien deregler.
+#          UUV_MONTAGE=nue_air python localisations/verification_monde.py
+#
+#   2. le fichier montage_local.txt, ecrit UNE fois par machine. Il n'est PAS
+#      versionne (.gitignore) : c'est exactement ce qui permet aux deux PC de
+#      ne pas etre d'accord sans se battre. Le PC du bassin y met "tube_eau"
+#      une bonne fois, et plus personne n'a rien a se dire ensuite.
+#
+#   3. a defaut, la question est posee au terminal au premier lancement, et la
+#      reponse est ecrite dans ce fichier. Une seule fois par machine.
+#
+# Ce qu'on ne fait deliberement PAS : deviner en silence. Aucune image ne
+# permet de distinguer a coup sur l'air de l'eau — la balance des blancs de la
+# camera efface le bleu, et la profondeur RealSense se trompe du meme facteur
+# que les tags, donc les deux restent d'accord entre elles meme quand elles ont
+# tort. Une question au premier lancement coute dix secondes ; une mauvaise
+# devinette a coute deux semaines.
+FICHIER_MONTAGE_LOCAL = _ICI / "montage_local.txt"
+
+
+def _lire_montage_local():
+    """Le montage retenu sur CETTE machine, ou None s'il n'y en a pas."""
+    try:
+        texte = FICHIER_MONTAGE_LOCAL.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for ligne in texte.splitlines():
+        ligne = ligne.split("#", 1)[0].strip()
+        if not ligne:
+            continue
+        if ligne in MONTAGES:
+            return ligne
+        print(f"[optique] {FICHIER_MONTAGE_LOCAL.name} : '{ligne}' n'est pas "
+              f"un montage connu, ligne ignoree.")
+    return None
+
+
+def ecrire_montage_local(nom):
+    """Fixe le montage de CETTE machine, une fois pour toutes."""
+    if nom not in MONTAGES:
+        raise ValueError(f"montage inconnu : {nom!r}")
+    FICHIER_MONTAGE_LOCAL.write_text(
+        "# Le montage physique de CETTE machine-ci.\n"
+        "# Une seule ligne utile : nue_air, tube_air ou tube_eau.\n"
+        "# Ce fichier n'est pas versionne : chaque ordinateur garde le sien.\n"
+        "# Pour en changer :  python calibration/regler_montage.py\n"
+        f"{nom}\n", encoding="utf-8")
+    return FICHIER_MONTAGE_LOCAL
+
+
+def montage_probable():
+    """Le montage le plus vraisemblable vu ce qui est calibre sur la machine.
+
+    Sert uniquement de reponse par defaut a la question posee au premier
+    lancement : une machine sur laquelle quelqu'un a pris la peine de calibrer
+    tube_eau est tres probablement celle du bassin. Ce n'est qu'une suggestion,
+    jamais une decision.
+    """
+    for nom in ("tube_eau", "tube_air", "nue_air"):
+        if (DOSSIER_MONTAGES / f"{nom}.npz").exists():
+            return nom
+    return "nue_air"
+
+
+_DESCRIPTIONS = {
+    "nue_air": "camera nue, a l'air          (banc, bureau, table)",
+    "tube_air": "camera dans le tube, a l'air (essai a sec)",
+    "tube_eau": "camera dans le tube, DANS L'EAU  (bassin)",
+}
+
+
+def _demander_montage():
+    """Pose la question une fois, au terminal. None si on ne peut pas."""
+    if os.environ.get("UUV_MONTAGE_MUET"):
+        return None
+    try:
+        if not (sys.stdin and sys.stdin.isatty()):
+            return None
+    except (AttributeError, ValueError):
+        return None
+
+    suggere = montage_probable()
+    print("\n" + "=" * 68)
+    print("QUEL EST LE MONTAGE DE CETTE MACHINE ?")
+    print("=" * 68)
+    print("Question posee UNE seule fois par ordinateur. La reponse est gardee")
+    print(f"dans {FICHIER_MONTAGE_LOCAL} et ne part pas sur git :")
+    print("chaque PC garde la sienne.\n")
+    for indice, nom in enumerate(MONTAGES, start=1):
+        marque = " <- suggere" if nom == suggere else ""
+        print(f"  {indice}) {nom:9s} {_DESCRIPTIONS[nom]}{marque}")
+    print(f"\n  Entree seule = {suggere}")
+    try:
+        reponse = input("  Ton choix : ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+
+    if not reponse:
+        choisi = suggere
+    elif reponse.isdigit() and 1 <= int(reponse) <= len(MONTAGES):
+        choisi = MONTAGES[int(reponse) - 1]
+    elif reponse in MONTAGES:
+        choisi = reponse
+    else:
+        print(f"  '{reponse}' n'est pas un choix valable, on garde {suggere}.")
+        choisi = suggere
+
+    try:
+        fichier = ecrire_montage_local(choisi)
+        print(f"  -> montage '{choisi}' retenu, ecrit dans {fichier}")
+        print("     Pour en changer plus tard :")
+        print("       python calibration/regler_montage.py")
+    except OSError as erreur:
+        print(f"  -> montage '{choisi}' retenu (non enregistre : {erreur})")
+    print("=" * 68 + "\n")
+    return choisi
+
+
+def _resoudre_montage():
+    """Renvoie (montage, d'ou il vient)."""
+    force = os.environ.get("UUV_MONTAGE")
+    if force:
+        if force not in MONTAGES:
+            raise SystemExit(
+                f"[optique] UUV_MONTAGE='{force}' inconnu. "
+                f"Montages possibles : {', '.join(MONTAGES)}")
+        return force, "variable UUV_MONTAGE"
+
+    local = _lire_montage_local()
+    if local:
+        return local, FICHIER_MONTAGE_LOCAL.name
+
+    demande = _demander_montage()
+    if demande:
+        return demande, "reponse au premier lancement"
+
+    # Ni reglage, ni terminal pour poser la question : on prend le plus
+    # prudent — la camera nue — et on le DIT. Le silence est le seul vrai
+    # danger ici.
+    defaut = "nue_air"
+    if not os.environ.get("UUV_MONTAGE_MUET"):
+        print(f"[optique] montage non regle sur cette machine, on prend "
+              f"'{defaut}'.")
+        print("[optique]   si la camera est dans le tube ou dans l'eau, les "
+              "distances seront fausses.")
+        print("[optique]   pour regler : python calibration/regler_montage.py")
+    return defaut, "defaut faute de reglage"
+
+
+MONTAGE_ACTIF, MONTAGE_ORIGINE = _resoudre_montage()
+
+
+def resume_montage():
+    """Une ligne lisible : quel montage, et d'ou vient la decision."""
+    reel = source(MONTAGE_ACTIF)
+    if reel != MONTAGE_ACTIF:
+        return (f"montage {MONTAGE_ACTIF} (via {MONTAGE_ORIGINE}) "
+                f"mais PAS CALIBRE -> chiffres de {reel}")
+    return f"montage {MONTAGE_ACTIF} (via {MONTAGE_ORIGINE})"
 
 
 def _actif(montage):
@@ -190,6 +348,77 @@ def charger(montage=None, silencieux=False):
 def focale(montage=None):
     """La focale horizontale du montage, en pixels."""
     return float(charger(montage, silencieux=True)[0][0, 0])
+
+
+# --- garde-fou : ce que la camera voit contredit-il le montage declare ? ----
+# Ce test ne DECIDE rien, il alerte. L'eau absorbe le rouge (~0.4 /m) et
+# presque pas le bleu (~0.02 /m) : sur un aller-retour de trois metres le canal
+# rouge tombe a un tiers pendant que le bleu ne bouge pas. Une image de bassin
+# est donc franchement bleue, une image de bureau ne l'est pas.
+#
+# Pourquoi ce n'est qu'une alerte : la balance des blancs automatique de la
+# D435i corrige une partie du bleu, un mur bleu en salle donne le meme signal,
+# et un flux infrarouge est gris donc muet. Le test se tait des qu'il doute.
+_SEUIL_EAU = 0.60          # rouge/bleu en dessous = tres probablement de l'eau
+_SEUIL_AIR = 0.85          # au dessus = tres probablement de l'air
+_deja_alerte = False
+
+
+def controler_image(image, montage=None):
+    """Compare la couleur dominante au montage declare.
+
+    Renvoie un message d'alerte a afficher, ou None quand rien ne cloche ou
+    que l'image ne permet pas de conclure.
+    """
+    global _deja_alerte
+    if _deja_alerte or image is None or getattr(image, "ndim", 0) != 3:
+        return None
+    if image.shape[2] != 3:
+        return None
+
+    petite = np.asarray(image[::8, ::8], dtype=np.float64)
+    bleu, vert, rouge = (float(np.median(petite[:, :, c])) for c in range(3))
+    if max(bleu, vert, rouge) < 20.0:
+        return None                                  # image trop sombre
+    if max(abs(rouge - vert), abs(vert - bleu)) < 3.0:
+        return None                                  # image grise : infrarouge
+    if bleu < 1.0:
+        return None
+
+    rapport = rouge / bleu
+    sous_leau = montage_est_immerge(_actif(montage))
+    if rapport < _SEUIL_EAU and not sous_leau:
+        _deja_alerte = True
+        return (f"l'image est tres bleue (rouge/bleu = {rapport:.2f}) alors que "
+                f"le montage declare est '{_actif(montage)}', qui est un "
+                f"montage a l'air.\n"
+                f"    Si la camera est dans l'eau, les distances seront "
+                f"trop courtes d'environ 25 %.\n"
+                f"    Pour corriger : python calibration/regler_montage.py")
+    if rapport > _SEUIL_AIR and sous_leau:
+        _deja_alerte = True
+        return (f"l'image n'a pas la teinte de l'eau (rouge/bleu = "
+                f"{rapport:.2f}) alors que le montage declare est "
+                f"'{_actif(montage)}'.\n"
+                f"    Si la camera est a l'air, les distances seront trop "
+                f"longues d'environ 33 %.\n"
+                f"    Pour corriger : python calibration/regler_montage.py")
+    return None
+
+
+def montage_est_immerge(montage=None):
+    """Le montage donne suppose-t-il la camera dans l'eau ?"""
+    return _actif(montage).endswith("_eau")
+
+
+def annoncer_montage(prefixe="[optique]"):
+    """Affiche le montage retenu. A appeler au demarrage de tout script qui
+    mesure quelque chose : c'est la ligne qu'on relit six mois plus tard pour
+    savoir avec quels chiffres la manip a tourne."""
+    print(f"{prefixe} {resume_montage()}")
+    if MONTAGE_ORIGINE.startswith("defaut"):
+        print(f"{prefixe} regle-le une fois pour toutes : "
+              f"python calibration/regler_montage.py")
 
 
 # --- geometrie du champ -----------------------------------------------------
@@ -605,10 +834,9 @@ def rapport():
     # apres une bascule. `servi` differe de `MONTAGE_ACTIF` quand le montage
     # demande n'est pas encore calibre — le seul cas ou l'on mesure avec une
     # optique qui n'est pas celle qu'on croit.
-    forcage = "  (impose par UUV_MONTAGE)" if "UUV_MONTAGE" in os.environ else ""
     lignes = [
         "=" * 74, "OPTIQUE DU MONTAGE", "=" * 74,
-        f"\nMONTAGE ACTIF  {MONTAGE_ACTIF}{forcage}",
+        f"\nMONTAGE ACTIF  {MONTAGE_ACTIF}  (via {MONTAGE_ORIGINE})",
         (f"  source des chiffres : {servi}" if servi == MONTAGE_ACTIF else
          f"  >>> ATTENTION : '{MONTAGE_ACTIF}' n'est pas calibre, les chiffres "
          f"servis viennent de '{servi}'."),
