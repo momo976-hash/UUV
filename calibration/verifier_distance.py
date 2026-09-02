@@ -74,7 +74,12 @@ RESOLUTION = (640, 480)
 #
 # En revanche, cela ne touche PAS la calibration : elle se fait au damier,
 # dont c'est le pas des carreaux qui compte, pas la taille des tags.
-TAILLES_CONNUES = (0.223, 0.11732)
+#
+# Les deux tags s'ecartent du nominal dans des sens OPPOSES — le petit de
+# -0.15 %, le grand de +0.40 %. Ce n'est donc pas une echelle d'imprimante,
+# qui les aurait decales du meme cote : c'est propre a chaque impression.
+# Aucun des deux ne se devine, il faut les mesurer.
+TAILLES_CONNUES = (0.22389, 0.11732)
 ICI = Path(__file__).resolve().parent
 
 
