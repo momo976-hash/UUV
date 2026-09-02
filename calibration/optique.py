@@ -411,6 +411,74 @@ def montage_est_immerge(montage=None):
     return _actif(montage).endswith("_eau")
 
 
+# --- le decalage du point de vue derriere le hublot -------------------------
+# MESURE AU BASSIN, le 02/09, montage tube_eau, calibration fx 791.34 :
+#
+#     0.50 m -> 0.4841 m   -3.18 %   (+/- 0.4 mm)
+#     1.00 m -> 0.9839 m   -1.61 %   (+/- 2.3 mm)
+#     1.50 m -> 1.4862 m   -0.92 %   (+/- 19 mm)
+#     2.00 m -> 1.9944 m   -0.28 %   (+/- 26 mm)
+#
+# L'ajustement pondere donne une PENTE DE 1.0002 +/- 0.0044 et un DECALAGE de
+# -15.9 mm a 7 sigma. Les deux chiffres comptent autant l'un que l'autre :
+#
+#   - la pente vaut 1 : la focale fx = 791.34 est juste, il n'y a plus rien a
+#     corriger de ce cote. Les %-d'erreur qui diminuent avec la distance ne
+#     venaient pas d'une focale un peu fausse.
+#   - le decalage est constant en METRES, pas en pourcentage. Aucune focale ne
+#     peut produire cela : d = fx.S/s est une pure proportionnalite, elle
+#     passe forcement par zero.
+#
+# Le modele a un seul parametre (pente forcee a 1, decalage seul) donne un
+# chi2 de 0.18 pour 3 degres de liberte, contre 48.7 pour le modele en pure
+# echelle. Ce n'est pas une preference, c'est un ecart de deux ordres de
+# grandeur.
+#
+# CE QUE C'EST PHYSIQUEMENT. Une camera derriere un hublot courbe n'a PAS de
+# centre de projection unique : chaque rayon est refracte par la paroi, et les
+# prolongements des rayons emergents ne se coupent pas tous au meme point. Le
+# modele stenope, lui, exige un point unique ; la calibration en choisit donc
+# un, au mieux, et il tombe a cote. Tout se passe comme si l'oeil de la camera
+# etait 16 mm plus loin qu'il ne l'est — le meme ecart quelle que soit la
+# distance visee, exactement ce qu'on mesure.
+#
+# 16 mm est du meme ordre que le tube lui-meme (rayon interieur 24.75 mm,
+# paroi 4.25 mm), ce qui est le bon ordre de grandeur pour cet effet.
+#
+# Reference : Treibitz, Schechner, Kaplan, Negahdaripour, « Flat Refractive
+# Geometry », IEEE TPAMI 34(1):51-65, 2012 — le hublot rend le systeme
+# non-single-viewpoint, et le stenope n'en est qu'une approximation.
+DECALAGE_HUBLOT = {
+    "tube_eau": 0.0159,      # mesure au bassin, 4 distances, 7 sigma
+    "tube_air": 0.0,         # jamais mesure
+    "nue_air": 0.0,          # pas de hublot : rien a corriger
+}
+
+
+def decalage_hublot(montage=None):
+    """Metres a AJOUTER a une distance mesuree, pour ce montage."""
+    return DECALAGE_HUBLOT.get(_actif(montage), 0.0)
+
+
+def corriger_hublot(tvec, montage=None):
+    """Corrige un vecteur camera->objet du decalage du point de vue.
+
+    La direction est juste — c'est un probleme de distance, pas d'angle — donc
+    on allonge le vecteur sans le tourner. Sans correction, toutes les
+    positions sont ramenees de 16 mm VERS la camera ; les tags d'une meme
+    carte se retrouvent alors trop proches les uns des autres, et le filtre
+    voit un monde qui retrecit.
+    """
+    decalage = decalage_hublot(montage)
+    t = np.asarray(tvec, dtype=float)
+    if decalage == 0.0:
+        return t.copy()
+    distance = float(np.linalg.norm(t))
+    if distance < 1e-9:
+        return t.copy()
+    return t * ((distance + decalage) / distance)
+
+
 def annoncer_montage(prefixe="[optique]"):
     """Affiche le montage retenu. A appeler au demarrage de tout script qui
     mesure quelque chose : c'est la ligne qu'on relit six mois plus tard pour
@@ -840,6 +908,9 @@ def rapport():
         (f"  source des chiffres : {servi}" if servi == MONTAGE_ACTIF else
          f"  >>> ATTENTION : '{MONTAGE_ACTIF}' n'est pas calibre, les chiffres "
          f"servis viennent de '{servi}'."),
+        (f"  decalage du hublot : +{1000*decalage_hublot():.1f} mm ajoutes a "
+         f"chaque distance" if decalage_hublot() else
+         "  decalage du hublot : aucun (jamais mesure pour ce montage)"),
         "\nCAMERA (nue, en air)",
         f"  focale {f:.1f} px, champ {2*h:.1f} x {2*v:.1f} deg (diagonale {2*d:.1f})",
         f"  encombrement {1000*CAMERA_LARGEUR:.0f} x {1000*CAMERA_HAUTEUR:.0f} x "

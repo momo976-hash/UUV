@@ -578,25 +578,50 @@ def main():
                   f"+/- {1000*sigma_decalage:.0f} mm  "
                   f"({abs(decalage)/sigma_decalage:.1f} sigma)")
 
+        # La significativite se juge en sigma, et RIEN D'AUTRE. Un seuil fixe
+        # en millimetres a deja masque un decalage a 7 sigma parce qu'il
+        # tombait sous les 20 mm arbitraires qu'on exigeait en plus : la
+        # pertinence pratique est une question distincte de la realite
+        # statistique, et il faut les afficher separement.
         significatif = (np.isfinite(sigma_decalage)
-                        and abs(decalage) > 2.0 * sigma_decalage
-                        and abs(decalage) > 0.02)
-        if significatif:
-            print(f"\n  [DECALAGE FIXE, SIGNIFICATIF] {1000*decalage:+.0f} mm.")
+                        and abs(decalage) > 2.0 * sigma_decalage)
+        etendue = float(vrais.max() - vrais.min())
+        if not np.isfinite(sigma_decalage):
+            pass
+        elif not significatif:
+            print(f"\n  Le decalage tient dans le bruit ({abs(decalage)/sigma_decalage:.1f} "
+                  f"sigma) : une pure erreur d'echelle")
+            print(f"  suffit a tout expliquer, donc la focale seule.")
+            if etendue > 0 and vrais.min() > 0.6:
+                print(f"  Pour le trancher pour de bon, mesurer A COURTE DISTANCE")
+                print(f"  (0.5 m) : c'est la qu'un decalage fixe se voit le plus en")
+                print(f"  pourcentage, alors qu'une erreur d'echelle donne le meme")
+                print(f"  pourcentage a toutes les distances.")
+        else:
+            print(f"\n  [DECALAGE FIXE, REEL a {abs(decalage)/sigma_decalage:.1f} sigma] "
+                  f"{1000*decalage:+.1f} mm.")
             print("  AUCUN reglage de focale ne peut corriger cela : changer fx")
             print("  ne change que la pente, jamais cette ordonnee a l'origine.")
-            print("  C'est la signature d'un deplacement APPARENT (coherent avec")
-            print("  une camera sans centre de projection unique derriere un")
-            print("  hublot courbe).")
-            print(f"\n  CORRECTION EMPIRIQUE A APPLIQUER EN AVAL :")
-            print(f"      d_corrigee = (d_mesuree - ({decalage:+.4f})) / {pente:.4f}")
-        elif np.isfinite(sigma_decalage):
-            print(f"\n  Le decalage tient dans le bruit des mesures : une pure")
-            print(f"  erreur d'echelle suffit a tout expliquer, donc la focale")
-            print(f"  seule. Pour le trancher pour de bon, mesurer A COURTE")
-            print(f"  DISTANCE (0.5 m) : c'est la qu'un decalage fixe se voit le")
-            print(f"  plus en pourcentage, alors qu'une erreur d'echelle donne")
-            print(f"  le meme pourcentage a toutes les distances.")
+            print("  C'est la signature d'un deplacement APPARENT — une camera")
+            print("  derriere un hublot courbe n'a pas de centre de projection")
+            print("  unique, et le modele stenope place son oeil au mauvais")
+            print("  endroit, du meme ecart a toutes les distances.")
+            ecart_pente = abs(pente - 1.0)
+            if np.isfinite(sig_pente := float(np.sqrt(covariance[0, 0]))) \
+                    and ecart_pente < 2.0 * sig_pente:
+                print(f"\n  Et la pente vaut {pente:.4f} +/- {sig_pente:.4f} : "
+                      f"compatible avec 1.")
+                print(f"  La focale fx = {fx:.2f} est donc JUSTE. Il ne reste que")
+                print(f"  le decalage — ne pas retoucher la calibration.")
+                print(f"\n  CORRECTION : d_corrigee = d_mesuree + "
+                      f"{-1000*decalage:.1f} mm")
+            else:
+                print(f"\n  CORRECTION EMPIRIQUE A APPLIQUER EN AVAL :")
+                print(f"      d_corrigee = (d_mesuree - ({decalage:+.4f})) "
+                      f"/ {pente:.4f}")
+            if abs(decalage) < 0.005:
+                print(f"\n  (reel, mais {1000*abs(decalage):.0f} mm : a corriger "
+                      f"seulement si cette precision compte)")
         print("-" * 66)
     elif len(lignes) > 0:
         print(f"\n  ({len(lignes)} mesure(s) a cette focale ; il en faut 3 a des")

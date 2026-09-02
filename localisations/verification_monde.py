@@ -348,6 +348,11 @@ while True:
             ok2, rvec, tvec = cv2.solvePnP(coins_3d, pts, K, dist,
                                            flags=cv2.SOLVEPNP_IPPE_SQUARE)
             if ok2:
+                # Le hublot courbe deplace le point de vue apparent : toutes
+                # les distances sortent 16 mm trop courtes sous l'eau, mesure
+                # au bassin. La direction, elle, est juste — on allonge sans
+                # tourner. Vaut 0 hors montage immerge.
+                tvec = optique.corriger_hublot(tvec, MONTAGE)
                 poses[int(tid)] = transformation(cv2.Rodrigues(rvec)[0], tvec)
                 surfaces[int(tid)] = cv2.contourArea(pts.astype(np.float32))
 
