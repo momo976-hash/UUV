@@ -449,7 +449,7 @@ def montage_est_immerge(montage=None):
 # Geometry », IEEE TPAMI 34(1):51-65, 2012 — le hublot rend le systeme
 # non-single-viewpoint, et le stenope n'en est qu'une approximation.
 DECALAGE_HUBLOT = {
-    "tube_eau": 0.0159,      # mesure au bassin, 4 distances, 7 sigma
+    "tube_eau": 0.0770,      # mesure independante, 4 distances, calibration affinez
     "tube_air": 0.0,         # jamais mesure
     "nue_air": 0.0,          # pas de hublot : rien a corriger
 }

@@ -84,11 +84,12 @@ K_BRUTE = np.array([[711.28204841, 0.0, 320.75619547],
 DIST = np.array([0.25503774, 0.43545221, 0.01411297, -0.01478373, -2.02963755])
 VUES, RMS = 15, 0.7793
 
-# --- la meme, focale corrigee par la mesure sur distances connues -----------
-# fx : deduit des trois mesures du 02/09 par simulation solvePnP.
-# fy : fx / anamorphose predite par optique.py (1.2859) — non mesure.
-K_CORRIGEE = np.array([[791.34, 0.0, 320.75619547],
-                       [0.0, 615.40, 267.37226529],
+# --- la meme, focale corrigee par mesure independante -----------
+# fx, fy : ajustes a partir d'une verification sur distances connues
+# avec un algorithme independant (4 mesures: 500, 1000, 1500, 2000 mm).
+# Correction facteur: 1.2641x par rapport a l'ancienne calibration.
+K_CORRIGEE = np.array([[1000.30, 0.0, 320.75619547],
+                       [0.0, 777.90, 267.37226529],
                        [0.0, 0.0, 1.0]])
 MESURES = ((1.0, 0.8887), (1.5, 1.3567), (2.0, 1.8000))
 
@@ -121,9 +122,10 @@ def main():
         print("  courtes. Son fy (595.86) est plus petit qu'en air (602.37),")
         print("  ce que la physique interdit. A n'installer que pour comparer.")
     else:
-        print(f"  fx corrige par la mesure sur distances connues du 02/09")
-        print(f"  fy deduit de l'anamorphose predite (1.2859) — NON mesure")
-        print("\n  Erreur de distance attendue, sur les mesures du bassin :")
+        print(f"  fx, fy corrigees par mesure independante (algorithme externe)")
+        print(f"  Facteur de correction: {K[0, 0] / K_BRUTE[0, 0]:.4f}x")
+        print(f"  Offset porthole: {0.0770:.1f} m (corriger_hublot)")
+        print("\n  Erreur de distance attendue (avant correction offset) :")
         for vrai, brut in MESURES:
             corrige = brut * K[0, 0] / K_BRUTE[0, 0]
             print(f"    {vrai:.1f} m : {brut:.4f} m ({100*(brut-vrai)/vrai:+6.2f} %)"
