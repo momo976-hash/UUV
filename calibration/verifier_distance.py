@@ -566,30 +566,60 @@ def main():
     # partager fx et differer par fy (c'est precisement ce que --focale rend
     # facile), et solvePnP les distingue. Sans cette colonne, l'ajustement plus
     # bas les melangerait en croyant regrouper une seule calibration.
+    #
+    # cote_px est le COTE APPARENT du tag, en pixels. Il etait affiche et
+    # aussitot perdu, alors que c'est le seul chiffre qui permette de comparer
+    # ce script a une AUTRE chaine de mesure (apriltag_ros, par exemple). La
+    # distance vaut d = fx.S/s : si deux chaines annoncent la meme distance
+    # vraie avec la meme focale mais divergent, l'ecart est soit dans S (la
+    # taille declaree du tag), soit dans s (la ou chaque detecteur pose les
+    # coins). Sans s enregistre, impossible de dire lequel des deux — et c'est
+    # exactement la question restee ouverte face aux mesures de Josiah.
     COLONNES = ["horodatage", "montage", "distance_vraie_m",
                 "distance_mesuree_m", "ecart_pct", "fx_utilise", "fy_utilise",
-                "fx_deduit", "tag_m", "dispersion_mm"]
+                "fx_deduit", "tag_m", "cote_px", "dispersion_mm"]
 
     fichier_historique = ICI / "verifier_distance_historique.csv"
     if fichier_historique.exists():
-        # Les historiques ecrits avant l'ajout de fy_utilise n'ont pas la
-        # colonne. Y ajouter des lignes plus larges decalerait tout le fichier,
-        # donc on le convertit d'abord — en passant par un fichier temporaire
-        # et un remplacement atomique, pour qu'une coupure de courant au
-        # mauvais moment ne puisse pas laisser un historique tronque.
+        # Les historiques ecrits avant l'ajout d'une colonne ne l'ont pas. Y
+        # ajouter des lignes plus larges decalerait tout le fichier, donc on le
+        # convertit d'abord. La conversion est generique — elle insere CHAQUE
+        # colonne manquante a sa place — pour ne pas avoir a la reecrire au
+        # prochain ajout. On passe par un fichier temporaire et un remplacement
+        # atomique : une coupure au mauvais moment ne peut pas laisser un
+        # historique tronque.
         with open(fichier_historique, newline="") as f:
             anciennes = list(csv.reader(f))
-        if anciennes and anciennes[0] != COLONNES and "fy_utilise" not in anciennes[0]:
+        if anciennes and anciennes[0] != COLONNES:
             entete = anciennes[0]
-            place = entete.index("fx_utilise") + 1 if "fx_utilise" in entete else len(entete)
-            converti = [COLONNES] + [l[:place] + [""] + l[place:]
-                                     for l in anciennes[1:] if l]
-            temporaire = fichier_historique.with_suffix(".csv.tmp")
-            with open(temporaire, "w", newline="") as f:
-                csv.writer(f).writerows(converti)
-            temporaire.replace(fichier_historique)
-            print(f"\n  (historique complete d'une colonne fy_utilise, "
-                  f"{len(converti) - 1} lignes conservees)")
+            manquantes = [c for c in COLONNES if c not in entete]
+            # On ne convertit que si l'ancien en-tete est un sous-ensemble du
+            # nouveau. Un en-tete portant des colonnes INCONNUES ne vient pas
+            # d'une version anterieure de ce script : y toucher risquerait de
+            # detruire des donnees qu'on ne sait pas relire.
+            inconnues = [c for c in entete if c not in COLONNES]
+            if manquantes and not inconnues:
+                index = {c: i for i, c in enumerate(entete)}
+                converti = [COLONNES]
+                for ligne in anciennes[1:]:
+                    if not ligne:
+                        continue
+                    converti.append([ligne[index[c]] if c in index
+                                     and index[c] < len(ligne) else ""
+                                     for c in COLONNES])
+                temporaire = fichier_historique.with_suffix(".csv.tmp")
+                with open(temporaire, "w", newline="") as f:
+                    csv.writer(f).writerows(converti)
+                temporaire.replace(fichier_historique)
+                print(f"\n  (historique complete de : {', '.join(manquantes)} ; "
+                      f"{len(converti) - 1} lignes conservees)")
+            elif inconnues:
+                print(f"\n  ATTENTION : {fichier_historique.name} porte des "
+                      f"colonnes inconnues ({', '.join(inconnues)}).")
+                print("  Il n'est PAS converti, et la nouvelle mesure ne peut "
+                      "pas y etre ajoutee sans le corrompre.")
+                print("  Mets-le de cote (renomme-le) et relance.")
+                return 1
 
     nouveau = not fichier_historique.exists()
     with open(fichier_historique, "a", newline="") as f:
@@ -600,7 +630,7 @@ def main():
                            options.montage, f"{options.reel:.4f}",
                            f"{mesuree:.4f}", f"{ecart:+.2f}", f"{fx:.2f}",
                            f"{fy:.2f}", f"{fx_deduit:.2f}", f"{options.tag:.4f}",
-                           f"{1000*dispersion:.1f}"])
+                           f"{cote_px:.2f}", f"{1000*dispersion:.1f}"])
     print(f"\n  Mesure ajoutee a : {fichier_historique}")
 
     # -- si plusieurs mesures du meme montage existent, verifier la forme ---
