@@ -130,29 +130,41 @@ def main():
                   f"  ->  {corrige:.4f} m ({100*(corrige-vrai)/vrai:+.2f} %)")
 
     fichier = DOSSIER / "tube_eau.npz"
+    deja_a_jour = False
     if fichier.exists():
         # Ne jamais ecraser en silence : le fichier present est peut-etre une
         # calibration plus recente, faite sur cette machine.
         ancien = np.load(fichier)
         if np.allclose(ancien["K"], K, atol=1e-3):
-            print(f"\nDeja installee dans : {fichier}")
-            print("  rien a faire.")
-            return 0
-        print(f"\nUn fichier tube_eau.npz existe deja :")
+            # Le .npz est deja bon, mais ca ne veut PAS dire que le YAML l'est
+            # aussi : avant ce correctif, un lancement precedent pouvait
+            # s'arreter ici (return 0) sans jamais ecrire le YAML. On continue
+            # donc jusqu'a la fin — le reecrire est sans risque.
+            print(f"\n.npz deja a jour dans : {fichier}")
+            deja_a_jour = True
+        else:
+            print(f"\nUn fichier tube_eau.npz existe deja :")
         print(f"  {fichier}")
         print(f"  fx {ancien['K'][0, 0]:.2f}   fy {ancien['K'][1, 1]:.2f}")
-        sauvegarde = fichier.with_name("tube_eau_remplace.npz")
-        numero = 2
-        while sauvegarde.exists():
-            sauvegarde = fichier.with_name(f"tube_eau_remplace_{numero}.npz")
-            numero += 1
-        np.savez(sauvegarde, **{cle: ancien[cle] for cle in ancien.files})
-        print(f"  mis de cote dans : {sauvegarde.name}")
+        if not deja_a_jour:
+            # Mettre de cote seulement si on s'apprete a la remplacer par une
+            # AUTRE matrice : sauvegarder une copie identique d'elle-meme
+            # n'a aucun sens et ne fait qu'accumuler des fichiers.
+            sauvegarde = fichier.with_name("tube_eau_remplace.npz")
+            numero = 2
+            while sauvegarde.exists():
+                sauvegarde = fichier.with_name(f"tube_eau_remplace_{numero}.npz")
+                numero += 1
+            np.savez(sauvegarde, **{cle: ancien[cle] for cle in ancien.files})
+            print(f"  mis de cote dans : {sauvegarde.name}")
 
     DOSSIER.mkdir(parents=True, exist_ok=True)
-    np.savez(fichier, K=K, dist=DIST, rms=RMS, vues=VUES,
-             largeur=640, hauteur=480)
-    print(f"\nInstallee dans : {fichier}")
+    if deja_a_jour:
+        print("  (npz inchange)")
+    else:
+        np.savez(fichier, K=K, dist=DIST, rms=RMS, vues=VUES,
+                 largeur=640, hauteur=480)
+        print(f"\nInstallee dans : {fichier}")
 
     # Le fichier ROS doit suivre, sinon le noeud continue de publier les
     # anciennes intrinseques dans /camera_info et tout ce qui ecoute ce topic
