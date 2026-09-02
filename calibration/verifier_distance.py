@@ -16,6 +16,23 @@
 # noeud ROS du Pi s'y connecte. Lance donc CE script en premier, le noeud du
 # Pi ensuite.
 #
+# EPROUVER UNE FOCALE SANS L'INSTALLER :
+#
+#     python verifier_distance.py --reel 1.500 --focale 838.45,652.10
+#
+# La matrice n'est changee qu'en memoire, le .npz n'est pas touche. C'est ce
+# qu'il faut pour departager plusieurs focales candidates sur le terrain : on
+# les essaie l'une apres l'autre sur la meme scene, et on n'installe que celle
+# qui gagne. Avant, tester une valeur obligeait a reecrire le .npz — donc a
+# ecraser la calibration en service pour un essai, et a penser a la remettre.
+# Une apres-midi de mesures a deja ete faite avec une calibration d'essai
+# laissee en place par oubli.
+#
+# Avec une seule valeur (--focale 838.45) l'anamorphose de la calibration est
+# conservee et fy suit : le rapport fx/fy est une propriete du TUBE, pas un
+# parametre libre, et le changer par megarde en testant fx serait une erreur
+# silencieuse.
+#
 # AFFICHAGE. Une fenetre s'ouvre si l'ecran le permet, pour voir le cadrage —
 # indispensable au bord du bassin, ou l'on ne sait pas autrement si le tag est
 # vu. En SSH sur le Raspberry Pi il n'y a pas d'affichage : cv2.imshow y leve
@@ -310,6 +327,11 @@ def main():
                                 "(port %(const)s par defaut)")
     analyseur.add_argument("--sans-fenetre", action="store_true",
                            help="ne rien afficher (utile en SSH)")
+    analyseur.add_argument("--focale", metavar="FX[,FY]",
+                           help="essayer CES focales-la au lieu de celles du "
+                                ".npz, sans rien reinstaller. 'FX,FY' pour les "
+                                "deux axes, 'FX' seul pour garder l'anamorphose "
+                                "de la calibration. Ex : --focale 838.45,652.10")
     options = analyseur.parse_args()
 
     K, dist, fichier = charger_calibration(options.montage)
@@ -331,9 +353,46 @@ def main():
             print("Il manque le dossier montages/ — il n'est pas versionne,")
             print("il faut le copier depuis la machine qui a calibre.")
         return 1
-    fx, fy = float(K[0, 0]), float(K[1, 1])
     print(f"Calibration : {fichier}")
-    print(f"  fx {fx:.2f}   fy {fy:.2f}")
+    print(f"  fx {float(K[0, 0]):.2f}   fy {float(K[1, 1]):.2f}")
+
+    # --focale : eprouver des focales candidates AVANT de les installer.
+    # Sans cela, tester une valeur oblige a reecrire le .npz, donc a ecraser
+    # la calibration en service pour un essai — et si l'essai est mauvais, il
+    # faut penser a la remettre. On a deja mesure une apres-midi entiere avec
+    # une calibration d'essai laissee en place par oubli.
+    #
+    # Le .npz n'est PAS touche : la matrice n'est modifiee qu'en memoire.
+    if options.focale:
+        try:
+            morceaux = [float(v) for v in options.focale.replace(" ", "").split(",")]
+        except ValueError:
+            print(f"\nERREUR : --focale '{options.focale}' n'est pas lisible.")
+            print("  Attendu : --focale 838.45,652.10   ou   --focale 838.45")
+            return 1
+        if len(morceaux) == 1:
+            # Une seule valeur : on garde l'anamorphose de la calibration, qui
+            # est une propriete du TUBE, pas un parametre libre. La changer
+            # sans le vouloir en testant fx serait une erreur silencieuse.
+            anamorphose = float(K[1, 1]) / float(K[0, 0])
+            nouveau_fx = morceaux[0]
+            nouveau_fy = nouveau_fx * anamorphose
+        elif len(morceaux) == 2:
+            nouveau_fx, nouveau_fy = morceaux
+        else:
+            print(f"\nERREUR : --focale attend une ou deux valeurs, "
+                  f"{len(morceaux)} donnees.")
+            return 1
+        if nouveau_fx <= 0 or nouveau_fy <= 0:
+            print("\nERREUR : une focale se compte en pixels et vaut > 0.")
+            return 1
+        K = K.copy()
+        K[0, 0], K[1, 1] = nouveau_fx, nouveau_fy
+        print(f"  --focale : on essaie fx {nouveau_fx:.2f}   fy {nouveau_fy:.2f}"
+              f"   (anamorphose {nouveau_fx / nouveau_fy:.4f})")
+        print("             le fichier .npz n'est PAS modifie.")
+
+    fx, fy = float(K[0, 0]), float(K[1, 1])
     print(f"Tag de {options.tag:.3f} m, annonce a {options.reel:.3f} m\n")
 
     if options.pi is not None:
@@ -503,18 +562,44 @@ def main():
     # travail. Chaque lancement s'ajoute desormais a un fichier, avec tout ce
     # qu'il faut pour reconstruire l'analyse plus tard : distance vraie,
     # distance mesuree, montage, focale utilisee.
+    # fy_utilise est enregistre au meme titre que fx : deux essais peuvent
+    # partager fx et differer par fy (c'est precisement ce que --focale rend
+    # facile), et solvePnP les distingue. Sans cette colonne, l'ajustement plus
+    # bas les melangerait en croyant regrouper une seule calibration.
+    COLONNES = ["horodatage", "montage", "distance_vraie_m",
+                "distance_mesuree_m", "ecart_pct", "fx_utilise", "fy_utilise",
+                "fx_deduit", "tag_m", "dispersion_mm"]
+
     fichier_historique = ICI / "verifier_distance_historique.csv"
+    if fichier_historique.exists():
+        # Les historiques ecrits avant l'ajout de fy_utilise n'ont pas la
+        # colonne. Y ajouter des lignes plus larges decalerait tout le fichier,
+        # donc on le convertit d'abord — en passant par un fichier temporaire
+        # et un remplacement atomique, pour qu'une coupure de courant au
+        # mauvais moment ne puisse pas laisser un historique tronque.
+        with open(fichier_historique, newline="") as f:
+            anciennes = list(csv.reader(f))
+        if anciennes and anciennes[0] != COLONNES and "fy_utilise" not in anciennes[0]:
+            entete = anciennes[0]
+            place = entete.index("fx_utilise") + 1 if "fx_utilise" in entete else len(entete)
+            converti = [COLONNES] + [l[:place] + [""] + l[place:]
+                                     for l in anciennes[1:] if l]
+            temporaire = fichier_historique.with_suffix(".csv.tmp")
+            with open(temporaire, "w", newline="") as f:
+                csv.writer(f).writerows(converti)
+            temporaire.replace(fichier_historique)
+            print(f"\n  (historique complete d'une colonne fy_utilise, "
+                  f"{len(converti) - 1} lignes conservees)")
+
     nouveau = not fichier_historique.exists()
     with open(fichier_historique, "a", newline="") as f:
         ecrivain = csv.writer(f)
         if nouveau:
-            ecrivain.writerow(["horodatage", "montage", "distance_vraie_m",
-                               "distance_mesuree_m", "ecart_pct", "fx_utilise",
-                               "fx_deduit", "tag_m", "dispersion_mm"])
+            ecrivain.writerow(COLONNES)
         ecrivain.writerow([datetime.now().isoformat(timespec="seconds"),
                            options.montage, f"{options.reel:.4f}",
                            f"{mesuree:.4f}", f"{ecart:+.2f}", f"{fx:.2f}",
-                           f"{fx_deduit:.2f}", f"{options.tag:.4f}",
+                           f"{fy:.2f}", f"{fx_deduit:.2f}", f"{options.tag:.4f}",
                            f"{1000*dispersion:.1f}"])
     print(f"\n  Mesure ajoutee a : {fichier_historique}")
 
@@ -531,10 +616,28 @@ def main():
     # que la marche entre elles. C'est arrive : les trois mesures a fx 711 et
     # les trois a fx 791 ajustees ensemble annoncaient un decalage de 28 mm
     # qui n'existait pas.
+    def _meme_optique(ligne):
+        """La ligne a-t-elle ete mesuree avec CETTE optique-la ?"""
+        if ligne["montage"] != options.montage:
+            return False
+        try:
+            if abs(float(ligne["fx_utilise"]) - fx) >= 0.01:
+                return False
+        except (TypeError, ValueError):
+            return False
+        # fy est vide sur les lignes anterieures a l'ajout de la colonne. On
+        # les garde : a l'epoque, fx seul identifiait la calibration puisque
+        # --focale n'existait pas et que fy suivait toujours le .npz.
+        brut = (ligne.get("fy_utilise") or "").strip()
+        if not brut:
+            return True
+        try:
+            return abs(float(brut) - fy) < 0.01
+        except ValueError:
+            return False
+
     with open(fichier_historique, newline="") as f:
-        lignes = [l for l in csv.DictReader(f)
-                  if l["montage"] == options.montage
-                  and abs(float(l["fx_utilise"]) - fx) < 0.01]
+        lignes = [l for l in csv.DictReader(f) if _meme_optique(l)]
     if len(lignes) >= 3:
         vrais = np.array([float(l["distance_vraie_m"]) for l in lignes])
         mesures = np.array([float(l["distance_mesuree_m"]) for l in lignes])

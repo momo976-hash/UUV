@@ -33,30 +33,46 @@
 #    significatif. Le probleme est donc, et uniquement, la focale.
 #
 # ---------------------------------------------------------------------------
-# LA VALEUR CORRIGEE, ET POURQUOI ON PEUT S'Y FIER
+# PREMIERE CORRECTION : fx = 791.3 px  (depassee, gardee pour la trace)
 # ---------------------------------------------------------------------------
-# On cherche l'optique reelle qui, resolue avec la matrice de Josiah, rendrait
-# exactement les 0.8998 x mesures au bassin. La simulation (projectPoints puis
-# solvePnP, comme dans le vrai code) donne :
+# On a d'abord cherche l'optique qui, resolue avec la matrice de Josiah,
+# rendrait exactement les 0.8998 x mesures au bassin. La simulation
+# (projectPoints puis solvePnP, comme dans le vrai code) donnait fx = 791.3 px,
+# et le modele optique de optique.py — qui ne connait que la geometrie du tube
+# et l'indice de l'eau — predisait 803.6 px. Les deux se rejoignaient a 1.5 %,
+# ce qui a suffi a installer 791.34 / 615.40 pendant un temps.
 #
-#         fx = 791.3 px
+# ---------------------------------------------------------------------------
+# CE QUI EST INSTALLE AUJOURD'HUI : fx = 838.45, fy = 652.10
+# ---------------------------------------------------------------------------
+# Une verification independante, faite sur le terrain avec un AUTRE algorithme
+# de mesure, a trouve ces deux valeurs justes. Elles valent 1.0595 x les
+# precedentes, le meme facteur sur les deux axes : l'anamorphose 1.2859 du
+# modele optique est donc conservee intacte, ce qui est rassurant — c'est une
+# propriete du tube, et elle n'avait aucune raison de bouger.
 #
-# Ce nombre est ROBUSTE : on le retrouve a 0.01 px pres quelle que soit
-# l'anamorphose supposee, entre 1.20 et 1.35. Autrement dit, la mesure de
-# distance contraint fx tres precisement, et ne dit RIEN de fy.
+# Elles sont prises TELLES QUELLES, sans etre rejustifiees apres coup. Une
+# tentative de les rededuire des mesures du 02/09 a echoue : aucune mise a
+# l'echelle de 791.34 ne reproduit les distances de cette verification, ce qui
+# montre seulement que ces mesures-la ne sortaient pas de cette calibration.
+# Les redemontrer n'aurait fabrique qu'un ajustement de plus, et c'est ainsi
+# qu'on avait deja invente un decalage de 77 mm qui n'existait pas.
 #
-# Et il y a mieux : le modele optique de optique.py, qui ne connait que la
-# geometrie du tube et l'indice de l'eau, predit fx = 803.6 a partir de la
-# camera nue. Mesure et modele se rejoignent a 1.5 %. Deux chemins totalement
-# independants — un calcul de refraction d'un cote, un metre ruban et des tags
-# de l'autre — tombent sur le meme nombre. La physique etait juste depuis le
-# debut ; c'est la calibration au damier qui a rate.
+# Le controle qui reste a faire, et qui vaut mieux que tout raisonnement :
+#
+#     python verifier_distance.py --reel 1.5 --tag 0.11732 --pi \
+#         --focale 838.45,652.10
+#
+# a plusieurs distances, dont 0.5 m. Le script ajuste alors une droite sur
+# l'historique et dit lui-meme si ce qui reste est une focale ou un decalage.
 #
 # ---------------------------------------------------------------------------
 # CE QUI RESTE FRAGILE : fy
 # ---------------------------------------------------------------------------
-# La mesure ne contraint pas fy. On le prend donc du modele, via l'anamorphose
-# predite (fx/fy = 1.2859), ce qui donne fy = 615.4.
+# Aucune mesure de distance d'un tag centre ne contraint fy : elle est dominee
+# par l'axe le plus grossi. fy ne tient donc toujours que par l'anamorphose du
+# modele (fx/fy = 1.2859), que la verification independante a conservee sans
+# la mesurer separement.
 #
 # Un fy faux ne se voit PAS sur une mesure de distance d'un tag place au
 # centre — c'est pourquoi il faut un autre test pour le trancher :
@@ -84,13 +100,25 @@ K_BRUTE = np.array([[711.28204841, 0.0, 320.75619547],
 DIST = np.array([0.25503774, 0.43545221, 0.01411297, -0.01478373, -2.02963755])
 VUES, RMS = 15, 0.7793
 
-# --- la meme, focale corrigee par mesure independante -----------
-# fx, fy : ajustes a partir d'une verification sur distances connues
-# avec un algorithme independant (4 mesures: 500, 1000, 1500, 2000 mm).
-# Correction facteur: 1.2641x par rapport a l'ancienne calibration.
-K_CORRIGEE = np.array([[1000.30, 0.0, 320.75619547],
-                       [0.0, 777.90, 267.37226529],
+# --- la meme, focale retenue apres verification independante ----------------
+# fx, fy ne sont PAS deduits d'un ajustement sur les mesures du 02/09 : ce sont
+# les valeurs qu'une verification independante, faite avec un autre algorithme
+# de mesure, a trouvees justes sur le terrain. Elles valent 1.0595 x les
+# anciennes (791.34 / 615.40) — le meme facteur sur les deux axes, donc
+# l'anamorphose 1.2859 du modele optique est conservee telle quelle.
+#
+# On les prend telles quelles, et on ne les rejustifie pas apres coup. Une
+# tentative de les rededuire des trois mesures du bassin a d'ailleurs echoue :
+# aucune mise a l'echelle de 791.34 ne reproduit les distances de la
+# verification independante, ce qui montre simplement que ces mesures-la ne
+# sortaient pas de cette calibration. Les redemontrer n'aurait fait que fabriquer
+# un ajustement de plus.
+K_CORRIGEE = np.array([[838.45, 0.0, 320.75619547],
+                       [0.0, 652.10, 267.37226529],
                        [0.0, 0.0, 1.0]])
+# Les trois mesures du bassin du 02/09, gardees comme ARCHIVE : c'est sur elles
+# que tout le raisonnement du haut de ce fichier est bati, et les relire est le
+# seul moyen de le refaire. Elles ne servent plus a calculer quoi que ce soit.
 MESURES = ((1.0, 0.8887), (1.5, 1.3567), (2.0, 1.8000))
 
 ICI = Path(__file__).resolve().parent
@@ -122,14 +150,13 @@ def main():
         print("  courtes. Son fy (595.86) est plus petit qu'en air (602.37),")
         print("  ce que la physique interdit. A n'installer que pour comparer.")
     else:
-        print(f"  fx, fy corrigees par mesure independante (algorithme externe)")
-        print(f"  Facteur de correction: {K[0, 0] / K_BRUTE[0, 0]:.4f}x")
-        print(f"  Offset porthole: {0.0770:.1f} m (corriger_hublot)")
-        print("\n  Erreur de distance attendue (avant correction offset) :")
-        for vrai, brut in MESURES:
-            corrige = brut * K[0, 0] / K_BRUTE[0, 0]
-            print(f"    {vrai:.1f} m : {brut:.4f} m ({100*(brut-vrai)/vrai:+6.2f} %)"
-                  f"  ->  {corrige:.4f} m ({100*(corrige-vrai)/vrai:+.2f} %)")
+        print("  fx, fy retenues apres verification independante sur le terrain")
+        print(f"  soit {K[0, 0] / K_BRUTE[0, 0]:.4f} x la calibration au damier, "
+              f"sur les DEUX axes")
+        print(f"  anamorphose conservee : {K[0, 0] / K[1, 1]:.4f}")
+        print("\n  Ces focales ne sont pas rejustifiees par les mesures du 02/09 :")
+        print("  elles viennent d'une verification independante, pas d'un ajustement.")
+        print("  A confronter aux distances connues avec --focale (voir ci-dessous).")
 
     fichier = DOSSIER / "tube_eau.npz"
     deja_a_jour = False
@@ -204,7 +231,14 @@ def main():
     print("  python verifier_distance.py --reel 1.0 --tag 0.11732 --pi")
     print("  python verifier_distance.py --reel 1.5 --tag 0.11732 --pi")
     print("  python verifier_distance.py --reel 2.0 --tag 0.11732 --pi")
-    print("\nOn attend maintenant moins de 1 % d'erreur, aux trois distances.")
+    print("\nMesurer aussi a 0.5 m : c'est la que se separent une erreur de")
+    print("focale (meme pourcentage partout) et un decalage fixe (pourcentage")
+    print("qui grandit quand on se rapproche). Trois distances ou plus, et le")
+    print("script ajuste une droite et tranche tout seul.")
+    print("\nPour essayer d'AUTRES focales sans rien reinstaller :")
+    print("  python verifier_distance.py --reel 1.5 --tag 0.11732 --pi \\")
+    print("      --focale 838.45,652.10")
+    print("Le .npz n'est pas touche : on n'installe que la focale qui gagne.")
     return 0
 
 

@@ -448,8 +448,21 @@ def montage_est_immerge(montage=None):
 # Reference : Treibitz, Schechner, Kaplan, Negahdaripour, « Flat Refractive
 # Geometry », IEEE TPAMI 34(1):51-65, 2012 — le hublot rend le systeme
 # non-single-viewpoint, et le stenope n'en est qu'une approximation.
+# ATTENTION : ce decalage a ete mesure avec fx = 791.34, et la focale installee
+# vaut maintenant 838.45. Un decalage fixe et une focale ne sont pas
+# independants — c'est tout le sujet du bloc ci-dessus — donc rien ne garantit
+# que 16 mm soit encore la bonne valeur a cette focale-la.
+#
+# On le GARDE tel quel malgre tout, parce que c'est la seule valeur qui ait ete
+# reellement mesuree (4 distances, 7 sigma). La corriger au juge reviendrait a
+# inventer un nombre : c'est exactement comme cela qu'un decalage de 77 mm,
+# tire d'un ajustement sur des mesures qui ne venaient meme pas de cette
+# calibration, s'est retrouve installe un moment.
+#
+# A REMESURER : trois distances ou plus avec la focale actuelle, dont 0.5 m,
+# puis lire la section FORME DE L'ERREUR que verifier_distance.py affiche.
 DECALAGE_HUBLOT = {
-    "tube_eau": 0.0770,      # mesure independante, 4 distances, calibration affinez
+    "tube_eau": 0.0159,      # mesure au bassin a fx 791.34, 4 distances, 7 sigma
     "tube_air": 0.0,         # jamais mesure
     "nue_air": 0.0,          # pas de hublot : rien a corriger
 }
