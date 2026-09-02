@@ -63,7 +63,18 @@ except ImportError:
     rs = None
 
 RESOLUTION = (640, 480)
-TAILLES_CONNUES = (0.223, 0.1175)     # les deux tags du bassin, en metres
+# Les deux tags du bassin, cote du carre NOIR, en metres. Mesures au pied a
+# coulisse et non lus sur la fiche d'impression : une imprimante ne restitue
+# pas exactement l'echelle demandee.
+#
+# La distance sort de d = fx . S / s, ou S est ce cote. Une erreur relative
+# sur S se retrouve DONC TELLE QUELLE sur la distance : 1 % d'erreur de
+# mesure du tag = 1 % d'erreur a toutes les distances, sans exception. C'est
+# la raison pour laquelle ces deux nombres se mesurent, et ne s'estiment pas.
+#
+# En revanche, cela ne touche PAS la calibration : elle se fait au damier,
+# dont c'est le pas des carreaux qui compte, pas la taille des tags.
+TAILLES_CONNUES = (0.223, 0.11732)
 ICI = Path(__file__).resolve().parent
 
 
