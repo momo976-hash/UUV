@@ -45,7 +45,7 @@ except ImportError:
 CAMERA_INDEX = None
 RESOLUTION = optique.RESOLUTION
 
-TAILLE_TAG = 0.223
+TAILLE_TAG = optique.TAILLE_TAG_GRAND   # mesure au pied a coulisse, pas 223 mm nominal
 MIN_LIAISON = 6      # co-visibilites avant d'utiliser un tag (liaison rapide)
 MAX_LIAISON = 60     # on garde ce nombre d'observations pour affiner la liaison
 LISSAGE = 15

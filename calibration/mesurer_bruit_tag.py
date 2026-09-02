@@ -46,7 +46,7 @@ import optique  # noqa: E402
 
 CAMERA_INDEX = None
 RESOLUTION = optique.RESOLUTION
-TAILLE_TAG = 0.223
+TAILLE_TAG = optique.TAILLE_TAG_GRAND   # mesure au pied a coulisse, pas 223 mm nominal
 IMAGES_PAR_CAPTURE = 300
 FREQUENCE_SUPPOSEE = 30.0
 

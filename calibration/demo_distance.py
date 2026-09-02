@@ -83,8 +83,9 @@ import optique  # noqa: E402
 CAMERA_INDEX = None
 FAMILLE = cv2.aruco.DICT_APRILTAG_36h11
 
-# Les deux tags dont on dispose : celui du bassin et le petit.
-TAILLES = (0.223, 0.115)
+# Les deux tags dont on dispose : celui du bassin et le petit. Mesures au
+# pied a coulisse, voir optique.py — ne pas revenir au nominal (0.223/0.115).
+TAILLES = (optique.TAILLE_TAG_GRAND, optique.TAILLE_TAG_PETIT)
 
 DOSSIER_PREUVES = Path(__file__).resolve().parent / "preuves"
 

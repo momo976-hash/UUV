@@ -17,7 +17,7 @@ CAMERA_INDEX = None
 # Resolution FIGEE : doit etre identique pour la calibration et les mesures.
 RESOLUTION = (640, 480)
 
-TAILLE_TAG = 0.223          # cote du carre noir, en metres (22,3 cm)
+TAILLE_TAG = 0.22389        # cote du carre noir, mesure au pied a coulisse (nominal 223 mm)
 FACTEUR_FOCALE = 0.95       # correction de focale issue de la validation
 
 ECHANTILLONS_REQUIS = 25    # observations avant d'enregistrer un tag

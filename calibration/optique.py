@@ -95,6 +95,21 @@ TUBE_LONGUEUR = 0.150
 TUBE_MASSE = 0.115            # kg
 TUBE_PROFONDEUR_MAX = 130     # metres d'eau
 
+# --- les deux tags du bassin, cote du carre NOIR, en metres -----------------
+# Mesures au pied a coulisse, pas lus sur la fiche d'impression : une
+# imprimante ne restitue pas exactement l'echelle demandee. La distance sort
+# de d = fx.S/s, ou S est ce cote : 1 % d'erreur de mesure du tag redonne 1 %
+# d'erreur a TOUTES les distances, sans exception, donc ces deux nombres se
+# mesurent et ne s'estiment pas.
+#
+# Les deux s'ecartent du nominal dans des sens OPPOSES — le petit de -0.15 %,
+# le grand de +0.40 %. Ce n'est donc pas une echelle d'imprimante, qui les
+# aurait decales du meme cote : c'est propre a chaque impression. Utiliser le
+# nominal (0.223 / 0.115) plutot que ces valeurs revient a une erreur de
+# mesure de tag qu'on connaissait deja et qu'on choisit de ne pas corriger.
+TAILLE_TAG_GRAND = 0.22389    # nominal 223.0 mm
+TAILLE_TAG_PETIT = 0.11732    # nominal 117.5 mm
+
 # --- comment la camera est posee dedans -------------------------------------
 # "radiale" : couchee le long du tube, regard a travers la paroi cylindrique.
 #             C'est le seul montage qui rentre dans un tube de 49.5 mm, et

@@ -182,7 +182,7 @@ import optique  # noqa: E402
 #
 # `python optique.py` chiffre les trois.
 FOCALE_EAU = optique.focale_eau()
-TAILLE_TAG = 0.223
+TAILLE_TAG = optique.TAILLE_TAG_GRAND   # mesure au pied a coulisse, pas 223 mm nominal
 
 # ===========================================================================
 # LES NOMBRES A MESURER

@@ -36,7 +36,7 @@ import optique  # noqa: E402
 CAMERA_INDEX = None          # None = detection automatique
 RESOLUTION = (640, 480)      # doit etre identique a celle de la calibration
 
-TAILLE_TAG = 0.223           # cote du carre noir, en metres
+TAILLE_TAG = optique.TAILLE_TAG_GRAND   # mesure au pied a coulisse, pas 223 mm nominal
 FACTEUR_APPROX = 0.95        # ancienne approximation (focale = largeur x facteur)
 LISSAGE = 20                 # images moyennees pour stabiliser l'affichage
 

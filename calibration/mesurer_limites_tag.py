@@ -72,8 +72,10 @@ MONTAGE = optique.MONTAGE_ACTIF
 K_CALIB, DIST_CALIB = optique.charger(MONTAGE)
 RESOLUTION = optique.RESOLUTION
 
-TAILLE_TAG_REELLE = 0.223   # les tags du bassin : c'est vers eux qu'on conclut
-TAILLE_TAG = 0.223          # le tag d'essai devant la camera (option --tag)
+# mesure au pied a coulisse (optique.py) : les tags du bassin s'ecartent du
+# nominal 223 mm, et c'est vers ce nombre-la qu'on conclut, pas vers 0.223.
+TAILLE_TAG_REELLE = optique.TAILLE_TAG_GRAND
+TAILLE_TAG = TAILLE_TAG_REELLE   # le tag d'essai devant la camera (option --tag)
 
 FENETRE = 30          # images sur lesquelles on estime le taux de detection
 TAUX_LIMITE = 0.95    # en dessous, on considere la detection non fiable

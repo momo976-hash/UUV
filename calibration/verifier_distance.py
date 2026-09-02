@@ -116,6 +116,11 @@ RESOLUTION = (640, 480)
 # -0.15 %, le grand de +0.40 %. Ce n'est donc pas une echelle d'imprimante,
 # qui les aurait decales du meme cote : c'est propre a chaque impression.
 # Aucun des deux ne se devine, il faut les mesurer.
+#
+# Dupliques ici plutot qu'importes d'optique.py (TAILLE_TAG_GRAND,
+# TAILLE_TAG_PETIT) : ce script part souvent seul sur le PC du bassin, sans
+# le reste du depot. Les deux couples doivent rester egaux ; changer l'un
+# sans l'autre laisserait les deux chaines de mesure diverger en silence.
 TAILLES_CONNUES = (0.22389, 0.11732)
 ICI = Path(__file__).resolve().parent
 

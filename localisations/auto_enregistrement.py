@@ -14,7 +14,7 @@ from collections import deque
 import cv2
 import numpy as np
 
-TAILLE_TAG = 0.223       # cote du carre noir, en metres (22,3 cm)
+TAILLE_TAG = 0.22389     # cote du carre noir, mesure au pied a coulisse (nominal 223 mm)
 FACTEUR_FOCALE = 0.95
 CARTE_PX = 500
 ECHELLE = 150            # pixels par metre ; reglable en direct avec '+' et '-'

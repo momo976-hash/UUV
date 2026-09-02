@@ -42,7 +42,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 # 1. Le bassin et les tags
 # --------------------------------------------------------------------------
 LONGUEUR, LARGEUR, PROFONDEUR = 3.80, 1.67, 1.00
-TAILLE_TAG = 0.223
+TAILLE_TAG = optique.TAILLE_TAG_GRAND   # mesure au pied a coulisse, pas 223 mm nominal
 BORDURE = 0.020          # ruban noir autour du tag (methode de Josiah)
 
 # id, paroi, x, y, z (profondeur), normale (dirigee vers l'interieur du bassin)
