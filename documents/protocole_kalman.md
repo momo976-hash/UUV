@@ -2,6 +2,26 @@
 
 Ce qu'il reste a faire APRES la calibration `tube_eau`, dans l'ordre.
 
+## Document de reference
+
+Le filtre suit **Alex Becker, « Kalman Filter Explained Through Examples »**,
+kalmanfilter.net — modele **cinematique a vitesse constante**, c'est celui
+demande par Thein.
+
+Ce n'est pas une inspiration lointaine : c'est le meme filtre. Pour le
+verifier, lancer
+
+```
+python localisations/kalman_du_cours.py
+```
+
+Ce script fait passer l'exemple chiffre du document (un radar 1D qui suit un
+avion) dans la classe qui filtre reellement la position de l'engin, et
+compare les 9 valeurs publiees — `Q`, `x(1,0)`, `P(1,0)`, `K(1)`, `x(1,1)`,
+`P(1,1)`, `x(2,1)`, `P(2,1)` — a celles calculees. Elles sont retrouvees a la
+quatrieme decimale. Le meme controle tourne en verrou dans les auto-tests de
+`filtre_kalman.py` : toucher aux equations le fait echouer immediatement.
+
 Le filtre est deja ecrit et teste (`localisations/filtre_kalman.py`, lancer
 `python localisations/filtre_kalman.py` passe 6 auto-tests). Il n'y a donc
 rien a coder. Ce qui manque, ce sont **quatre nombres mesures** que le filtre

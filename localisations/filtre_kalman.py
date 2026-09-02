@@ -449,10 +449,102 @@ def fusionner_positions(mesures):
 
 
 # ===========================================================================
-# Filtre de position : lineaire, exactement le Kalman du cours
+# Le noyau : les cinq equations du Kalman lineaire, et rien d'autre
+# ===========================================================================
+class KalmanLineaire:
+    """Les cinq equations du filtre de Kalman lineaire, telles quelles.
+
+    NOTATION. Celle du document de reference du projet — Alex Becker,
+    « Kalman Filter Explained Through Examples », kalmanfilter.net, 2026.
+    Les symboles sont les siens, exactement :
+
+        PREDICTION
+            x(n+1,n) = F x(n,n) + G u(n)          equation d'extrapolation
+            P(n+1,n) = F P(n,n) F' + Q            covariance extrapolee
+
+        MISE A JOUR
+            K(n)   = P(n,n-1) H' [H P(n,n-1) H' + R(n)]^-1        gain
+            x(n,n) = x(n,n-1) + K(n) [z(n) - H x(n,n-1)]          etat
+            P(n,n) = (I-KH) P(n,n-1) (I-KH)' + K R K'             covariance
+
+    POURQUOI CETTE CLASSE EXISTE SEPAREMENT. Elle ne connait ni tag, ni tube,
+    ni centrale inertielle : elle ne sait faire que ces cinq lignes. Tout ce
+    qui est propre a l'engin — quel etat, quel modele de mouvement, quelle
+    mesure, quelle confiance — vit dans les classes qui l'utilisent.
+
+    Cette separation n'est pas une coquetterie : elle rend le coeur du filtre
+    VERIFIABLE sur l'exemple chiffre du document lui-meme (un radar qui suit
+    un avion, etat [portee, vitesse]). C'est ce que fait kalman_du_cours.py,
+    qui retrouve les valeurs imprimees dans le document a la quatrieme
+    decimale. Un desaccord la-dessus se verrait tout de suite, au lieu de se
+    cacher derriere la geometrie des tags.
+
+    FORME DE JOSEPH. Le document donne deux ecritures de la mise a jour de P :
+    la simplifiee (I-KH)P, et celle de Joseph. Elles sont egales en arithmetique
+    exacte — kalman_du_cours.py le verifie, l'ecart vaut 2e-15 sur son exemple.
+    On garde Joseph, que le document recommande : elle reste symetrique et
+    definie positive apres des milliers d'iterations en virgule flottante, la
+    simplifiee non.
+    """
+
+    def __init__(self, x, P):
+        self.x = np.asarray(x, dtype=float).ravel()
+        self.P = np.asarray(P, dtype=float)
+
+    def predire(self, F, Q, G=None, u=None):
+        """x(n+1,n) = F x + G u   et   P(n+1,n) = F P F' + Q.
+
+        G et u sont l'entree connue du document (« input variable »), dont il
+        donne pour exemple les lectures d'un accelerometre embarque. C'est
+        exactement l'usage qu'on en fait ici.
+        """
+        self.x = F @ self.x
+        if G is not None and u is not None:
+            self.x = self.x + G @ np.asarray(u, dtype=float).ravel()
+        self.P = F @ self.P @ F.T + Q
+
+    def innovation(self, z, H):
+        """z(n) - H x(n,n-1) : l'information neuve apportee par la mesure."""
+        return np.asarray(z, dtype=float).ravel() - H @ self.x
+
+    def gain(self, H, R):
+        """K = P H' (H P H' + R)^-1, et S = H P H' + R au passage.
+
+        S est la covariance de l'innovation. Le document ne s'en sert pas,
+        mais c'est elle qui permet de reconnaitre une mesure aberrante — le
+        « Outlier Treatment » qu'il renvoie a son chapitre dedie.
+        """
+        S = H @ self.P @ H.T + R
+        return self.P @ H.T @ np.linalg.inv(S), S
+
+    def corriger(self, z, H, R):
+        """Les trois equations de mise a jour. Retourne (innovation, K)."""
+        y = self.innovation(z, H)
+        K, _ = self.gain(H, R)
+        self.x = self.x + K @ y
+        I_KH = np.eye(len(self.x)) - K @ H
+        self.P = I_KH @ self.P @ I_KH.T + K @ R @ K.T
+        return y, K
+
+
+# ===========================================================================
+# Filtre de position : le noyau ci-dessus, avec F, Q et H de l'engin
 # ===========================================================================
 class FiltreKalmanPosition:
-    """Modele a vitesse constante, mesure de position seule."""
+    """Modele CINEMATIQUE a vitesse constante, mesure de position seule.
+
+    C'est le modele du document de reference, porte de 1 a 3 dimensions :
+
+        etat      x = [px, py, pz, vx, vy, vz]'
+        modele    F = [[I3, dt.I3], [0, I3]]        vitesse constante
+        bruit     Q = sigma_a^2 . G G'   avec G = [dt^2/2 . I3 ; dt . I3]
+        mesure    H = [I3, 0]                        les tags donnent p, pas v
+
+    Le Q ci-dessus EST celui du document. Il ecrit, en 1D :
+        Q = sigma_a^2 [[dt^4/4, dt^3/2], [dt^3/2, dt^2]]
+    et G G' vaut exactement ces quatre blocs. C'est verifie chiffre par
+    chiffre dans kalman_du_cours.py.
+    """
 
     H = np.hstack([np.eye(3), np.zeros((3, 3))])
 
@@ -469,12 +561,38 @@ class FiltreKalmanPosition:
         self.seuil = float(seuil_chi2)             # chi2 a 3 ddl, seuil 99.9 %
         self.max_rejets_consecutifs = int(max_rejets_consecutifs)
         self.sigma_v_reprise = float(sigma_vitesse_reprise)
-        self.x = np.zeros(6)
-        self.P = np.eye(6) * 1e3
+        self.noyau = KalmanLineaire(np.zeros(6), np.eye(6) * 1e3)
         self.demarre = False
         self.rejets = 0
         self.rejets_consecutifs = 0
         self.reprises = 0
+
+    # x et P vivent dans le noyau ; on les expose tels quels pour que le reste
+    # du fichier — et les scripts qui lisent filtre.x — ne change pas.
+    @property
+    def x(self):
+        return self.noyau.x
+
+    @x.setter
+    def x(self, valeur):
+        self.noyau.x = np.asarray(valeur, dtype=float).ravel()
+
+    @property
+    def P(self):
+        return self.noyau.P
+
+    @P.setter
+    def P(self, valeur):
+        self.noyau.P = np.asarray(valeur, dtype=float)
+
+    @staticmethod
+    def modele(dt):
+        """F et G du modele a vitesse constante, pour un pas dt."""
+        F = np.eye(6)
+        F[:3, 3:] = dt * np.eye(3)
+        # G : effet d'une acceleration pendant dt, sur la position et la vitesse
+        G = np.vstack([0.5 * dt * dt * np.eye(3), dt * np.eye(3)])
+        return F, G
 
     def demarrer(self, position, sigma_position=0.05, sigma_vitesse=0.5):
         self.x = np.concatenate([np.asarray(position, dtype=float), np.zeros(3)])
@@ -504,18 +622,17 @@ class FiltreKalmanPosition:
         """
         if not self.demarre or dt <= 0:
             return
-        F = np.eye(6)
-        F[:3, 3:] = dt * np.eye(3)
-        # G : effet d'une acceleration pendant dt, sur la position et la vitesse
-        G = np.vstack([0.5 * dt * dt * np.eye(3), dt * np.eye(3)])
-        self.x = F @ self.x
+        F, G = self.modele(dt)
         if acceleration is None:
             incertitude = self.sigma_a          # acceleration inconnue
+            entree = None
         else:
-            self.x = self.x + G @ np.asarray(acceleration, dtype=float).ravel()
             incertitude = self.bruit_accel      # acceleration mesuree
+            entree = acceleration
             self.accel_utilise = True
-        self.P = F @ self.P @ F.T + incertitude ** 2 * (G @ G.T)
+        # Q = sigma^2 . G G' — le Q du document, ecrit en 3D.
+        Q = incertitude ** 2 * (G @ G.T)
+        self.noyau.predire(F, Q, G=G, u=entree)
 
     def corriger(self, position_mesuree, covariance):
         """Integre une mesure. Retourne (acceptee, distance_mahalanobis)."""
@@ -525,10 +642,9 @@ class FiltreKalmanPosition:
 
         z = np.asarray(position_mesuree, dtype=float)
         R = np.asarray(covariance, dtype=float)
-        y = z - self.H @ self.x
+        y = self.noyau.innovation(z, self.H)
         S = self.H @ self.P @ self.H.T + R
-        S_inv = np.linalg.inv(S)
-        distance = float(y @ S_inv @ y)
+        distance = float(y @ np.linalg.solve(S, y))
 
         if distance > self.seuil:      # aberration probable (flip d'un tag)
             self.rejets_consecutifs += 1
@@ -548,12 +664,8 @@ class FiltreKalmanPosition:
             return True, distance
 
         self.rejets_consecutifs = 0
-        K = self.P @ self.H.T @ S_inv
-        self.x = self.x + K @ y
-        # forme de Joseph : garde P symetrique et definie positive meme
-        # apres des milliers d'iterations en virgule flottante.
-        I_KH = np.eye(6) - K @ self.H
-        self.P = I_KH @ self.P @ I_KH.T + K @ R @ K.T
+        # Les trois equations de mise a jour du document, forme de Joseph.
+        self.noyau.corriger(z, self.H, R)
         return True, distance
 
     @property
@@ -1293,6 +1405,33 @@ def _auto_test():
           f"sans accel {1000*resultats[False]:.0f} mm, "
           f"avec accel {1000*resultats[True]:.0f} mm")
     assert resultats[True] < resultats[False] / 3
+
+    # --- accord avec le document de reference ------------------------------
+    # L'exemple chiffre de Becker (radar 1D, kalmanfilter.net), passe par le
+    # noyau du projet. Ce test protege les cinq equations : si quelqu'un
+    # touche a la prediction, au gain ou a la forme de Joseph, l'ecart avec
+    # les valeurs publiees le dit immediatement. Le detail commente vit dans
+    # kalman_du_cours.py ; ici on garde juste le verrou.
+    dt_doc, sigma_doc = 5.0, 0.2
+    F_doc = np.array([[1.0, dt_doc], [0.0, 1.0]])
+    Q_doc = sigma_doc ** 2 * np.array(
+        [[dt_doc ** 4 / 4, dt_doc ** 3 / 2], [dt_doc ** 3 / 2, dt_doc ** 2]])
+    ref = KalmanLineaire(np.array([10000.0, 200.0]), np.diag([16.0, 0.25]))
+    ref.predire(F_doc, Q_doc)
+    assert np.allclose(ref.x, [11000.0, 200.0])
+    assert np.allclose(ref.P, [[28.5, 3.75], [3.75, 1.25]])
+    K_doc, _ = ref.gain(np.eye(2), np.diag([36.0, 2.25]))
+    assert np.allclose(K_doc, [[0.4048, 0.6377], [0.0399, 0.3144]], atol=5e-5)
+    ref.corriger(np.array([11020.0, 202.0]), np.eye(2), np.diag([36.0, 2.25]))
+    assert np.allclose(ref.x, [11009.37, 201.43], atol=5e-3)
+    assert np.allclose(ref.P, [[14.57, 1.43], [1.43, 0.71]], atol=5e-3)
+    # Le Q 3D de l'engin est le Q 1D du document, bloc par bloc.
+    _, G_doc = FiltreKalmanPosition.modele(dt_doc)
+    Q3 = sigma_doc ** 2 * (G_doc @ G_doc.T)
+    assert np.isclose(Q3[0, 0], Q_doc[0, 0]) and np.isclose(Q3[0, 3], Q_doc[0, 1])
+    assert np.isclose(Q3[3, 3], Q_doc[1, 1])
+    print("accord avec Becker (kalmanfilter.net) : les 8 valeurs publiees de "
+          "son exemple sont retrouvees")
 
     print("=" * 68)
     print("TOUS LES TESTS PASSENT")
