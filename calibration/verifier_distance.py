@@ -236,9 +236,18 @@ def ouvrir_camera():
             return CameraOpenCV(cap)
         cap.release()
 
-    print("ERREUR : aucun flux couleur trouve.")
-    print("Sur le Pi, verifie que la RealSense est branchee et que")
-    print("pyrealsense2 est installe.")
+    print("ERREUR : aucune camera couleur branchee SUR CET ORDINATEUR.")
+    print()
+    print("Si la camera est tenue par le Raspberry Pi — c'est le cas au bord")
+    print("du bassin — il manque simplement l'option --pi :")
+    print()
+    print("    python verifier_distance.py --reel <distance> --tag <cote> --pi")
+    print()
+    print("Ce PC ecoute alors le port 5000, et le noeud d'emission du Pi s'y")
+    print("connecte. Lancer d'abord cette commande, le noeud du Pi ensuite.")
+    print()
+    print("Si la camera est bien censee etre branchee ici : verifie le cable")
+    print("et que pyrealsense2 est installe (python -m pip install pyrealsense2).")
     return None
 
 
