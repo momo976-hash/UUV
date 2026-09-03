@@ -269,7 +269,7 @@ lissage_filtre = deque(maxlen=LISSAGE)
 MEMOIRE_DYNAMIQUE = 900          # 30 s a 30 Hz
 vitesses_angulaires = deque(maxlen=MEMOIRE_DYNAMIQUE)   # deg/s
 accelerations = deque(maxlen=MEMOIRE_DYNAMIQUE)         # m/s^2
-precedent_p = precedent_R = precedent_t = precedent_ref = None
+precedent_p = precedent_R = precedent_t = precedent_ref = precedent_carte_ref = None
 precedente_vitesse = None
 
 
@@ -377,30 +377,41 @@ while True:
                     print(f"Tag {B} relie automatiquement. Monde : {sorted(carte)}")
 
     # pose de la camera dans le repere monde (meilleur tag connu visible)
-    cam_p = cam_R = ref = None
+    cam_p = cam_R = ref = carte_ref = None
     connus_vus = [i for i in poses if i in carte]
     if connus_vus:
         ref = max(connus_vus, key=lambda i: surfaces[i])
-        T_monde_cam = carte[ref] @ inverse(poses[ref])
+        carte_ref = carte[ref]
+        T_monde_cam = carte_ref @ inverse(poses[ref])
         cam_p = T_monde_cam[:3, 3]
         cam_R = T_monde_cam[:3, :3]
 
     # --- ce que l'engin fait vraiment : vitesse de rotation et acceleration -
     # Mesure sur la pose BRUTE, entre deux images consecutives.
     #
-    # Deux poses consecutives ne sont comparables QUE si elles viennent du
-    # MEME tag de reference. carte[B] continue d'etre affinee en continu tant
-    # que B reste visible avec un autre tag connu (cf. plus haut) : rien ne
-    # garantit que carte[2] et carte[7] s'accordent au millimetre a un instant
-    # donne, meme si le monde est juste en moyenne. Comparer une position
-    # obtenue via le tag 7 a la suivante obtenue via le tag 2 revient a
-    # mesurer l'ECART ENTRE DEUX CARTES, pas un deplacement reel — et divise
-    # par un intervalle d'image (~1/30 s), un ecart de quelques cm devient des
-    # centaines de deg/s ou de m/s2. Un changement de reference est donc traite
-    # exactement comme une perte de tag : on ne differencie pas a travers.
+    # Deux poses consecutives ne sont comparables QUE si elles viennent de LA
+    # MEME carte du MEME tag de reference. Un changement de tag (7 -> 2) ne
+    # suffit pas a le detecter : carte[B] continue d'etre affinee en continu
+    # tant que B reste co-visible avec un autre tag connu (cf. plus haut), et
+    # cela vaut aussi pour le tag origine — des que le 2e tag est assez lie
+    # pour servir a son tour de reference, il peut re-affiner carte[origine].
+    # Verifie par simulation : une camera IMMOBILE, meme tag de reference
+    # d'un bout a l'autre mais dont la carte se raffine chaque image, rend
+    # deja des dizaines de deg/s et m/s2 de dynamique fantome — la seule
+    # comparaison d'ID (premiere version de ce correctif) ne voit rien venir
+    # puisque l'ID de reference, lui, ne change pas.
+    #
+    # On compare donc l'OBJET carte[ref] par IDENTITE (`is`), pas sa valeur :
+    # chaque affinage fait `carte[B] = T` avec un tableau tout neuf (issu de
+    # np.median(...)), donc `is` detecte un affinage meme infime, ce qu'une
+    # comparaison numerique a tolerance fixe pourrait manquer. Un changement
+    # de reference OU un affinage de la carte entre deux images est donc
+    # traite exactement comme une perte de tag : on ne differencie pas a
+    # travers deux etats de carte differents, aussi proches soient-ils.
     if cam_p is not None:
         instant = time.time()
-        if precedent_t is not None and ref == precedent_ref:
+        if (precedent_t is not None and ref == precedent_ref
+                and carte_ref is precedent_carte_ref):
             intervalle = instant - precedent_t
             if 1e-3 < intervalle < 0.5:      # on ignore les trous (tag perdu)
                 vitesses_angulaires.append(angle_entre(precedent_R, cam_R) / intervalle)
@@ -413,10 +424,10 @@ while True:
                 precedente_vitesse = None
         else:
             precedente_vitesse = None
-        precedent_p, precedent_R, precedent_t, precedent_ref = (
-            cam_p.copy(), cam_R.copy(), instant, ref)
+        precedent_p, precedent_R, precedent_t, precedent_ref, precedent_carte_ref = (
+            cam_p.copy(), cam_R.copy(), instant, ref, carte_ref)
     else:
-        precedent_t = precedent_ref = None
+        precedent_t = precedent_ref = precedent_carte_ref = None
         precedente_vitesse = None
 
     # --- filtre de Kalman : nourri par TOUS les tags connus visibles --------
