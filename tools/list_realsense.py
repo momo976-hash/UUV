@@ -2,19 +2,19 @@
 #
 #     python list_realsense.py
 #
-# Repond a une erreur precise du SDK : "Couldn't resolve requests". Elle veut
+# Repond a une error precise du SDK : "Couldn't resolve requests". Elle veut
 # dire que les flux demandes n'existent pas sur l'appareil trouve, sans dire
 # lesquels manquent ni pourquoi. Les causes possibles se ressemblent toutes a
 # l'ecran :
 #
 #   - c'est une D435 et non une D435i : le model SANS "i" n'a pas d'IMU.
 #     C'est de loin le cas le plus frequent, et rien ne le signale autrement
-#     que par cette erreur.
+#     que par cette error.
 #   - deux cameras sont branchees et le SDK a pris celle qui n'a pas d'IMU.
 #   - un autre programme tient deja la camera.
 #
 # Ce script enumere les appareils, leur numero de serie, leurs capteurs et
-# leurs flux, puis dit franchement si une centrale inertielle est disponible.
+# leurs flux, puis dit franchement si une imu inertielle est disponible.
 import sys
 
 try:
@@ -39,11 +39,11 @@ def main():
         print("  - essaie un autre port USB, de preference USB 3")
         return 1
 
-    avec_imu = []
+    with_imu = []
     for numero, appareil in enumerate(appareils):
-        nom = appareil.get_info(rs.camera_info.name)
+        name = appareil.get_info(rs.camera_info.name)
         serie = appareil.get_info(rs.camera_info.serial_number)
-        print(f"\n[{numero}] {nom}")
+        print(f"\n[{numero}] {name}")
         print(f"     numero de serie : {serie}")
         try:
             print(f"     micrologiciel   : "
@@ -64,7 +64,7 @@ def main():
         accel = any("accel" in t for t in tous)
         if gyro and accel:
             print("     -> CENTRALE INERTIELLE PRESENTE (accel + gyro)")
-            avec_imu.append((numero, nom, serie))
+            with_imu.append((numero, name, serie))
         else:
             manque = [n for n, present in (("gyro", gyro), ("accel", accel))
                       if not present]
@@ -73,23 +73,23 @@ def main():
     print("\n" + "=" * 68)
     print("CONCLUSION")
     print("=" * 68)
-    if not avec_imu:
-        print("Aucun appareil branche n'a de centrale inertielle.")
+    if not with_imu:
+        print("Aucun appareil branche n'a de imu inertielle.")
         print("\nLe model D435 (sans 'i') n'en a PAS ; seul le D435i en porte")
-        print("une. Verifie le nom exact affiche plus haut : c'est la seule")
+        print("une. Verifie le name exact affiche plus haut : c'est la seule")
         print("facon de les distinguer, ils sont physiquement identiques.")
         print("\nimu_realsense.py ne peut donc pas fonctionner avec celui-ci.")
         print("En attendant, la demonstration des maths tourne sans materiel :")
         print("  python imu_realsense.py --simulation")
         return 1
 
-    print(f"{len(avec_imu)} appareil(s) avec centrale inertielle :")
-    for numero, nom, serie in avec_imu:
-        print(f"  [{numero}] {nom}   serie {serie}")
+    print(f"{len(with_imu)} appareil(s) avec imu inertielle :")
+    for numero, name, serie in with_imu:
+        print(f"  [{numero}] {name}   serie {serie}")
     if len(appareils) > 1:
         print("\nATTENTION : plusieurs appareils sont branches. Le SDK prend le")
-        print("premier qu'il trouve, et rien ne dit lequel. Pour toute mesure")
-        print("qui compte — bias du gyro, bruit — DEBRANCHE les autres :")
+        print("first qu'il trouve, et rien ne dit lequel. Pour toute measurement")
+        print("qui compte — bias du gyro, noise — DEBRANCHE les autres :")
         print("le bias est propre a un exemplaire, comme une calibration.")
     print("\nTu peux lancer :  python imu_realsense.py")
     return 0

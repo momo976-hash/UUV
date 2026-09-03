@@ -24,7 +24,7 @@ CARTE_DES_TAGS = {
 
 
 def rotation_y(deg):
-    """Rotation autour de l'axe vertical Y (le 'cap' du tag)."""
+    """Rotation autour de l'axis vertical Y (le 'cap' du tag)."""
     a = np.radians(deg)
     c, s = np.cos(a), np.sin(a)
     return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]], dtype=np.float64)
@@ -50,13 +50,13 @@ def inverse(T):
 def ouvrir_camera():
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     for index in range(4):
-        for backend, nom in backends:
+        for backend, name in backends:
             cap = cv2.VideoCapture(index, backend) if backend else cv2.VideoCapture(index)
             if cap.isOpened():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera trouvee : index={index}, backend={nom}, {ww}x{hh}")
+                    print(f"Camera trouvee : index={index}, backend={name}, {ww}x{hh}")
                     return cap, ww, hh
             cap.release()
     return None, 0, 0
@@ -73,23 +73,23 @@ dist = np.zeros(5)
 h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
-dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
-detecteur = cv2.aruco.ArucoDetector(dictionnaire, cv2.aruco.DetectorParameters())
+dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
+detector = cv2.aruco.ArucoDetector(dictionary, cv2.aruco.DetectorParameters())
 
-print("En direct. Montre un tag connu de la carte. 'q' pour quitter.")
+print("En direct. Montre un tag known de la tag_map. 'q' pour quitter.")
 
 while True:
     ok, image = cam.read()
     if not ok:
         continue
     gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    coins, ids, _ = detecteur.detectMarkers(gris)
+    corners, ids, _ = detector.detectMarkers(gris)
 
     positions_camera = []
     orientations_camera = []
     if ids is not None:
-        cv2.aruco.drawDetectedMarkers(image, coins, ids)
-        for c, tag_id in zip(coins, ids.flatten()):
+        cv2.aruco.drawDetectedMarkers(image, corners, ids)
+        for c, tag_id in zip(corners, ids.flatten()):
             if tag_id not in CARTE_DES_TAGS:
                 continue
             pts = c.reshape(4, 2).astype(np.float64)
@@ -99,7 +99,7 @@ while True:
                 continue
             cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAG_SIZE / 2, 2)
 
-            # Tag vu depuis la camera
+            # Tag seen depuis la camera
             R_cam, _ = cv2.Rodrigues(rvec)
             T_camera_tag = transformation(R_cam, tvec)
 
@@ -123,10 +123,10 @@ while True:
                     (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
         cv2.putText(image, f"CAMERA rot : roll={roll:+.0f} pitch={pitch:+.0f} yaw={yaw:+.0f} deg",
                     (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
-        cv2.putText(image, f"({len(positions_camera)} tag(s) connu(s))",
+        cv2.putText(image, f"({len(positions_camera)} tag(s) known(s))",
                     (10, 88), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1)
     else:
-        cv2.putText(image, "Aucun tag de la carte visible", (10, 40),
+        cv2.putText(image, "Aucun tag de la tag_map visible", (10, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
     cv2.imshow("Localisation piscine + orientation (q pour quitter)", image)

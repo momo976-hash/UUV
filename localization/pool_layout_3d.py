@@ -1,23 +1,23 @@
 # pool_layout_3d.py — Vue 3D MANIPULABLE du plan de pose des tags dans le bassin.
 #
 # Le meme plan que le schema, mais qu'on peut tourner, zoomer et inspecter.
-# En plus : une camera virtuelle qu'on deplace pour verifier, avant de mouiller
-# quoi que ce soit, quels tags entrent ENSEMBLE dans l'image sous l'eau (c'est
+# En plus : une camera virtuelle qu'on deplace pour check, avant de mouiller
+# quoi que ce soit, quels tags entrent ENSEMBLE dans l'image sous l'water (c'est
 # la condition pour que deux tags se relient dans world_frame_check.py).
 #
-# Repere du bassin :  x = longueur (3.80 m)   y = largeur (1.67 m)
+# Repere du bassin :  x = length (3.80 m)   y = width (1.67 m)
 #                     z = PROFONDEUR sous la surface (0 = surface, 1.00 = fond)
 #
 # Commandes
 #   souris glisser : tourner        molette : zoom          0 : recadrer
 #   1 : vue de dessus   2 : vue de face   3 : vue isometrique
-#   n : normales    l : boucle des liaisons    e : eau et parois
+#   n : normales    l : boucle des liaisons    e : water et parois
 #   c : camera virtuelle on/off
 #   fleches : deplacer la camera (x, y)     a / d : pivoter     w / x : monter / descendre
 #   p : enregistrer une image PNG     h : rappel des touches     q : quitter
 #
 # Lancement :  python pool_layout_3d.py
-#              python pool_layout_3d.py --png   (pas de fenetre, exporte 3 vues)
+#              python pool_layout_3d.py --png   (pas de window, exporte 3 vues)
 import sys
 from pathlib import Path
 
@@ -28,8 +28,8 @@ import optics  # noqa: E402
 
 EXPORT = "--png" in sys.argv
 
-# L'image part toujours a cote de ce fichier, jamais dans le dossier courant :
-# lance depuis PowerShell, le dossier courant est souvent celui de VS Code.
+# L'image part toujours a cote de ce path, jamais dans le folder current :
+# lance depuis PowerShell, le folder current est souvent celui de VS Code.
 IMAGE = Path(__file__).resolve().with_name("pool_layout_3d.png")
 
 import matplotlib
@@ -42,10 +42,10 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 # 1. Le bassin et les tags
 # --------------------------------------------------------------------------
 LONGUEUR, LARGEUR, PROFONDEUR = 3.80, 1.67, 1.00
-TAG_SIZE = optics.LARGE_TAG_SIZE   # mesure au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au pied a coulisse, pas 223 mm nominal
 BORDURE = 0.020          # ruban noir autour du tag (methode de Josiah)
 
-# id, paroi, x, y, z (profondeur), normale (dirigee vers l'interieur du bassin)
+# id, paroi, x, y, z (depth), normale (dirigee vers l'interieur du bassin)
 TAGS = [
     (0, "Longue A", 0.50, 0.000, 0.35, (0, +1, 0)),
     (1, "Longue A", 1.45, 0.000, 0.65, (0, +1, 0)),
@@ -67,28 +67,28 @@ COULEUR_PAROI = {
 }
 
 # --------------------------------------------------------------------------
-# 2. La camera sous l'eau, dans son tube
+# 2. La camera sous l'water, dans son tube
 # --------------------------------------------------------------------------
 # Toute l'optics vient de optics.py : matrix de calibration, refraction du
-# hublot, et le TUBE, qui peut rogner le champ avant meme que l'eau s'en mele.
-# Le champ retenu ci-dessous est donc le plus petit des deux.
+# hublot, et le TUBE, qui peut rogner le champ avant meme que l'water s'en mele.
+# Le champ kept ci-dessous est donc le plus petit des deux.
 LARGEUR_PX, HAUTEUR_PX = optics.RESOLUTION
 _demi_h_air, _demi_v_air, _demi_d_air = optics.demi_champs()
 
 # Le champ n'est pas reduit pareil dans les deux directions. Camera couchee
-# dans le tube, l'axe HORIZONTAL de l'image suit l'axe du tube et traverse une
-# lame a faces paralleles : il se retrecit d'un facteur 1.33. L'axe VERTICAL
+# dans le tube, l'axis HORIZONTAL de l'image suit l'axis du tube et traverse une
+# lame a faces paralleles : il se retrecit d'un facteur 1.33. L'axis VERTICAL
 # est circonferentiel et traverse un menisque, dont l'effet ne depend que de
-# l'ecart entre la pupille et l'axe du tube : nul si elle est sur l'axe, et
+# l'gap entre la pupil et l'axis du tube : nul si elle est sur l'axis, et
 # ELARGISSANT si elle est en retrait, comme c'est le cas ici. Le cone tracé
-# plus bas est donc plus large en hauteur qu'en largeur, ce qui surprend mais
+# plus bas est donc plus large en height qu'en width, ce qui surprend mais
 # est bien ce que la camera voit.
-DEMI_FOV_H = np.radians(optics.demi_champ_eau(_demi_h_air, "axe"))
+DEMI_FOV_H = np.radians(optics.demi_champ_eau(_demi_h_air, "axis"))
 DEMI_FOV_V = np.radians(optics.demi_champ_eau(_demi_v_air, "section"))
 
-# Pour la taille apparente d'un tag, c'est la direction la MOINS grossie qui
+# Pour la size apparente d'un tag, c'est la direction la MOINS grossie qui
 # decide de la detection : un carre trop etroit dans un sens n'est pas decode,
-# meme s'il est large dans l'autre. Sous l'eau et dans ce montage, la moins
+# meme s'il est large dans l'autre. Sous l'water et dans ce mounting, la moins
 # grossie est la VERTICALE — donc immerger ne fait pas gagner de portee, au
 # contraire du raccourci « x 1.33 » qui ne vaut que pour un hublot plat.
 WATER_FOCAL_LENGTH = optics.focale_eau()
@@ -101,12 +101,12 @@ if _VIGNETTAGE["rogne_horizontal"]:
 if _VIGNETTAGE["rogne_vertical"]:
     DEMI_FOV_V = min(DEMI_FOV_V, _DEMI_TUBE)
 
-PORTEE = 3.0             # portee retenue pour le trace du cone
-# Les deux limites de detection, mesurees puis simulees (voir
+PORTEE = 3.0             # portee kept pour le trace du cone
+# Les deux limites de detection, measured puis simulees (voir
 # calibration/simuler_limites_tag.py) : le critere reel est en fait unique,
 # taille_apparente x cos(incidence) >= PIXELS_MIN, l'angle ne faisant que
 # comprimer le tag. INCIDENCE_MAX reste le plafond dur au-dela duquel la
-# detection s'effondre quelle que soit la taille.
+# detection s'effondre quelle que soit la size.
 INCIDENCE_MAX = 65.0
 PIXELS_MIN = 20
 
@@ -121,7 +121,7 @@ def repere_tag(normale):
 
 
 def carre(centre, droite, vertical, demi):
-    """Les 4 coins d'un carre pose dans le plan (droite, vertical)."""
+    """Les 4 corners d'un carre pose dans le plan (droite, vertical)."""
     return np.array([
         centre - demi * droite - demi * vertical,
         centre + demi * droite - demi * vertical,
@@ -134,11 +134,11 @@ def visibles_depuis(position, azimut):
     """Tags reellement exploitables depuis cette pose de camera.
 
     Trois conditions, celles qui comptent vraiment sur le terrain :
-      - le tag est dans le champ de vision retreci par l'eau ;
+      - le tag est dans le champ de vision retreci par l'water ;
       - la camera le regarde d'assez face (incidence) ;
       - il est assez gros dans l'image (pixels).
     """
-    axe = np.array([np.cos(azimut), np.sin(azimut), 0.0])
+    axis = np.array([np.cos(azimut), np.sin(azimut), 0.0])
     droite = np.array([-np.sin(azimut), np.cos(azimut), 0.0])
     bas = np.array([0.0, 0.0, 1.0])
 
@@ -148,7 +148,7 @@ def visibles_depuis(position, azimut):
         distance = np.linalg.norm(v)
         if distance < 1e-6:
             continue
-        avant = float(v @ axe)
+        avant = float(v @ axis)
         if avant <= 0:
             continue
         if abs(np.arctan2(float(v @ droite), avant)) > DEMI_FOV_H:
@@ -160,7 +160,7 @@ def visibles_depuis(position, azimut):
         if incidence > INCIDENCE_MAX:
             continue
         pixels = WATER_FOCAL_LENGTH * TAG_SIZE / distance
-        # Le critere porte sur la largeur du tag UNE FOIS COMPRIME par
+        # Le critere porte sur la width du tag UNE FOIS COMPRIME par
         # l'angle : la simulation a montre que l'incidence ne fait rien
         # d'autre que le retrecir d'un facteur cosinus, jusqu'au plafond dur
         # de INCIDENCE_MAX ou la detection s'effondre.
@@ -176,15 +176,15 @@ def visibles_depuis(position, azimut):
 CENTRE = np.array([LONGUEUR / 2, LARGEUR / 2, PROFONDEUR / 2])
 DEMI = np.array([LONGUEUR / 2, LARGEUR / 2, PROFONDEUR / 2])
 
-etat = {
+state = {
     "zoom": 1.05,
     "normales": True,
     "boucle": True,
-    "eau": True,
+    "water": True,
     "camera": True,
 }
 camera = {
-    "position": np.array([1.00, 1.55, 0.50]),   # collee a la paroi B, mi-profondeur
+    "position": np.array([1.00, 1.55, 0.50]),   # collee a la paroi B, mi-depth
     "azimut": np.radians(270.0),                # regarde la paroi A, tags 0 et 1
 }
 
@@ -213,7 +213,7 @@ def dessiner(ax):
     xmax, ymax, zmax = LONGUEUR, LARGEUR, PROFONDEUR
 
     # --- parois, fond, surface -------------------------------------------
-    if etat["eau"]:
+    if state["water"]:
         fond = [[(xmin, ymin, zmax), (xmax, ymin, zmax),
                  (xmax, ymax, zmax), (xmin, ymax, zmax)]]
         ax.add_collection3d(Poly3DCollection(fond, facecolor="#c9d4dc",
@@ -232,25 +232,25 @@ def dessiner(ax):
                                              alpha=0.07, edgecolor="none"))
 
     # aretes du bassin
-    coins = np.array([[x, y, z] for z in (zmin, zmax)
+    corners = np.array([[x, y, z] for z in (zmin, zmax)
                       for x, y in ((xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax))])
     aretes = [(0, 1), (1, 2), (2, 3), (3, 0),
               (4, 5), (5, 6), (6, 7), (7, 4),
               (0, 4), (1, 5), (2, 6), (3, 7)]
     for i, j in aretes:
-        ax.plot(*zip(coins[i], coins[j]), color="#5c6b76", linewidth=1.0, alpha=0.8)
+        ax.plot(*zip(corners[i], corners[j]), color="#5c6b76", linewidth=1.0, alpha=0.8)
 
     # --- boucle des liaisons ---------------------------------------------
     positions = np.array([[x, y, z] for _, _, x, y, z, _ in TAGS])
-    if etat["boucle"]:
+    if state["boucle"]:
         boucle = np.vstack([positions, positions[0]])
         ax.plot(boucle[:, 0], boucle[:, 1], boucle[:, 2],
                 color="#c2410c", linewidth=1.1, linestyle="--", alpha=0.75, zorder=1)
 
     # --- tags --------------------------------------------------------------
-    vus = dict()
-    if etat["camera"]:
-        vus = {t[0]: t for t in visibles_depuis(camera["position"], camera["azimut"])}
+    seen = dict()
+    if state["camera"]:
+        seen = {t[0]: t for t in visibles_depuis(camera["position"], camera["azimut"])}
 
     demi_tag = TAG_SIZE / 2
     for tid, paroi, x, y, z, normale in TAGS:
@@ -258,14 +258,14 @@ def dessiner(ax):
         n, droite, vertical = repere_tag(normale)
 
         # La face du tag, cerclee du ruban noir colle par Josiah : cette marge
-        # de contraste est ce que le detecteur cherche en premier.
-        actif = tid in vus
+        # de contraste est ce que le detector cherche en first.
+        actif = tid in seen
         ax.add_collection3d(Poly3DCollection(
             [carre(centre, droite, vertical, demi_tag)],
             facecolor="#22c55e" if actif else COULEUR_PAROI[paroi],
             alpha=0.97, edgecolor="#111418", linewidth=3.2))
 
-        if etat["normales"]:
+        if state["normales"]:
             fleche = centre + 0.28 * n
             ax.plot(*zip(centre, fleche), color="#334155", linewidth=1.2)
             ax.scatter(*fleche, color="#334155", s=8)
@@ -277,53 +277,53 @@ def dessiner(ax):
                           edgecolor=COULEUR_PAROI[paroi], linewidth=1.2))
 
     # --- camera virtuelle --------------------------------------------------
-    if etat["camera"]:
+    if state["camera"]:
         p = camera["position"]
         a = camera["azimut"]
-        axe = np.array([np.cos(a), np.sin(a), 0.0])
+        axis = np.array([np.cos(a), np.sin(a), 0.0])
         droite = np.array([-np.sin(a), np.cos(a), 0.0])
         bas = np.array([0.0, 0.0, 1.0])
-        rayons = [axe + sh * np.tan(DEMI_FOV_H) * droite + sv * np.tan(DEMI_FOV_V) * bas
+        rayons = [axis + sh * np.tan(DEMI_FOV_H) * droite + sv * np.tan(DEMI_FOV_V) * bas
                   for sh, sv in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
         t = portee_utile(p, rayons)          # le cone s'arrete sur la paroi visee
         loin = [p + t * u for u in rayons]
-        for coin in loin:
-            ax.plot(*zip(p, coin), color="#0ea5e9", linewidth=0.9, alpha=0.85)
+        for corner in loin:
+            ax.plot(*zip(p, corner), color="#0ea5e9", linewidth=0.9, alpha=0.85)
         ax.add_collection3d(Poly3DCollection([loin], facecolor="#0ea5e9",
                                              alpha=0.10, edgecolor="#0ea5e9"))
         ax.scatter(*p, color="#0ea5e9", s=55, marker="o", depthshade=False)
-        for tid in vus:
+        for tid in seen:
             cible = positions[[t[0] for t in TAGS].index(tid)]
             ax.plot(*zip(p, cible), color="#22c55e", linewidth=0.9, alpha=0.7)
 
     # --- cadrage -----------------------------------------------------------
-    k = etat["zoom"]
+    k = state["zoom"]
     ax.set_xlim(CENTRE[0] - k * DEMI[0], CENTRE[0] + k * DEMI[0])
     ax.set_ylim(CENTRE[1] - k * DEMI[1], CENTRE[1] + k * DEMI[1])
     ax.set_zlim(CENTRE[2] + k * DEMI[2], CENTRE[2] - k * DEMI[2])   # z vers le bas
     ax.set_box_aspect((LONGUEUR, LARGEUR, PROFONDEUR))
-    ax.set_xlabel("x  longueur (m)", fontsize=8)
-    ax.set_ylabel("y  largeur (m)", fontsize=8)
-    ax.set_zlabel("z  profondeur (m)", fontsize=8)
+    ax.set_xlabel("x  length (m)", fontsize=8)
+    ax.set_ylabel("y  width (m)", fontsize=8)
+    ax.set_zlabel("z  depth (m)", fontsize=8)
     ax.tick_params(labelsize=7)
     ax.view_init(elev=elevation, azim=azimut_vue)
 
-    if etat["camera"]:
-        lignes = [f"camera  x={camera['position'][0]:.2f}  y={camera['position'][1]:.2f}  "
+    if state["camera"]:
+        rows = [f"camera  x={camera['position'][0]:.2f}  y={camera['position'][1]:.2f}  "
                   f"z={camera['position'][2]:.2f}  cap={np.degrees(camera['azimut']) % 360:.0f} deg",
-                  f"champ sous l'eau  {np.degrees(2 * DEMI_FOV_H):.1f} x "
+                  f"champ sous l'water  {np.degrees(2 * DEMI_FOV_H):.1f} x "
                   f"{np.degrees(2 * DEMI_FOV_V):.1f} deg"]
-        if len(vus) >= 2:
-            ids = ", ".join(str(i) for i in sorted(vus))
-            lignes.append(f"tags vus ensemble : {ids}  ->  LIAISON POSSIBLE")
-        elif len(vus) == 1:
-            lignes.append(f"tag vu : {list(vus)[0]}  ->  localisation seule, pas de liaison")
+        if len(seen) >= 2:
+            ids = ", ".join(str(i) for i in sorted(seen))
+            rows.append(f"tags seen ensemble : {ids}  ->  LIAISON POSSIBLE")
+        elif len(seen) == 1:
+            rows.append(f"tag seen : {list(seen)[0]}  ->  localisation seule, pas de liaison")
         else:
-            lignes.append("aucun tag exploitable depuis cette pose")
-        for tid, distance, incidence, pixels in sorted(vus.values())[:4]:
-            lignes.append(f"   tag {tid} : {distance:.2f} m, {pixels:.0f} px, "
+            rows.append("aucun tag exploitable depuis cette pose")
+        for tid, distance, incidence, pixels in sorted(seen.values())[:4]:
+            rows.append(f"   tag {tid} : {distance:.2f} m, {pixels:.0f} px, "
                           f"incidence {incidence:.0f} deg")
-        ax.text2D(0.01, 0.99, "\n".join(lignes), transform=ax.transAxes,
+        ax.text2D(0.01, 0.99, "\n".join(rows), transform=ax.transAxes,
                   va="top", ha="left", fontsize=7.5, family="monospace",
                   color="#0f172a",
                   bbox=dict(boxstyle="round,pad=0.4", facecolor="#f1f5f9",
@@ -336,15 +336,15 @@ def resume_console():
     print(f"BASSIN {LONGUEUR} x {LARGEUR} x {PROFONDEUR} m     "
           f"{LONGUEUR * LARGEUR * PROFONDEUR:.2f} m3")
     print(f"Tag {TAG_SIZE * 1000:.0f} mm + ruban noir {BORDURE * 1000:.0f} mm")
-    print(f"Champ de vision sous l'eau : {np.degrees(2 * DEMI_FOV_H):.1f} deg horizontal, "
+    print(f"Champ de vision sous l'water : {np.degrees(2 * DEMI_FOV_H):.1f} deg horizontal, "
           f"{np.degrees(2 * DEMI_FOV_V):.1f} deg vertical")
     print("-" * 70)
-    print(" id  paroi          x      y      z     normale   -> suivant")
+    print(" id  paroi          x      y      z     normale   -> next")
     positions = np.array([[x, y, z] for _, _, x, y, z, _ in TAGS])
     for i, (tid, paroi, x, y, z, normale) in enumerate(TAGS):
-        suivant = positions[(i + 1) % len(TAGS)]
-        d = np.linalg.norm(suivant - positions[i])
-        n = "".join(f"{'+' if v > 0 else '-'}{axe}" for v, axe in zip(normale, "xyz") if v)
+        next = positions[(i + 1) % len(TAGS)]
+        d = np.linalg.norm(next - positions[i])
+        n = "".join(f"{'+' if v > 0 else '-'}{axis}" for v, axis in zip(normale, "xyz") if v)
         print(f" {tid:<3} {paroi:<13} {x:5.2f}  {y:5.2f}  {z:5.2f}    {n:<6}    {d:.3f} m")
     print("-" * 70)
     tour = sum(np.linalg.norm(positions[(i + 1) % len(TAGS)] - positions[i])
@@ -357,7 +357,7 @@ def resume_console():
 AIDE = """
   souris glisser : tourner       molette : zoom          0 : recadrer
   1 vue de dessus   2 vue de face   3 vue isometrique
-  n normales    l boucle    e eau et parois    c camera virtuelle
+  n normales    l boucle    e water et parois    c camera virtuelle
   fleches deplacer la camera    a / d pivoter    w / x monter / descendre
   p enregistrer PNG    h aide    q quitter
 """
@@ -374,10 +374,10 @@ def main():
             ax = fig.add_subplot(1, 3, i, projection="3d")
             ax.view_init(elev=elev, azim=azim)
             dessiner(ax)
-            if muet == "z":          # de dessus, la profondeur ne se lit pas
+            if muet == "z":          # de dessus, la depth ne se lit pas
                 ax.set_zlabel("")
                 ax.set_zticks([])
-            elif muet == "y":        # de face, la largeur ne se lit pas
+            elif muet == "y":        # de face, la width ne se lit pas
                 ax.set_ylabel("")
                 ax.set_yticks([])
             ax.set_title(titre, fontsize=10, weight="bold")
@@ -403,53 +403,53 @@ def main():
         fig.canvas.draw_idle()
 
     def sur_molette(evenement):
-        etat["zoom"] *= 0.88 if evenement.button == "up" else 1 / 0.88
-        etat["zoom"] = float(np.clip(etat["zoom"], 0.25, 4.0))
+        state["zoom"] *= 0.88 if evenement.button == "up" else 1 / 0.88
+        state["zoom"] = float(np.clip(state["zoom"], 0.25, 4.0))
         rafraichir()
 
     def sur_touche(evenement):
-        touche = evenement.key
+        key = evenement.key
         pas, pas_angle = 0.10, np.radians(6)
-        if touche == "q" or touche == "escape":
+        if key == "q" or key == "escape":
             plt.close(fig)
             return
-        elif touche == "n":
-            etat["normales"] = not etat["normales"]
-        elif touche == "l":
-            etat["boucle"] = not etat["boucle"]
-        elif touche == "e":
-            etat["eau"] = not etat["eau"]
-        elif touche == "c":
-            etat["camera"] = not etat["camera"]
-        elif touche == "0":
-            etat["zoom"] = 1.05
-        elif touche == "1":
+        elif key == "n":
+            state["normales"] = not state["normales"]
+        elif key == "l":
+            state["boucle"] = not state["boucle"]
+        elif key == "e":
+            state["water"] = not state["water"]
+        elif key == "c":
+            state["camera"] = not state["camera"]
+        elif key == "0":
+            state["zoom"] = 1.05
+        elif key == "1":
             ax.view_init(elev=89, azim=-90)
-        elif touche == "2":
+        elif key == "2":
             ax.view_init(elev=6, azim=-89)
-        elif touche == "3":
+        elif key == "3":
             ax.view_init(elev=24, azim=-58)
-        elif touche == "right":
+        elif key == "right":
             camera["position"][0] += pas
-        elif touche == "left":
+        elif key == "left":
             camera["position"][0] -= pas
-        elif touche == "up":
+        elif key == "up":
             camera["position"][1] += pas
-        elif touche == "down":
+        elif key == "down":
             camera["position"][1] -= pas
-        elif touche == "w":
+        elif key == "w":
             camera["position"][2] -= pas
-        elif touche == "x":
+        elif key == "x":
             camera["position"][2] += pas
-        elif touche == "a":
+        elif key == "a":
             camera["azimut"] += pas_angle
-        elif touche == "d":
+        elif key == "d":
             camera["azimut"] -= pas_angle
-        elif touche == "p":
+        elif key == "p":
             fig.savefig(IMAGE, dpi=200)
             print(f"Image enregistree : {IMAGE}")
             return
-        elif touche == "h":
+        elif key == "h":
             print(AIDE)
             return
         else:

@@ -5,7 +5,7 @@ our calibration and republish it for apriltag_ros. (ROS 2)
 WHAT IT DOES
     - Subscribes to /camera/camera/color/image_raw.
     - Reads K, D and the rest of a standard ROS camera_calibration YAML file
-      (calibration/montages/<montage>_ros.yaml in this repo).
+      (calibration/montages/<mounting>_ros.yaml in this repo).
     - Publishes /my_camera_info and /my_image_rect, timestamp- and
       frame_id-matched to the incoming image, for apriltag_ros to consume.
 
@@ -17,7 +17,7 @@ USAGE
     file, so it runs with no parameter at all as long as this script stays
     inside the repo checkout on the Pi. Pass calyaml_path explicitly to test
     another mounting (tube_air_ros.yaml, nue_air_ros.yaml) without touching
-    the default — see calibration/optics.py for which montage is which.
+    the default — see calibration/optics.py for which mounting is which.
 
 WHY camera_info.d IS FORCED TO ZERO, EVEN THOUGH THE YAML CARRIES REAL VALUES
     The image this node publishes on /my_image_rect has ALREADY been

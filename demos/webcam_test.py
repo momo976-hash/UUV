@@ -1,13 +1,13 @@
 # webcam_test.py — Detection AprilTag avec la webcam (OpenCV seul, sans compilation)
-# Utilise le detecteur AprilTag integre a OpenCV (cv2.aruco) : aucune librairie
+# Utilise le detector AprilTag integre a OpenCV (cv2.aruco) : aucune librairie
 # a compiler, fonctionne meme avec Python 3.14.
 import cv2
 import numpy as np
 
-TAG_SIZE = 0.10  # cote du tag en metres (mesure ton tag imprime et change ici)
+TAG_SIZE = 0.10  # cote du tag en metres (measurement ton tag imprime et change ici)
 
 # --- Webcam ---
-cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # CAP_DSHOW : evite l'erreur MSMF sous Windows
+cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # CAP_DSHOW : evite l'error MSMF sous Windows
 if not cam.isOpened():
     print("ERREUR : impossible d'ouvrir la webcam.")
     raise SystemExit
@@ -24,8 +24,8 @@ coins_3d = np.array(
 )
 
 # --- Detecteur AprilTag 36h11 integre a OpenCV ---
-dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
-detecteur = cv2.aruco.ArucoDetector(dictionnaire, cv2.aruco.DetectorParameters())
+dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
+detector = cv2.aruco.ArucoDetector(dictionary, cv2.aruco.DetectorParameters())
 
 print("Webcam ouverte. Appuie sur 'q' pour quitter.")
 
@@ -35,10 +35,10 @@ while True:
         break
     gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    coins, ids, _ = detecteur.detectMarkers(gris)
+    corners, ids, _ = detector.detectMarkers(gris)
     if ids is not None:
-        cv2.aruco.drawDetectedMarkers(image, coins, ids)  # contour + id
-        for c, tag_id in zip(coins, ids.flatten()):
+        cv2.aruco.drawDetectedMarkers(image, corners, ids)  # contour + id
+        for c, tag_id in zip(corners, ids.flatten()):
             pts = c.reshape(4, 2).astype(np.float64)
             ok2, rvec, tvec = cv2.solvePnP(
                 coins_3d, pts, K, dist, flags=cv2.SOLVEPNP_IPPE_SQUARE

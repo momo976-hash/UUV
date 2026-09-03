@@ -11,17 +11,17 @@ import optics  # noqa: E402
 
 # Index de la camera (None = detection automatique).
 CAMERA_INDEX = None
-# Resolution FIGEE : doit etre identique pour la calibration et les mesures.
+# Resolution FIGEE : doit etre identique pour la calibration et les measurements.
 RESOLUTION = (640, 480)
 
-TAG_SIZE = optics.LARGE_TAG_SIZE   # mesure au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au pied a coulisse, pas 223 mm nominal
 
 
 # --- Calibration reelle de la camera (damier 5x7, 22 vues, RMS 0.169 px) ---
-# Si le fichier calibration_camera.npz est a cote du script, il est utilise.
+# Si le path calibration_camera.npz est a cote du script, il est utilise.
 MONTAGE = optics.MONTAGE_ACTIF
-# L'optics vient de optics.py : camera, tube, hublot, milieu. Le montage
-# n'est ecrit dans aucun fichier de code : optics.py le lit dans
+# L'optics vient de optics.py : camera, tube, hublot, milieu. Le mounting
+# n'est ecrit dans aucun path de code : optics.py le lit dans
 # calibration/montage_local.txt, propre a CETTE machine, et le demande une
 # fois s'il n'existe pas encore. Pour le changer :
 #     python calibration/set_mounting.py
@@ -33,18 +33,18 @@ K_CALIB, DIST_CALIB = optics.charger(MONTAGE)
 LARGEUR_CALIB = 640          # resolution utilisee lors de la calibration
 
 
-def charger_calibration(largeur, hauteur):
+def charger_calibration(width, height):
     """Renvoie (K, dist). Adapte K si la camera tourne a une autre resolution."""
     K, d, Lc = K_CALIB.copy(), DIST_CALIB.copy(), LARGEUR_CALIB
     try:
         f = np.load("calibration_camera.npz")
-        K, d, Lc = f["K"].astype(np.float64), f["dist"].ravel(), int(f["largeur"])
+        K, d, Lc = f["K"].astype(np.float64), f["dist"].ravel(), int(f["width"])
         print("Calibration chargee depuis calibration_camera.npz")
     except Exception:
         print("Calibration integree au script utilisee")
-    if largeur != Lc:                      # mise a l'echelle si resolution differente
+    if width != Lc:                      # mise a l'echelle si resolution differente
         K = K.copy()
-        K[:2] *= largeur / Lc
+        K[:2] *= width / Lc
     return K, d
 
 
@@ -55,12 +55,12 @@ def ouvrir_camera():
     (640x480 en 4:3 est recadre, 1280x720 en 16:9 utilise tout le capteur).
     Une calibration faite a une resolution n'est donc PAS transposable a une
     autre par simple mise a l'echelle. On fige la resolution pour que la
-    calibration et les mesures portent sur exactement la meme optics.
+    calibration et les measurements portent sur exactement la meme optics.
     """
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
     for index in indices:
-        for backend, nom in backends:
+        for backend, name in backends:
             cap = cv2.VideoCapture(index, backend) if backend else cv2.VideoCapture(index)
             if cap.isOpened():
                 cap.set(cv2.CAP_PROP_FRAME_WIDTH, RESOLUTION[0])
@@ -68,7 +68,7 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera utilisee : index={index}, backend={nom}, {ww}x{hh}")
+                    print(f"Camera utilisee : index={index}, backend={name}, {ww}x{hh}")
                     if (ww, hh) != RESOLUTION:
                         print(f"  ATTENTION : resolution obtenue {ww}x{hh} au lieu de "
                               f"{RESOLUTION[0]}x{RESOLUTION[1]}. La calibration ne sera "
@@ -87,10 +87,10 @@ K, dist = charger_calibration(L, H)
 h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
-dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
+dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
 params = cv2.aruco.DetectorParameters()
-params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX  # coins sub-pixel
-detecteur = cv2.aruco.ArucoDetector(dictionnaire, params)
+params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX  # corners sub-pixel
+detector = cv2.aruco.ArucoDetector(dictionary, params)
 
 print("En direct. Montre un tag. Appuie sur 'q' pour quitter.")
 
@@ -100,11 +100,11 @@ while True:
         continue
     gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    coins, ids, _ = detecteur.detectMarkers(gris)
+    corners, ids, _ = detector.detectMarkers(gris)
     if ids is not None:
-        cv2.aruco.drawDetectedMarkers(image, coins, ids)
-        y_texte = 30  # ligne de depart pour le panneau d'infos en haut a gauche
-        for c, tag_id in zip(coins, ids.flatten()):
+        cv2.aruco.drawDetectedMarkers(image, corners, ids)
+        y_texte = 30  # row de depart pour le panneau d'infos en haut a gauche
+        for c, tag_id in zip(corners, ids.flatten()):
             pts = c.reshape(4, 2).astype(np.float64)
             ok2, rvec, tvec = cv2.solvePnP(
                 coins_3d, pts, K, dist, flags=cv2.SOLVEPNP_IPPE_SQUARE
@@ -114,7 +114,7 @@ while True:
 
             cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAG_SIZE / 2, 2)
 
-            # POSITION du tag dans le repere camera (metres)
+            # POSITION du tag dans le frame camera (metres)
             x, y, z = tvec.flatten()
 
             # ORIENTATION : matrix de rotation -> angles d'Euler (degres)

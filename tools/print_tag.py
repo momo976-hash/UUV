@@ -1,31 +1,31 @@
-# print_tag.py — Genere une page A4 avec un tag AprilTag a la taille exacte
+# print_tag.py — Genere une page A4 avec un tag AprilTag a la size exacte
 #
 # POURQUOI
 # Pour mesurer PIXELS_MIN il faut voir le tag devenir tout petit dans l'image.
 # Avec les 22.3 cm du bassin cela n'arrive qu'a 4.5 m, hors de portee d'une
-# camera au bout d'un cable. Le detecteur ne connait pas les metres : il ne
+# camera au bout d'un cable. Le detector ne connait pas les metres : il ne
 # voit qu'un carre de N pixels. Un tag de 5 cm a 1.5 m lui est rigoureusement
 # identique a un tag de 22.3 cm a 6.7 m. On imprime donc un petit tag et on
-# mesure la limite sur un bureau.
+# measurement la limit sur un bureau.
 #
 # LE PIEGE DE L'IMPRESSION
-# Les imprimantes redimensionnent par defaut ("ajuster a la page"), ce qui
-# fausserait la taille du tag — et donc toutes les distances. La page porte
-# pour cela un REGLET DE CONTROLE de 10 cm : apres impression, mesure-le a la
+# Les imprimantes redimensionnent par default ("ajuster a la page"), ce qui
+# fausserait la size du tag — et donc toutes les distances. La page porte
+# pour cela un REGLET DE CONTROLE de 10 cm : apres impression, measurement-le a la
 # regle. S'il ne fait pas 10.0 cm, l'echelle est fausse, il faut reimprimer
-# en "taille reelle" / "100 %" / "aucune mise a l'echelle".
+# en "size reelle" / "100 %" / "aucune mise a l'echelle".
 #
 # LA TAILLE, C'EST LE CARRE NOIR
 # Le cote a mesurer est celui du CARRE NOIR EXTERIEUR, marges blanches non
-# comprises : c'est ce carre que le detecteur accroche, et c'est cette valeur
+# comprises : c'est ce carre que le detector accroche, et c'est cette value
 # qu'attendent solvePnP et l'option --tag de measure_tag_limits.py.
 #
 # MODE D'EMPLOI
 #   python print_tag.py                  ->  un tag de 5 cm, id 0
-#   python print_tag.py --taille 0.04    ->  4 cm
+#   python print_tag.py --size 0.04    ->  4 cm
 #   python print_tag.py --id 7           ->  un autre motif
-#   python print_tag.py --tous 0.05 0.10 ->  plusieurs tailles, une page
-# Puis : imprimer le PDF a 100 %, verifier le reglet, coller sur un carton
+#   python print_tag.py --tous 0.05 0.10 ->  plusieurs sizes, une page
+# Puis : imprimer le PDF a 100 %, check le reglet, coller sur un carton
 # bien plat (un tag gondole fausse l'angle) et lancer
 #   python measure_tag_limits.py --tag 0.05
 import argparse
@@ -55,16 +55,16 @@ def image_du_tag(identifiant, cotes_par_cellule=40):
     cellule tout autour). On rend chaque cellule sur plusieurs pixels pour
     que l'impression reste nette.
     """
-    dictionnaire = cv2.aruco.getPredefinedDictionary(FAMILLE)
-    cotes = dictionnaire.markerSize + 2 * BORDURE
-    return cv2.aruco.generateImageMarker(dictionnaire, identifiant,
+    dictionary = cv2.aruco.getPredefinedDictionary(FAMILLE)
+    cotes = dictionary.markerSize + 2 * BORDURE
+    return cv2.aruco.generateImageMarker(dictionary, identifiant,
                                          cotes * cotes_par_cellule, BORDURE)
 
 
 def marge_blanche(taille_cm):
     """La zone blanche a laisser autour du carre noir.
 
-    Le detecteur cherche les bords du carre : couper au ras le rend
+    Le detector cherche les bords du carre : couper au ras le rend
     indetectable. Une cellule suffit en theorie (36h11 en fait huit), on en
     laisse deux.
     """
@@ -77,7 +77,7 @@ def hauteur_du_bloc(taille_cm):
 
 
 def poser_tag(figure, page, image, identifiant, taille_cm, centre_x_cm, haut_y_cm):
-    """Place le motif a sa taille physique exacte, `haut_y_cm` sous le bord haut."""
+    """Place le motif a sa size physique exacte, `haut_y_cm` sous le bord haut."""
     gauche = (centre_x_cm - taille_cm / 2) / A4[0]
     bas = (A4[1] - haut_y_cm - taille_cm) / A4[1]
     axes = figure.add_axes([gauche, bas, taille_cm / A4[0], taille_cm / A4[1]])
@@ -105,7 +105,7 @@ def poser_tag(figure, page, image, identifiant, taille_cm, centre_x_cm, haut_y_c
 
 
 def poser_reglet(axes, y_cm):
-    """Le temoin d'echelle : 10 cm gradues, a verifier a la regle."""
+    """Le temoin d'echelle : 10 cm gradues, a check a la regle."""
     x0 = (A4[0] - REGLET) / 2
     y = A4[1] - y_cm
 
@@ -120,7 +120,7 @@ def poser_reglet(axes, y_cm):
               ha="center", va="top", fontsize=8)
     axes.text(A4[0] / 2, y - 1.0,
               "Sinon l'imprimante a redimensionne : reimprimer a 100 % "
-              "(\"taille reelle\", sans ajustement).",
+              "(\"size reelle\", sans ajustement).",
               ha="center", va="top", fontsize=7, color="0.4")
 
 
@@ -128,10 +128,10 @@ def construire_page(tailles_cm, identifiant):
     figure = plt.figure(figsize=(A4[0] / 2.54, A4[1] / 2.54))
     figure.patch.set_facecolor("white")
 
-    figure.text(0.5, 0.965, "AprilTag 36h11 — mire de mesure",
+    figure.text(0.5, 0.965, "AprilTag 36h11 — mire de measurement",
                 ha="center", fontsize=13, weight="bold")
     figure.text(0.5, 0.941,
-                "Imprimer a 100 %, verifier le reglet, "
+                "Imprimer a 100 %, check le reglet, "
                 "decouper sur les pointilles, coller bien a plat.",
                 ha="center", fontsize=8.5, color="0.4")
 
@@ -143,18 +143,18 @@ def construire_page(tailles_cm, identifiant):
 
     motif = image_du_tag(identifiant)
     haut, refuses = 5.2, []
-    for taille in tailles_cm:
-        if haut + hauteur_du_bloc(taille) > A4[1] - 1.4:
-            refuses.append(taille)
+    for size in tailles_cm:
+        if haut + hauteur_du_bloc(size) > A4[1] - 1.4:
+            refuses.append(size)
             continue
-        poser_tag(figure, page, motif, identifiant, taille, A4[0] / 2,
-                  haut + marge_blanche(taille))
-        haut += hauteur_du_bloc(taille) + 0.6
-    for taille in refuses:
-        print(f"  Tag de {taille:.1f} cm ignore : plus de place sur cette A4 "
+        poser_tag(figure, page, motif, identifiant, size, A4[0] / 2,
+                  haut + marge_blanche(size))
+        haut += hauteur_du_bloc(size) + 0.6
+    for size in refuses:
+        print(f"  Tag de {size:.1f} cm ignore : plus de place sur cette A4 "
               "(les zones blanches sont incompressibles).")
     if refuses:
-        print("  Relance-le seul, ou avec moins de tailles a la fois.")
+        print("  Relance-le seul, ou avec moins de sizes a la fois.")
 
     figure.text(0.5, 0.022,
                 "La cote annoncee est celle du CARRE NOIR EXTERIEUR, "
@@ -164,47 +164,47 @@ def construire_page(tailles_cm, identifiant):
 
 
 def main():
-    analyseur = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description="Genere une page A4 imprimable avec un ou plusieurs "
-                    "AprilTag 36h11 a la taille physique exacte.")
-    analyseur.add_argument("--taille", type=float, default=0.05, metavar="METRES",
-                           help="cote du carre noir en metres (defaut %(default)s)")
-    analyseur.add_argument("--tous", type=float, nargs="+", metavar="METRES",
-                           help="plusieurs tailles sur la meme page, "
+                    "AprilTag 36h11 a la size physique exacte.")
+    parser.add_argument("--size", type=float, default=0.05, metavar="METRES",
+                           help="cote du carre noir en metres (default %(default)s)")
+    parser.add_argument("--tous", type=float, nargs="+", metavar="METRES",
+                           help="plusieurs sizes sur la meme page, "
                                 "ex. --tous 0.03 0.05 0.08")
-    analyseur.add_argument("--id", type=int, default=0,
-                           help="identifiant du tag (defaut %(default)s). "
+    parser.add_argument("--id", type=int, default=0,
+                           help="identifiant du tag (default %(default)s). "
                                 "Prends-en un qui n'est pas dans le bassin.")
-    analyseur.add_argument("--sortie", type=Path, default=None,
-                           help="fichier PDF a ecrire (defaut : a cote du script)")
-    options = analyseur.parse_args()
+    parser.add_argument("--output", type=Path, default=None,
+                           help="path PDF a ecrire (default : a cote du script)")
+    options = parser.parse_args()
 
-    tailles_cm = [100 * t for t in (options.tous or [options.taille])]
-    for taille in tailles_cm:
-        if not 1.0 <= taille <= 19.0:
-            print(f"ERREUR : {taille/100:.3f} m est hors de ce qu'une A4 accepte "
+    tailles_cm = [100 * t for t in (options.tous or [options.size])]
+    for size in tailles_cm:
+        if not 1.0 <= size <= 19.0:
+            print(f"ERREUR : {size/100:.3f} m est hors de ce qu'une A4 accepte "
                   "(0.01 a 0.19 m).")
             return
 
-    sortie = options.sortie or Path(__file__).resolve().with_name(
+    output = options.output or Path(__file__).resolve().with_name(
         f"tag_{options.id}_" + "_".join(f"{t:.0f}cm" for t in tailles_cm) + ".pdf")
     figure = construire_page(tailles_cm, options.id)
-    figure.savefig(sortie, format="pdf")
+    figure.savefig(output, format="pdf")
     plt.close(figure)
 
-    # C'est l'axe le MOINS grossi qui decide si un tag est decode : un carre
+    # C'est l'axis le MOINS grossi qui decide si un tag est decode : un carre
     # trop etroit dans un sens ne passe pas, meme large dans l'autre. Ces
-    # mesures se font en air, sur un bureau, donc avec les focales en air.
-    K_air, _ = optics.charger("tube_air", silencieux=True)
-    focale = min(float(K_air[0, 0]), float(K_air[1, 1]))
-    print(f"Ecrit : {sortie}")
-    print("\nA quelle distance chaque tag atteint-il la limite supposee ?")
-    for taille in tailles_cm:
-        metres = taille / 100
-        print(f"  {taille:>4.1f} cm : 30 px a {focale*metres/30:.2f} m, "
-              f"20 px a {focale*metres/20:.2f} m, "
-              f"15 px a {focale*metres/15:.2f} m")
-    print("\nImprimer a 100 %, verifier le reglet a la regle, puis :")
+    # measurements se font en air, sur un bureau, donc avec les focales en air.
+    K_air, _ = optics.charger("tube_air", quiet=True)
+    focal_length = min(float(K_air[0, 0]), float(K_air[1, 1]))
+    print(f"Ecrit : {output}")
+    print("\nA quelle distance chaque tag atteint-il la limit supposee ?")
+    for size in tailles_cm:
+        metres = size / 100
+        print(f"  {size:>4.1f} cm : 30 px a {focal_length*metres/30:.2f} m, "
+              f"20 px a {focal_length*metres/20:.2f} m, "
+              f"15 px a {focal_length*metres/15:.2f} m")
+    print("\nImprimer a 100 %, check le reglet a la regle, puis :")
     print(f"  python measure_tag_limits.py --tag {tailles_cm[0]/100:.3f}")
 
 

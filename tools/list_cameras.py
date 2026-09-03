@@ -14,16 +14,16 @@ BACKENDS = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
 
 
 def cameras_disponibles(nb_index=5):
-    """Renvoie la liste des (index, backend, nom, largeur, hauteur) qui marchent."""
+    """Renvoie la liste des (index, backend, name, width, height) qui marchent."""
     trouvees = []
     for index in range(nb_index):
-        for backend, nom in BACKENDS:
+        for backend, name in BACKENDS:
             cap = cv2.VideoCapture(index, backend) if backend else cv2.VideoCapture(index)
             if cap.isOpened():
                 ok, img = cap.read()
                 if ok and img is not None:
                     h, w = img.shape[:2]
-                    trouvees.append((index, backend, nom, w, h))
+                    trouvees.append((index, backend, name, w, h))
                     cap.release()
                     break          # un backend qui marche suffit pour cet index
             cap.release()
@@ -37,15 +37,15 @@ if not liste:
 
 print("=" * 58)
 print("CAMERAS DETECTEES")
-for index, _, nom, w, h in liste:
-    print(f"  index={index}  backend={nom}  resolution={w}x{h}")
+for index, _, name, w, h in liste:
+    print(f"  index={index}  backend={name}  resolution={w}x{h}")
 print("=" * 58)
 print("Regarde chaque image et note l'index de celle que tu veux utiliser.")
 print("Touches : 'n' = suivante | 'q' = quitter")
 
 position = 0
 while True:
-    index, backend, nom, w, h = liste[position]
+    index, backend, name, w, h = liste[position]
     cap = cv2.VideoCapture(index, backend) if backend else cv2.VideoCapture(index)
     if not cap.isOpened():
         position = (position + 1) % len(liste)
@@ -55,7 +55,7 @@ while True:
         ok, image = cap.read()
         if not ok:
             break
-        cv2.putText(image, f"index = {index}   backend = {nom}", (10, 32),
+        cv2.putText(image, f"index = {index}   backend = {name}", (10, 32),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         cv2.putText(image, f"resolution = {w}x{h}", (10, 60),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
@@ -63,14 +63,14 @@ while True:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
         cv2.imshow("Identification des cameras", image)
 
-        touche = cv2.waitKey(1) & 0xFF
-        if touche == ord("q"):
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
             cap.release()
             cv2.destroyAllWindows()
-            print("\nNote l'index choisi et mets-le dans CAMERA_INDEX "
+            print("\nNote l'index chosen et mets-le dans CAMERA_INDEX "
                   "en haut de tes programmes.")
             raise SystemExit
-        if touche == ord("n"):
+        if key == ord("n"):
             break
 
     cap.release()

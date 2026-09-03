@@ -44,18 +44,18 @@ from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image
 
 
-def charger_yaml(chemin):
+def charger_yaml(path):
     """Read a standard ROS camera_calibration YAML file.
 
     Also returns the mounting the file was produced for, so the node can say
     it out loud at startup — an air calibration used underwater is otherwise
     indistinguishable from a good one until the poses come out wrong.
     """
-    with open(chemin, "r") as fichier:
-        donnees = yaml.safe_load(fichier)
+    with open(path, "r") as path:
+        donnees = yaml.safe_load(path)
 
-    montage = Path(chemin).stem
-    montage = montage[:-4] if montage.endswith("_ros") else montage
+    mounting = Path(path).stem
+    mounting = mounting[:-4] if mounting.endswith("_ros") else mounting
 
     info = CameraInfo()
     info.width = int(donnees["image_width"])
@@ -65,7 +65,7 @@ def charger_yaml(chemin):
     info.k = [float(v) for v in donnees["camera_matrix"]["data"]]
     info.r = [float(v) for v in donnees["rectification_matrix"]["data"]]
     info.p = [float(v) for v in donnees["projection_matrix"]["data"]]
-    return info, montage
+    return info, mounting
 
 
 class CameraInfoRelay(Node):
@@ -75,31 +75,31 @@ class CameraInfoRelay(Node):
         self.declare_parameter("image_topic", "/camera/color/image_raw")
         self.declare_parameter("output_namespace", "/camera_calibrated")
 
-        chemin = self.get_parameter("calibration_file").value
-        if not chemin:
+        path = self.get_parameter("calibration_file").value
+        if not path:
             raise RuntimeError("Set the 'calibration_file' parameter.")
-        self.model, montage = charger_yaml(chemin)
+        self.model, mounting = charger_yaml(path)
 
         fx, fy = self.model.k[0], self.model.k[4]
         self.get_logger().info(
-            f"mounting '{montage}': fx={fx:.2f} fy={fy:.2f} "
+            f"mounting '{mounting}': fx={fx:.2f} fy={fy:.2f} "
             f"(anamorphic ratio {max(fx, fy)/min(fx, fy):.2f})")
-        if "eau" not in montage:
+        if "water" not in mounting:
             self.get_logger().warn(
-                f"'{montage}' is an IN-AIR calibration. Do not use it for a "
+                f"'{mounting}' is an IN-AIR calibration. Do not use it for a "
                 "submerged run — ranges would be off by tens of percent.")
 
         topic_image = self.get_parameter("image_topic").value
-        sortie = self.get_parameter("output_namespace").value.rstrip("/")
+        output = self.get_parameter("output_namespace").value.rstrip("/")
 
-        self.pub_image = self.create_publisher(Image, f"{sortie}/image_raw", 10)
-        self.pub_info = self.create_publisher(CameraInfo, f"{sortie}/camera_info", 10)
+        self.pub_image = self.create_publisher(Image, f"{output}/image_raw", 10)
+        self.pub_info = self.create_publisher(CameraInfo, f"{output}/camera_info", 10)
         self.create_subscription(Image, topic_image, self.on_image, 10)
 
         self.get_logger().info(
-            f"Relaying {topic_image} -> {sortie}/image_raw + {sortie}/camera_info")
+            f"Relaying {topic_image} -> {output}/image_raw + {output}/camera_info")
         self.get_logger().info(
-            f"Using calibration {chemin} "
+            f"Using calibration {path} "
             f"({self.model.width}x{self.model.height}, fx={self.model.k[0]:.2f})")
         self.averti = False
 

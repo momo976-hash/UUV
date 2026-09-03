@@ -17,7 +17,7 @@ Contrôles :
 
 Références :
   - Kallwies et al., "Determining and Improving the Localization Accuracy of
-    AprilTag Detection", ICRA 2020  (choix de la librairie + affinage des coins)
+    AprilTag Detection", ICRA 2020  (choix de la librairie + affinage des corners)
   - López-Cerón & Cañas, "Accuracy Analysis of Marker-Based 3D Visual
     Localization", 2016            (solvePnP, distance < 4 m, éviter le face-à-face)
 """
@@ -42,11 +42,11 @@ from scipy.spatial.transform import Rotation
 # --------------------------------------------------------------------------
 def tag_object_points(tag_size_m):
     """
-    Coordonnées 3D des 4 coins du tag dans SON PROPRE repère (mètres).
+    Coordonnées 3D des 4 corners du tag dans SON PROPRE repère (mètres).
 
-    L'origine est au centre du tag, le plan du tag est Z = 0.
-    L'ordre DOIT correspondre à celui des coins renvoyés par pupil-apriltags,
-    qui liste les coins dans l'ordre :
+    L'origin est au centre du tag, le plan du tag est Z = 0.
+    L'ordre DOIT correspondre à celui des corners renvoyés par pupil-apriltags,
+    qui liste les corners dans l'ordre :
         0: bas-gauche, 1: bas-droit, 2: haut-droit, 3: haut-gauche
     """
     h = tag_size_m / 2.0
@@ -65,12 +65,12 @@ def estimate_pose(corners_2d, tag_size_m, K, dist):
     """
     Résout le problème Perspective-n-Point pour un tag.
 
-    Renvoie (rvec, tvec) : rotation (vecteur de Rodrigues) et translation
-    du repère TAG vu depuis le repère CAMERA. tvec est donc la position du
+    Renvoie (rvec, tvec) : rotation (vector de Rodrigues) et translation
+    du repère TAG seen depuis le repère CAMERA. tvec est donc la position du
     centre du tag dans le repère caméra (en mètres).
 
     On utilise SOLVEPNP_IPPE_SQUARE, l'algorithme dédié aux marqueurs carrés
-    plans : plus stable que la méthode itérative générique pour 4 coins.
+    plans : plus stable que la méthode itérative générique pour 4 corners.
     """
     obj_pts = tag_object_points(tag_size_m)
     img_pts = np.asarray(corners_2d, dtype=np.float64)
@@ -137,7 +137,7 @@ def draw_hud(frame, poses, fps):
 # Sources vidéo : RealSense (réel) ou webcam (test sans matériel)
 # --------------------------------------------------------------------------
 class RealSenseSource:
-    """Caméra Intel RealSense : fournit les images ET les intrinsèques exacts."""
+    """Caméra Intel RealSense : fournit les frames ET les intrinsèques exacts."""
 
     def __init__(self, width=640, height=480, fps=30):
         if rs is None:
@@ -177,14 +177,14 @@ class WebcamSource:
     """Webcam ordinaire : pour tester le code SANS la RealSense.
 
     Les intrinsèques sont ici APPROXIMÉS (pas calibrés) : les distances 3D ne
-    seront pas fiables, mais la détection et l'affichage des axes fonctionnent.
+    seront pas fiables, mais la détection et l'display des axes fonctionnent.
     """
 
     def __init__(self, index=0, width=640, height=480):
         self.cap = cv2.VideoCapture(index)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        # Approximation grossière : focale ~ largeur de l'image, centre optics au milieu
+        # Approximation grossière : focal_length ~ width de l'image, centre optics au milieu
         f = float(width)
         self.K = np.array(
             [[f, 0, width / 2], [0, f, height / 2], [0, 0, 1]], dtype=np.float64
@@ -214,7 +214,7 @@ def main():
         "--tag-size",
         type=float,
         default=0.10,
-        help="Côté du tag en mètres (mesure-le précisément !). Défaut: 0.10",
+        help="Côté du tag en mètres (measurement-le précisément !). Défaut: 0.10",
     )
     parser.add_argument(
         "--family",
