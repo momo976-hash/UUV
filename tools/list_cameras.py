@@ -1,10 +1,11 @@
 # list_cameras.py — List every camera this computer can open.
 #
-# Indispensable quand plusieurs cameras sont branchees (webcam du PC +
-# RealSense) : calibrer une camera et mesurer avec une autre fausse tout.
+# Essential when several cameras are plugged in (the PC's webcam + the
+# RealSense): calibrating one camera and measuring with another falsifies
+# everything.
 #
-# Le programme ouvre chaque index, affiche l'image et estime le champ de vision
-# a partir de la resolution, pour t'aider a reconnaitre laquelle est laquelle.
+# The program opens each index, shows the image and estimates the field of
+# view from the resolution, to help you tell which is which.
 #
 # Keys: n = camera suivante | q = quitter
 import cv2
@@ -14,7 +15,7 @@ BACKENDS = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
 
 
 def cameras_disponibles(nb_index=5):
-    """Renvoie la liste des (index, backend, name, width, height) qui marchent."""
+    """Returns the list of (index, backend, name, width, height) that work."""
     trouvees = []
     for index in range(nb_index):
         for backend, name in BACKENDS:
@@ -25,7 +26,7 @@ def cameras_disponibles(nb_index=5):
                     h, w = img.shape[:2]
                     trouvees.append((index, backend, name, w, h))
                     cap.release()
-                    break          # un backend qui marche suffit pour cet index
+                    break      # one working backend is enough for this index
             cap.release()
     return trouvees
 
@@ -40,7 +41,7 @@ print("CAMERAS DETECTEES")
 for index, _, name, w, h in liste:
     print(f"  index={index}  backend={name}  resolution={w}x{h}")
 print("=" * 58)
-print("Regarde chaque image et note l'index de celle que tu veux utiliser.")
+print("Look at each image and note the index of the one you want to use.")
 print("Keys: 'n' = suivante | 'q' = quitter")
 
 position = 0
@@ -67,7 +68,7 @@ while True:
         if key == ord("q"):
             cap.release()
             cv2.destroyAllWindows()
-            print("\nNote l'index chosen et mets-le dans CAMERA_INDEX "
+            print("\nNote the index you chose and put it in CAMERA_INDEX "
                   "en haut de tes programmes.")
             raise SystemExit
         if key == ord("n"):

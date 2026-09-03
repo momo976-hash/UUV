@@ -2,25 +2,25 @@
 #
 #     python list_realsense.py
 #
-# Repond a une error precise du SDK : "Couldn't resolve requests". Elle veut
-# dire que les flux demandes n'existent pas sur l'appareil trouve, sans dire
-# lesquels manquent ni pourquoi. Les causes possibles se ressemblent toutes a
+# It answers one precise SDK error: "Couldn't resolve requests". That means
+# the streams requested do not exist on the device found, without saying which
+# are missing or why. The possible causes all look alike from the outside:
 # l'ecran :
 #
-#   - c'est une D435 et non une D435i : le model SANS "i" n'a pas d'IMU.
-#     C'est de loin le cas le plus frequent, et rien ne le signale autrement
-#     que par cette error.
-#   - deux cameras sont branchees et le SDK a pris celle qui n'a pas d'IMU.
-#   - un autre programme tient deja la camera.
+#   - it is a D435 and not a D435i: the model WITHOUT the "i" has no IMU.
+#     By far the most frequent case, and nothing signals it other than that
+#     error.
+#   - two cameras are plugged in and the SDK took the one without an IMU.
+#   - another program already holds the camera.
 #
-# Ce script enumere les appareils, leur numero de serie, leurs capteurs et
-# leurs flux, puis dit franchement si une imu inertielle est disponible.
+# This script enumerates the devices, their serial numbers, their sensors and
+# their streams, then says plainly whether an inertial IMU is available.
 import sys
 
 try:
     import pyrealsense2 as rs
 except ImportError:
-    print("ERROR: pyrealsense2 n'est pas installe.")
+    print("ERROR: pyrealsense2 is not installed.")
     print("  python -m pip install pyrealsense2")
     sys.exit(1)
 
@@ -34,9 +34,9 @@ def main():
     print("=" * 68)
     if not appareils:
         print("\nAUCUN appareil trouve.")
-        print("  - la camera est-elle branchee ?")
-        print("  - un autre programme la tient-il deja ? (ferme-le)")
-        print("  - essaie un autre port USB, de preference USB 3")
+        print("  - is the camera plugged in?")
+        print("  - does another program already hold it? (close it)")
+        print("  - try another USB port, preferably USB 3")
         return 1
 
     with_imu = []
@@ -75,11 +75,11 @@ def main():
     print("=" * 68)
     if not with_imu:
         print("Aucun appareil branche n'a de imu inertielle.")
-        print("\nLe model D435 (sans 'i') n'en a PAS ; seul le D435i en porte")
-        print("une. Verifie le name exact affiche plus haut : c'est la seule")
-        print("facon de les distinguer, ils sont physiquement identiques.")
-        print("\nimu_realsense.py ne peut donc pas fonctionner avec celui-ci.")
-        print("En attendant, la demonstration des maths tourne sans materiel :")
+        print("\nThe D435 model (without the 'i') does NOT have one; only the")
+        print("D435i carries one. Check the exact name shown above: it is the")
+        print("only way to tell them apart, they are physically identical.")
+        print("\nSo imu_realsense.py cannot work with this one.")
+        print("In the meantime the maths demonstration runs with no hardware:")
         print("  python imu_realsense.py --simulation")
         return 1
 
@@ -87,10 +87,10 @@ def main():
     for numero, name, serie in with_imu:
         print(f"  [{numero}] {name}   serie {serie}")
     if len(appareils) > 1:
-        print("\nWARNING : plusieurs appareils sont branches. Le SDK prend le")
-        print("first qu'il trouve, et rien ne dit lequel. Pour toute measurement")
-        print("qui compte — bias du gyro, noise — DEBRANCHE les autres :")
-        print("le bias est propre a un exemplaire, comme une calibration.")
+        print("\nWARNING: several devices are plugged in. The SDK takes the")
+        print("first it finds, and nothing says which. For any measurement that")
+        print("matters — gyro bias, noise — UNPLUG the others: the bias belongs")
+        print("to one individual unit, like a calibration.")
     print("\nTu peux lancer :  python imu_realsense.py")
     return 0
 
