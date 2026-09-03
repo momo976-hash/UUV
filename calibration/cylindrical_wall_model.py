@@ -1,39 +1,41 @@
 # cylindrical_wall_model.py — Ray tracing through the tube's curved wall.
 #
 # A QUOI CA SERT
-# Verifier, par le calcul, ce que la wall du tube fait a la focal_length sous
-# l'water. Ce n'est pas un outil du quotidien : il product la table
-# GROSSISSEMENT_AXIAL de calibration_tube.py, et sert de justification aux
-# chiffres qui y sont recopies.
+# To check, by calculation, what the tube's wall does to the focal length
+# underwater. It is not an everyday tool: it produces calibrate_tube.py's
+# AXIAL_MAGNIFICATION table, and stands as the justification for the numbers
+# copied there.
 #
 #     python modele_wall_cylindrique.py     affiche la table
 #
 # CE QU'IL ETABLIT
-# Selon l'axis du tube, la wall cylindrique est localement PLANE : un plan
-# contenant l'axis la coupe en deux droites paralleles. C'est donc une lame a
-# faces paralleles, qui underwater multiplie la focal_length par l'index, 1.33. Le
-# trace le confirme a 0.5 % pres face a la formule analytique, et montre que
-# la distance de l'objet n'y change presque rien (1.2 % a 0.30 m, 0.4 % a 1 m).
-# Selon la circonference, le meniscus donne x1.038 : d'ou une anamorphic ratio
-# prevue de 1.277, en accord avec le 1.268 calcule autrement dans optics.py.
+# Along the tube axis, the cylindrical wall is locally FLAT: a plane
+# containing the axis cuts it in two parallel straight lines. So it is a
+# plane-parallel slab, which underwater multiplies the focal length by the
+# index, 1.33. The ray trace confirms that to within 0.5 % against the
+# analytical formula, and shows that the object's distance changes almost
+# nothing (1.2 % at 0.30 m, 0.4 % at 1 m). Around the circumference, the
+# meniscus gives x1.038: whence a predicted anamorphic ratio of 1.277, in
+# agreement with the 1.268 computed another way in optics.py.
 #
-# CE QU'IL N'EXPLIQUE PAS
-# Les focales measured underwater tombent 12.7 % (fx) et 6.6 % (fy) sous ces
+# WHAT IT DOES NOT EXPLAIN
+# The focal lengths measured underwater come out 12.7 % (fx) and 6.6 % (fy)
+# below these
 # previsions. Cet gap reste ouvert.
 #
-# PIEGE CORRIGE ICI, A NE PAS REINTRODUIRE
-# La normale d'un cylindre traverse de l'interieur pointe dans le MEME sens
-# que le radius. La formule de Snell vectorielle assumed l'inverse : sans
-# retourner la normale, cos(i) sort negatif et la deviation est calculee a
-# l'envers. Ce bug donnait un grossissement de 1.17 au lieu de 1.32, et avait
-# fait conclure a tort que la focal_length dependait fortement de la distance.
-# Le check contre la formule de la lame plane est la pour le rattraper :
-# si le trace s'en ecarte de plus de ~1 %, quelque chose cloche.
+# A TRAP FIXED HERE, NOT TO BE REINTRODUCED
+# The normal of a cylinder crossed from the inside points the SAME way as the
+# radius. Snell's vector formula assumes the opposite: without flipping the
+# normal, cos(i) comes out negative and the deviation is computed backwards.
+# That bug gave a magnification of 1.17 instead of 1.32, and had led to the
+# wrong conclusion that the focal length depended strongly on distance. The
+# check against the plane-slab formula is there to catch it: if the trace
+# departs from it by more than ~1 %, something is wrong.
 import numpy as np, cv2
 
 R1, R2 = 0.02475, 0.02900          # rayons interieur / exterieur du tube
 N_AIR, N_AC, N_EAU = 1.0, 1.49, 1.33
-PUPILLE = 0.00315                  # off-axis offset measurement, vers la wall visee
+PUPIL = 0.00315                    # measured off-axis offset, towards the wall
 FX_NUE, FY_NUE = 615.56, 615.09    # camera nue, measured aujourd'hui
 CX, CY = 320.0, 240.0
 
@@ -50,13 +52,13 @@ def _inter_cylindre(o, d, R):
 def _refracter(d, n, eta):
     """Snell vectoriel. eta = n1/n2.
 
-    La formule classique assumed la normale orientee FACE au radius incident.
-    Sur un cylindre traverse de l'interieur vers l'exterieur, la normale
-    radiale pointe dans le meme sens que le radius : one must la retourner,
-    sinon cos(i) sort negatif et la deviation est calculee a l'envers.
+    The classic formula assumes the normal faces INTO the incident ray. On a
+    cylinder crossed from inside to outside, the radial normal points the
+    same way as the ray: it has to be flipped, otherwise cos(i) comes out
+    negative and the deviation is computed backwards.
     """
     cosi = -float(d @ n)
-    if cosi < 0.0:                            # normale du meme cote que le radius
+    if cosi < 0.0:                        # normal on the same side as the ray
         n = -n
         cosi = -cosi
     k = 1 - eta*eta*(1 - cosi*cosi)
@@ -64,9 +66,9 @@ def _refracter(d, n, eta):
     return eta*d + (eta*cosi - np.sqrt(k))*n
 
 def tracer(dx, dy):
-    """Direction au niveau de la pupil -> radius in the water."""
+    """Direction at the pupil -> the ray in the water."""
     d = np.array([dx, dy, 1.0]); d /= np.linalg.norm(d)
-    o = np.array([0.0, 0.0, PUPILLE])
+    o = np.array([0.0, 0.0, PUPIL])
     p1 = _inter_cylindre(o, d, R1)
     if p1 is None: return None
     n1 = np.array([0.0, p1[1], p1[2]]); n1 /= np.linalg.norm(n1)
@@ -79,54 +81,55 @@ def tracer(dx, dy):
     if d2 is None: return None
     return p2, d2 / np.linalg.norm(d2)
 
-def _ecart(dx, dy, W):
-    """Distance du point W au radius sorti pour la direction (dx,dy)."""
+def _gap(dx, dy, W):
+    """Distance from the point W to the ray emerging for direction (dx, dy)."""
     r = tracer(dx, dy)
     if r is None: return None
     p, d = r
     v = W - p
     return v - float(v @ d)*d          # composante perpendiculaire au radius
 
-def projeter(W):
-    """Point 3D in the water -> pixel. Newton 2D sur (dx,dy)."""
-    # depart : approximation lame plane, direction x reduite de 1/1.33
+def project(W):
+    """A 3D point in the water -> a pixel. 2D Newton on (dx, dy)."""
+    # start: the plane-slab approximation, x direction reduced by 1/1.33
     dx, dy = W[0]/W[2]*N_EAU, W[1]/W[2]*N_EAU
     for _ in range(60):
-        e = _ecart(dx, dy, W)
+        e = _gap(dx, dy, W)
         if e is None: return None
         if np.linalg.norm(e) < 1e-9: break
         h = 1e-6
-        ex = _ecart(dx+h, dy, W); ey = _ecart(dx, dy+h, W)
+        ex = _gap(dx+h, dy, W); ey = _gap(dx, dy+h, W)
         if ex is None or ey is None: return None
         J = np.column_stack([(ex-e)/h, (ey-e)/h])       # 3x2
-        pas, *_ = np.linalg.lstsq(J, -e, rcond=None)
-        dx += float(pas[0]); dy += float(pas[1])
+        step, *_ = np.linalg.lstsq(J, -e, rcond=None)
+        dx += float(step[0]); dy += float(step[1])
     else:
         return None
     return np.array([FX_NUE*dx + CX, FY_NUE*dy + CY])
 
 
 if __name__ == "__main__":
-    print("Grossissement selon l'axis du tube, par distance d'objet")
-    print(f"{'distance (m)':>13} {'grossissement':>15} {'fx implique':>13}")
+    print("Magnification along the tube axis, by object distance")
+    print(f"{'distance (m)':>13} {'magnification':>15} {'implied fx':>13}")
     print("-" * 44)
     eps = 0.002
     for Z in (0.3, 0.4, 0.5, 0.6, 0.75, 1.0, 1.5, 2.0, 3.0, 10.0, 1000.0):
-        p = projeter(np.array([eps * Z, 0.0, Z]))
+        p = project(np.array([eps * Z, 0.0, Z]))
         g = (p[0] - CX) / (FX_NUE * eps)
         print(f"{Z:13.2f} {g:15.4f} {FX_NUE * g:13.1f}")
     print("-" * 44)
-    # Controle : la direction axiale doit redonner la plane-parallel slab.
-    # C'est ce test qui a rattrape l'error de signe sur la normale.
-    n, d0 = N_EAU, R1 - PUPILLE
+    # Check: the axial direction must give the plane-parallel slab back. It
+    # is this test that caught the sign error on the normal.
+    n, d0 = N_EAU, R1 - PUPIL
     pires = []
     for Z in (0.3, 0.75, 2.0, 1000.0):
-        p = projeter(np.array([eps * Z, 0.0, Z]))
+        p = project(np.array([eps * Z, 0.0, Z]))
         trace = (p[0] - CX) / (FX_NUE * eps)
         analytique = n * Z / (Z + (d0 + (R2 - R1) * (1 - n / N_AC)) * (n - 1))
         pires.append(abs(trace / analytique - 1))
-    print(f"  Controle lame plane : gap max {100*max(pires):.2f} % "
-          f"(doit rester sous ~1.5 %)")
-    print("  Le grossissement axial vaut donc bien ~1.33, quasi independant")
-    print("  de la distance. Les focales measured underwater tombent pourtant")
-    print("  12.7 % (fx) et 6.6 % (fy) plus bas : cet gap reste ouvert.")
+    print(f"  Plane-slab check: max gap {100*max(pires):.2f} % "
+          f"(must stay under ~1.5 %)")
+    print("  So the axial magnification really is ~1.33, near enough")
+    print("  independent of distance. And yet the focal lengths measured")
+    print("  underwater come out 12.7 % (fx) and 6.6 % (fy) lower: that gap")
+    print("  remains open.")
