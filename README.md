@@ -19,6 +19,13 @@ file — every number is recomputed as it prints.
 No camera needed for that one. Two demonstrations do need the camera plugged
 in, and the script lists them at the end.
 
+To *see* the filter working rather than read that it does — one figure, no
+camera and no water needed (requires `matplotlib`):
+
+```
+python demos/demo_kalman.py
+```
+
 **One honest reserve, stated up front:** position cannot come from the IMU
 alone. A MEMS bias double-integrates into 2.5 cm after 1 s but 1 m after
 10 s. The IMU is what carries the estimate through a **tag dropout of a few
@@ -67,6 +74,7 @@ tout seul une fois la mesure faite. Rien à désactiver à la main.
 | Je veux… | Commande |
 |---|---|
 | prouver que l'IMU et le filtre sont faits | `python localisations/preuve_imu_kalman.py` |
+| **voir le filtre travailler, en image** | `python demos/demo_kalman.py` |
 | montrer que la calibration donne la bonne distance | `python calibration/demo_distance.py --montage tube_eau` |
 | vérifier une distance connue, au mètre | `python calibration/verifier_distance.py --reel 1.5 --tag 0.22389` |
 | **faire l'étape 5 (engin dans l'eau)** | `python localisations/verification_monde.py` |

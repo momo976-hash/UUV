@@ -131,6 +131,18 @@ def demande_2_kalman():
     print("    acceleration avec 9 mm d'erreur au lieu de 377 mm sans l'IMU.")
     print("    C'est la ou les deux demandes se rejoignent : l'IMU nourrit le")
     print("    modele cinematique, les tags l'empechent de deriver.")
+    print()
+    print("  POUR LE VOIR PLUTOT QUE LE LIRE — une figure, sans camera ni eau")
+    print("  (demande matplotlib : python -m pip install matplotlib) :")
+    print("        python demos/demo_kalman.py")
+    print("    Simule l'engin dans le bassin avec l'implantation reelle des 10")
+    print("    tags, et lui inflige ce qui arrive vraiment : ambiguite de")
+    print("    retournement des tags, rideau de bulles de 3 s qui masque tout,")
+    print("    et un support de tag pousse de 22 mm en cours de route.")
+    print("    Le chiffre le plus parlant y est celui qu'on n'attend pas : le")
+    print("    filtre SUIT le support deplace au lieu de le corriger. Un Kalman")
+    print("    moyenne le bruit, jamais un biais — d'ou la surveillance des")
+    print("    supports, qui detecte le deplacement a 1 mm pres.")
     return ok1 and ok2
 
 
