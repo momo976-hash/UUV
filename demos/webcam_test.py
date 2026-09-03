@@ -18,7 +18,7 @@ import numpy as np
 TAG_SIZE = 0.10  # tag side in metres (measure your printed tag and change this)
 
 # --- Webcam ---
-cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # CAP_DSHOW : evite l'error MSMF sous Windows
+cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # CAP_DSHOW: avoids the MSMF error on Windows
 if not cam.isOpened():
     print("ERROR: cannot open the webcam.")
     raise SystemExit
@@ -30,11 +30,11 @@ dist = np.zeros(5)
 
 # --- The tag's 3D corners (order IPPE_SQUARE expects: TL, TR, BR, BL) ---
 h = TAG_SIZE / 2
-coins_3d = np.array(
+corners_3d = np.array(
     [[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64
 )
 
-# --- Detecteur AprilTag 36h11 integre a OpenCV ---
+# --- AprilTag 36h11 detector built into OpenCV ---
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
 detector = cv2.aruco.ArucoDetector(dictionary, cv2.aruco.DetectorParameters())
 
@@ -44,15 +44,15 @@ while True:
     ok, image = cam.read()
     if not ok:
         break
-    gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    corners, ids, _ = detector.detectMarkers(gris)
+    corners, ids, _ = detector.detectMarkers(grey)
     if ids is not None:
         cv2.aruco.drawDetectedMarkers(image, corners, ids)  # contour + id
         for c, tag_id in zip(corners, ids.flatten()):
             pts = c.reshape(4, 2).astype(np.float64)
             ok2, rvec, tvec = cv2.solvePnP(
-                coins_3d, pts, K, dist, flags=cv2.SOLVEPNP_IPPE_SQUARE
+                corners_3d, pts, K, dist, flags=cv2.SOLVEPNP_IPPE_SQUARE
             )
             if ok2:
                 cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAG_SIZE / 2, 2)

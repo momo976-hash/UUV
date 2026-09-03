@@ -78,8 +78,8 @@ WALL_COLOUR = {
 # All the optics come from optics.py: the calibration matrix, the viewport's
 # refraction, and the TUBE, which can clip the field before the water even
 # comes into it. So the field kept below is the smaller of the two.
-LARGEUR_PX, HAUTEUR_PX = optics.RESOLUTION
-_half_h_air, _half_v_air, _demi_d_air = optics.half_fields_of_view()
+WIDTH_PX, HEIGHT_PX = optics.RESOLUTION
+_half_h_air, _half_v_air, _half_d_air = optics.half_fields_of_view()
 
 # The field is not reduced the same way in both directions. With the camera
 # lying in the tube, the image's HORIZONTAL axis follows the tube axis and
@@ -184,8 +184,8 @@ HALF = np.array([POOL_LENGTH / 2, POOL_WIDTH / 2, POOL_DEPTH / 2])
 
 state = {
     "zoom": 1.05,
-    "normales": True,
-    "boucle": True,
+    "normals": True,
+    "loop": True,
     "water": True,
     "camera": True,
 }
@@ -218,11 +218,11 @@ def draw(ax):
     xmin, ymin, zmin = 0.0, 0.0, 0.0
     xmax, ymax, zmax = POOL_LENGTH, POOL_WIDTH, POOL_DEPTH
 
-    # --- walls, fond, surface -------------------------------------------
+    # --- walls, floor, surface ------------------------------------------
     if state["water"]:
-        fond = [[(xmin, ymin, zmax), (xmax, ymin, zmax),
+        floor = [[(xmin, ymin, zmax), (xmax, ymin, zmax),
                  (xmax, ymax, zmax), (xmin, ymax, zmax)]]
-        ax.add_collection3d(Poly3DCollection(fond, facecolor="#c9d4dc",
+        ax.add_collection3d(Poly3DCollection(floor, facecolor="#c9d4dc",
                                              alpha=0.35, edgecolor="none"))
         surface = [[(xmin, ymin, zmin), (xmax, ymin, zmin),
                     (xmax, ymax, zmin), (xmin, ymax, zmin)]]
@@ -237,20 +237,20 @@ def draw(ax):
         ax.add_collection3d(Poly3DCollection(walls, facecolor="#8fa3b0",
                                              alpha=0.07, edgecolor="none"))
 
-    # aretes du pool
+    # pool edges
     corners = np.array([[x, y, z] for z in (zmin, zmax)
                       for x, y in ((xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax))])
-    aretes = [(0, 1), (1, 2), (2, 3), (3, 0),
+    edges = [(0, 1), (1, 2), (2, 3), (3, 0),
               (4, 5), (5, 6), (6, 7), (7, 4),
               (0, 4), (1, 5), (2, 6), (3, 7)]
-    for i, j in aretes:
+    for i, j in edges:
         ax.plot(*zip(corners[i], corners[j]), color="#5c6b76", linewidth=1.0, alpha=0.8)
 
     # --- the linking loop ------------------------------------------------
     positions = np.array([[x, y, z] for _, _, x, y, z, _ in TAGS])
-    if state["boucle"]:
-        boucle = np.vstack([positions, positions[0]])
-        ax.plot(boucle[:, 0], boucle[:, 1], boucle[:, 2],
+    if state["loop"]:
+        loop = np.vstack([positions, positions[0]])
+        ax.plot(loop[:, 0], loop[:, 1], loop[:, 2],
                 color="#c2410c", linewidth=1.1, linestyle="--", alpha=0.75, zorder=1)
 
     # --- tags --------------------------------------------------------------
@@ -258,23 +258,23 @@ def draw(ax):
     if state["camera"]:
         seen = {t[0]: t for t in visible_from(camera["position"], camera["azimuth"])}
 
-    demi_tag = TAG_SIZE / 2
+    half_tag = TAG_SIZE / 2
     for tid, wall, x, y, z, normal in TAGS:
         centre = np.array([x, y, z])
         n, right, vertical = tag_frame(normal)
 
         # The tag's face, ringed with the black tape Josiah sticks on: that
         # contrast margin is what the detector looks for first.
-        actif = tid in seen
+        active = tid in seen
         ax.add_collection3d(Poly3DCollection(
-            [square(centre, right, vertical, demi_tag)],
-            facecolor="#22c55e" if actif else WALL_COLOUR[wall],
+            [square(centre, right, vertical, half_tag)],
+            facecolor="#22c55e" if active else WALL_COLOUR[wall],
             alpha=0.97, edgecolor="#111418", linewidth=3.2))
 
-        if state["normales"]:
-            fleche = centre + 0.28 * n
-            ax.plot(*zip(centre, fleche), color="#334155", linewidth=1.2)
-            ax.scatter(*fleche, color="#334155", s=8)
+        if state["normals"]:
+            arrow = centre + 0.28 * n
+            ax.plot(*zip(centre, arrow), color="#334155", linewidth=1.2)
+            ax.scatter(*arrow, color="#334155", s=8)
 
         label = centre + 0.13 * n - 0.16 * vertical
         ax.text(*label, str(tid), color="#0f172a", fontsize=9, weight="bold",
@@ -282,7 +282,7 @@ def draw(ax):
                 bbox=dict(boxstyle="circle,pad=0.18", facecolor="white",
                           edgecolor=WALL_COLOUR[wall], linewidth=1.2))
 
-    # --- camera virtuelle --------------------------------------------------
+    # --- virtual camera -----------------------------------------------------
     if state["camera"]:
         p = camera["position"]
         a = camera["azimuth"]
@@ -292,17 +292,17 @@ def draw(ax):
         rays = [axis + sh * np.tan(HALF_FOV_H) * right + sv * np.tan(HALF_FOV_V) * down
                   for sh, sv in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
         t = usable_range(p, rays)   # the cone stops on the wall aimed at
-        loin = [p + t * u for u in rays]
-        for corner in loin:
+        far = [p + t * u for u in rays]
+        for corner in far:
             ax.plot(*zip(p, corner), color="#0ea5e9", linewidth=0.9, alpha=0.85)
-        ax.add_collection3d(Poly3DCollection([loin], facecolor="#0ea5e9",
+        ax.add_collection3d(Poly3DCollection([far], facecolor="#0ea5e9",
                                              alpha=0.10, edgecolor="#0ea5e9"))
         ax.scatter(*p, color="#0ea5e9", s=55, marker="o", depthshade=False)
         for tid in seen:
-            cible = positions[[t[0] for t in TAGS].index(tid)]
-            ax.plot(*zip(p, cible), color="#22c55e", linewidth=0.9, alpha=0.7)
+            target = positions[[t[0] for t in TAGS].index(tid)]
+            ax.plot(*zip(p, target), color="#22c55e", linewidth=0.9, alpha=0.7)
 
-    # --- cadrage -----------------------------------------------------------
+    # --- framing -------------------------------------------------------------
     k = state["zoom"]
     ax.set_xlim(CENTRE[0] - k * HALF[0], CENTRE[0] + k * HALF[0])
     ax.set_ylim(CENTRE[1] - k * HALF[1], CENTRE[1] + k * HALF[1])
@@ -382,7 +382,7 @@ def main():
         fig = plt.figure(figsize=(16, 5.6))
         views = [("Isometric", 24, -58, ""), ("Seen from above", 89, -90, "z"),
                 ("Seen from the front (wall A)", 6, -89, "y")]
-        for i, (titre, elev, azim, silent_axis) in enumerate(views, start=1):
+        for i, (title, elev, azim, silent_axis) in enumerate(views, start=1):
             ax = fig.add_subplot(1, 3, i, projection="3d")
             ax.view_init(elev=elev, azim=azim)
             draw(ax)
@@ -392,7 +392,7 @@ def main():
             elif silent_axis == "y":   # from the front, the width cannot be read
                 ax.set_ylabel("")
                 ax.set_yticks([])
-            ax.set_title(titre, fontsize=10, weight="bold")
+            ax.set_title(title, fontsize=10, weight="bold")
         fig.suptitle("Layout of the 10 AprilTags — pool 3.80 x 1.67 x 1.00 m",
                      fontsize=12, weight="bold")
         fig.tight_layout()
@@ -410,25 +410,25 @@ def main():
     draw(ax)
     print(HELP)
 
-    def rafraichir():
+    def refresh():
         draw(ax)
         fig.canvas.draw_idle()
 
-    def sur_molette(evenement):
-        state["zoom"] *= 0.88 if evenement.button == "up" else 1 / 0.88
+    def on_scroll(event):
+        state["zoom"] *= 0.88 if event.button == "up" else 1 / 0.88
         state["zoom"] = float(np.clip(state["zoom"], 0.25, 4.0))
-        rafraichir()
+        refresh()
 
-    def sur_touche(evenement):
-        key = evenement.key
-        pas, pas_angle = 0.10, np.radians(6)
+    def on_key(event):
+        key = event.key
+        step, angle_step = 0.10, np.radians(6)
         if key == "q" or key == "escape":
             plt.close(fig)
             return
         elif key == "n":
-            state["normales"] = not state["normales"]
+            state["normals"] = not state["normals"]
         elif key == "l":
-            state["boucle"] = not state["boucle"]
+            state["loop"] = not state["loop"]
         elif key == "e":
             state["water"] = not state["water"]
         elif key == "c":
@@ -442,21 +442,21 @@ def main():
         elif key == "3":
             ax.view_init(elev=24, azim=-58)
         elif key == "right":
-            camera["position"][0] += pas
+            camera["position"][0] += step
         elif key == "left":
-            camera["position"][0] -= pas
+            camera["position"][0] -= step
         elif key == "up":
-            camera["position"][1] += pas
+            camera["position"][1] += step
         elif key == "down":
-            camera["position"][1] -= pas
+            camera["position"][1] -= step
         elif key == "w":
-            camera["position"][2] -= pas
+            camera["position"][2] -= step
         elif key == "x":
-            camera["position"][2] += pas
+            camera["position"][2] += step
         elif key == "a":
-            camera["azimuth"] += pas_angle
+            camera["azimuth"] += angle_step
         elif key == "d":
-            camera["azimuth"] -= pas_angle
+            camera["azimuth"] -= angle_step
         elif key == "p":
             fig.savefig(IMAGE, dpi=200)
             print(f"Image written: {IMAGE}")
@@ -469,10 +469,10 @@ def main():
         camera["position"][0] = float(np.clip(camera["position"][0], 0.0, POOL_LENGTH))
         camera["position"][1] = float(np.clip(camera["position"][1], 0.0, POOL_WIDTH))
         camera["position"][2] = float(np.clip(camera["position"][2], 0.05, POOL_DEPTH - 0.05))
-        rafraichir()
+        refresh()
 
-    fig.canvas.mpl_connect("scroll_event", sur_molette)
-    fig.canvas.mpl_connect("key_press_event", sur_touche)
+    fig.canvas.mpl_connect("scroll_event", on_scroll)
+    fig.canvas.mpl_connect("key_press_event", on_key)
     plt.show()
 
 

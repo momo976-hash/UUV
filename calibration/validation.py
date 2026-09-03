@@ -58,7 +58,7 @@ history = deque(maxlen=30)   # to smooth the distance
 path = os.path.abspath("validation.csv")
 if not os.path.exists(path):
     with open(path, "w", newline="") as f:
-        csv.writer(f).writerow(["n", "distance_mesuree_m"])
+        csv.writer(f).writerow(["n", "distance_measured_m"])
 counter = 0
 
 print("=" * 55)
@@ -72,13 +72,13 @@ while True:
     ok, image = cam.read()
     if not ok:
         continue
-    gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    corners, ids, _ = detector.detectMarkers(gris)
+    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    corners, ids, _ = detector.detectMarkers(grey)
 
     distance_stable = None
     if ids is not None:
         cv2.aruco.drawDetectedMarkers(image, corners, ids)
-        pts = corners[0].reshape(4, 2).astype(np.float64)  # 1er tag detecte
+        pts = corners[0].reshape(4, 2).astype(np.float64)  # 1st tag detected
         ok2, rvec, tvec = cv2.solvePnP(coins_3d, pts, K, dist,
                                        flags=cv2.SOLVEPNP_IPPE_SQUARE)
         if ok2:
@@ -105,7 +105,7 @@ while True:
         counter += 1
         with open(path, "a", newline="") as f:
             csv.writer(f).writerow([counter, f"{distance_stable:.3f}"])
-        print(f"[{counter}] enregistre : distance measured = {distance_stable:.3f} m")
+        print(f"[{counter}] recorded: distance measured = {distance_stable:.3f} m")
 
 cam.release()
 cv2.destroyAllWindows()

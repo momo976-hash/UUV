@@ -60,15 +60,15 @@ def tag_object_points(tag_size_m):
     The origin is at the tag's centre, the tag's plane is Z = 0.
     The order MUST match that of the corners returned by pupil-apriltags,
     which lists them in the order:
-        0: bas-gauche, 1: bas-droit, 2: haut-droit, 3: haut-gauche
+        0: bottom-left, 1: bottom-right, 2: top-right, 3: top-left
     """
     h = tag_size_m / 2.0
     return np.array(
         [
-            [-h, -h, 0.0],  # bas-gauche
-            [+h, -h, 0.0],  # bas-droit
-            [+h, +h, 0.0],  # haut-droit
-            [-h, +h, 0.0],  # haut-gauche
+            [-h, -h, 0.0],  # bottom-left
+            [+h, -h, 0.0],  # bottom-right
+            [+h, +h, 0.0],  # top-right
+            [-h, +h, 0.0],  # top-left
         ],
         dtype=np.float64,
     )
@@ -247,7 +247,7 @@ def main():
         return 1
 
     print(f"[INFO] Source : {args.source}")
-    print(f"[INFO] Matrice intrinseque K =\n{source.K}")
+    print(f"[INFO] Intrinsic matrix K =\n{source.K}")
     print(f"[INFO] Taille du tag : {args.tag_size*100:.1f} cm")
     print("[INFO] Press 'q' or ESC to quit.")
 
