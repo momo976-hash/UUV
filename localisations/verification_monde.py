@@ -269,7 +269,7 @@ lissage_filtre = deque(maxlen=LISSAGE)
 MEMOIRE_DYNAMIQUE = 900          # 30 s a 30 Hz
 vitesses_angulaires = deque(maxlen=MEMOIRE_DYNAMIQUE)   # deg/s
 accelerations = deque(maxlen=MEMOIRE_DYNAMIQUE)         # m/s^2
-precedent_p = precedent_R = precedent_t = None
+precedent_p = precedent_R = precedent_t = precedent_ref = None
 precedente_vitesse = None
 
 
@@ -377,7 +377,7 @@ while True:
                     print(f"Tag {B} relie automatiquement. Monde : {sorted(carte)}")
 
     # pose de la camera dans le repere monde (meilleur tag connu visible)
-    cam_p = cam_R = None
+    cam_p = cam_R = ref = None
     connus_vus = [i for i in poses if i in carte]
     if connus_vus:
         ref = max(connus_vus, key=lambda i: surfaces[i])
@@ -387,9 +387,20 @@ while True:
 
     # --- ce que l'engin fait vraiment : vitesse de rotation et acceleration -
     # Mesure sur la pose BRUTE, entre deux images consecutives.
+    #
+    # Deux poses consecutives ne sont comparables QUE si elles viennent du
+    # MEME tag de reference. carte[B] continue d'etre affinee en continu tant
+    # que B reste visible avec un autre tag connu (cf. plus haut) : rien ne
+    # garantit que carte[2] et carte[7] s'accordent au millimetre a un instant
+    # donne, meme si le monde est juste en moyenne. Comparer une position
+    # obtenue via le tag 7 a la suivante obtenue via le tag 2 revient a
+    # mesurer l'ECART ENTRE DEUX CARTES, pas un deplacement reel — et divise
+    # par un intervalle d'image (~1/30 s), un ecart de quelques cm devient des
+    # centaines de deg/s ou de m/s2. Un changement de reference est donc traite
+    # exactement comme une perte de tag : on ne differencie pas a travers.
     if cam_p is not None:
         instant = time.time()
-        if precedent_t is not None:
+        if precedent_t is not None and ref == precedent_ref:
             intervalle = instant - precedent_t
             if 1e-3 < intervalle < 0.5:      # on ignore les trous (tag perdu)
                 vitesses_angulaires.append(angle_entre(precedent_R, cam_R) / intervalle)
@@ -400,9 +411,12 @@ while True:
                 precedente_vitesse = vitesse
             else:
                 precedente_vitesse = None
-        precedent_p, precedent_R, precedent_t = cam_p.copy(), cam_R.copy(), instant
+        else:
+            precedente_vitesse = None
+        precedent_p, precedent_R, precedent_t, precedent_ref = (
+            cam_p.copy(), cam_R.copy(), instant, ref)
     else:
-        precedent_t = None
+        precedent_t = precedent_ref = None
         precedente_vitesse = None
 
     # --- filtre de Kalman : nourri par TOUS les tags connus visibles --------
