@@ -671,6 +671,9 @@ class FiltreKalmanPosition:
         self.rejets = 0
         self.rejets_consecutifs = 0
         self.reprises = 0
+        # Renseigne a chaque mise a jour, pour les graphiques (voir corriger).
+        # Reste None tant qu'aucune mesure n'est arrivee.
+        self.dernier_calcul = None
 
     # x et P vivent dans le noyau ; on les expose tels quels pour que le reste
     # du fichier — et les scripts qui lisent filtre.x — ne change pas.
@@ -751,10 +754,25 @@ class FiltreKalmanPosition:
         S = self.H @ self.P @ self.H.T + R
         distance = float(y @ np.linalg.solve(S, y))
 
+        # Photographie de l'AVANT-mise a jour, pour qui veut tracer ce que le
+        # filtre vient de faire (graphiques_kalman.py). C'est le seul endroit
+        # ou l'a priori existe encore : la ligne suivante l'ecrase. Purement
+        # passif — aucune de ces valeurs n'est relue par le filtre.
+        self.dernier_calcul = {
+            "x_avant": self.x.copy(), "P_avant": self.P.copy(),
+            "z": z.copy(), "R": R.copy(), "innovation": y.copy(),
+            "S": S.copy(), "distance": distance, "seuil": self.seuil,
+            "K": self.noyau.gain(self.H, R)[0].copy(),
+        }
+
         if distance > self.seuil:      # aberration probable (flip d'un tag)
             self.rejets_consecutifs += 1
             if self.rejets_consecutifs < self.max_rejets_consecutifs:
                 self.rejets += 1
+                # Refusee : l'etat ne bouge pas, l'apres est donc l'avant.
+                self.dernier_calcul.update(
+                    x_apres=self.x.copy(), P_apres=self.P.copy(),
+                    acceptee=False)
                 return False, distance
             # Verrouillage : autant de refus d'affilee ne s'explique plus par
             # des mesures aberrantes, mais par un etat faux. On se recale sur
@@ -766,11 +784,17 @@ class FiltreKalmanPosition:
             self.P[3:, :3] = 0.0
             self.reprises += 1
             self.rejets_consecutifs = 0
+            self.dernier_calcul.update(
+                x_apres=self.x.copy(), P_apres=self.P.copy(), acceptee=True,
+                reprise=True)
             return True, distance
 
         self.rejets_consecutifs = 0
         # Les trois equations de mise a jour du document, forme de Joseph.
         self.noyau.corriger(z, self.H, R)
+        self.dernier_calcul["x_apres"] = self.x.copy()
+        self.dernier_calcul["P_apres"] = self.P.copy()
+        self.dernier_calcul["acceptee"] = True
         return True, distance
 
     @property

@@ -324,12 +324,33 @@ print("  1. regarde le tag de reference, appuie sur 'o'")
 print("  2. bouge vers le 2e tag : la liaison se fait TOUTE SEULE en chemin")
 print("     (il suffit que les 2 tags soient un instant visibles ensemble)")
 print("  'm' mode | 'r' repartir a zero | 's' enregistrer | 'q' quitter")
+if "--graphiques" not in sys.argv:
+    print("  Pour VOIR le filtre travailler (4 figures du cours, en direct) :")
+    print("      relancer avec  --graphiques")
 print("=" * 66)
 
 # Le rappel est affiche AVANT la session, pas seulement apres : c'est
 # maintenant que la personne a l'engin dans l'eau sous la main. Le lui dire
 # une fois la manip terminee l'obligerait a tout recommencer.
 rappel_mesures_manquantes(avec_imu=cam.avec_imu)
+
+# --- les figures du cours, en direct (option --graphiques) -----------------
+# Facultatif et sans consequence si matplotlib manque : au bassin, une mesure
+# ne se refait pas parce qu'une bibliotheque d'affichage n'est pas installee.
+fenetres = None
+debut_session = time.time()
+if "--graphiques" in sys.argv:
+    try:
+        from graphiques_kalman import FenetresKalman, disponible
+        if disponible():
+            fenetres = FenetresKalman(axe=0)
+            print("Graphiques du filtre : fenetre ouverte (4 figures du cours).")
+        else:
+            print("--graphiques demande mais matplotlib n'est pas installe :")
+            print("    python -m pip install matplotlib")
+            print("La mesure continue sans les graphiques.")
+    except Exception as souci:
+        print(f"--graphiques indisponible ({souci}) — la mesure continue sans.")
 
 while True:
     ok, image = cam.read()
@@ -458,6 +479,12 @@ while True:
                                distance=float(np.linalg.norm(poses[i][:3, 3])),
                                identifiant=i)
         filtre.appliquer()
+        # Les quatre figures du cours, tracees sur CETTE mesure-ci. La mesure
+        # brute passee en reference est celle du meilleur tag visible, la meme
+        # que la position brute affichee a l'ecran.
+        if fenetres is not None:
+            fenetres.ajouter(maintenant - debut_session, filtre, cam_p)
+            fenetres.rafraichir()
         if filtre.position.demarre:
             cam_p_filtre = filtre.position.position
             cam_R_filtre = filtre.orientation.matrice
@@ -634,6 +661,16 @@ while True:
 cam.release()
 cv2.destroyAllWindows()
 print(f"\nTermine. Mesures dans : {CSV}")
+
+# La figure est ENREGISTREE avant d'etre fermee : sans cela, tout ce que les
+# quatre graphiques ont montre pendant la session disparait a la fermeture de
+# la fenetre, et il faut refaire la manip pour en garder une trace.
+if fenetres is not None:
+    fenetres.rafraichir(force=True)
+    image_figures = os.path.abspath("graphiques_kalman_session.png")
+    if fenetres.enregistrer(image_figures):
+        print(f"Figures du filtre enregistrees : {image_figures}")
+    fenetres.fermer()
 
 
 # --- le filtre fait-il son travail ? ---------------------------------------

@@ -75,6 +75,7 @@ tout seul une fois la mesure faite. Rien à désactiver à la main.
 |---|---|
 | prouver que l'IMU et le filtre sont faits | `python localisations/preuve_imu_kalman.py` |
 | **voir le filtre travailler, en image** | `python demos/demo_kalman.py` |
+| **les figures du cours EN DIRECT, vraies mesures** | `python localisations/verification_monde.py --graphiques` |
 | montrer que la calibration donne la bonne distance | `python calibration/demo_distance.py --montage tube_eau` |
 | vérifier une distance connue, au mètre | `python calibration/verifier_distance.py --reel 1.5 --tag 0.22389` |
 | **faire l'étape 5 (engin dans l'eau)** | `python localisations/verification_monde.py` |
