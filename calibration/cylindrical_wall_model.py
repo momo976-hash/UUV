@@ -1,4 +1,14 @@
 # cylindrical_wall_model.py — Ray tracing through the tube's curved wall.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python calibration/cylindrical_wall_model.py
+#
+# Prints the table and its own self-check. Nothing to install, nothing to
+# plug in. You only need it if you doubt calibrate_tube.py's
+# AXIAL_MAGNIFICATION table, or want to re-derive it after changing the
+# tube's dimensions in optics.py.
+# ===========================================================================
 #
 # A QUOI CA SERT
 # To check, by calculation, what the tube's wall does to the focal length

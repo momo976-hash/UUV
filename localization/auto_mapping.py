@@ -1,4 +1,15 @@
 # auto_mapping.py — Build the tag map AUTOMATICALLY, no tape measure.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python localization/auto_mapping.py
+#
+# Show the tags. The FIRST one seen becomes the origin. Then show PAIRS —
+# two tags visible at the same time — and each new one places itself
+# relative to the one already known. No tape measure needed.
+#
+# KEYS: s = save the map | '+'/'-' = zoom | c = clear the trail | q = quit
+# ===========================================================================
 #
 # The principle (the same as Thein's "Step 2"):
 #   - Le first tag seen devient l'ORIGINE (l'ancre) : T_monde_ancre = identity.

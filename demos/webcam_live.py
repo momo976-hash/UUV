@@ -1,3 +1,14 @@
+# webcam_live.py — Reading AprilTags live: POSITION (x,y,z) + ORIENTATION.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python demos/webcam_live.py
+#
+# Show a tag; it prints its position and orientation live. The quickest way
+# to check that a camera works and that the tags are being detected at all.
+#
+# KEYS: q = quit
+# ===========================================================================
 from pathlib import Path
 import sys
 # webcam_live.py — Lecture d'AprilTags en direct : POSITION (x,y,z) + ORIENTATION.

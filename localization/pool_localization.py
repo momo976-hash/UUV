@@ -1,4 +1,18 @@
 # pool_localization.py — Locate the camera from a known tag layout.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python localization/pool_localization.py
+#
+# Fill in TAG_MAP below with each tag's measured position, then run it and
+# show a known tag.
+#
+# KEYS: q = quit
+#
+# This is the simplest version, kept for reading: all tags flat on one wall,
+# oriented alike. See orientation_localization.py for differently oriented
+# tags, and world_frame_check.py for the pool script.
+# ===========================================================================
 #
 # The idea: each tag's position in the pool is known (TAG_MAP). The camera
 # measures where the tag is relative to itself. Combining the two gives

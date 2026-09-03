@@ -1,4 +1,17 @@
 # apriltag_pose.py — AprilTag detection and pose estimation, standalone.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python src/apriltag_pose.py --tag-size 0.10
+#     python src/apriltag_pose.py --source webcam --tag-size 0.10
+#
+# Needs pupil_apriltags (pip install -r requirements.txt). This is the
+# original Task 1 script and it stands alone: it does NOT read this
+# repository's calibration. For a measurement that uses the calibration in
+# service, use calibration/check_distance.py.
+#
+# KEYS: q or ESC = quit
+# ===========================================================================
 """
 AprilTag localisation with an Intel RealSense camera
 ==========================================================

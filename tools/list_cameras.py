@@ -1,4 +1,14 @@
 # list_cameras.py — List every camera this computer can open.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python tools/list_cameras.py
+#
+# Opens each camera index in turn and shows its image, so you can tell which
+# is which. Note the index you want and put it in that script's CAMERA_INDEX.
+#
+# KEYS: n = next camera | q = quit
+# ===========================================================================
 #
 # Essential when several cameras are plugged in (the PC's webcam + the
 # RealSense): calibrating one camera and measuring with another falsifies

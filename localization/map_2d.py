@@ -1,3 +1,14 @@
+# map_2d.py — Localisation + a 2D map seen from above.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python localization/map_2d.py
+#
+# Show the tags and move around; the camera is drawn on a top-down map.
+# Frame TWO tags together to record the following ones automatically.
+#
+# KEYS: s = save the map | r = reset | q = quit
+# ===========================================================================
 from pathlib import Path
 import sys
 # map_2d.py — Localisation + CARTE 2D vue de dessus.

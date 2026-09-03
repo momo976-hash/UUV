@@ -1,4 +1,17 @@
 # demo_full_pipeline.py — DEMO: read AprilTags + draw a top-down 2D map.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python demos/demo_full_pipeline.py
+#
+# Show the tags to the camera and move around. Everything records itself:
+# no tag id to type, no position to measure.
+#
+# KEYS: c = clear the trail | s = save the map | r = reset | q = quit
+#
+# This is a DEMO. For a real measurement session use
+# localization/world_frame_check.py, which is the one the protocol names.
+# ===========================================================================
 #
 # Everything is automatic: no tag id to type, no position to measure.
 #   - The 1st tag seen becomes the frame's origin.

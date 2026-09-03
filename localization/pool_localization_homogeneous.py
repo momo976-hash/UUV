@@ -1,4 +1,14 @@
 # pool_localization_homogeneous.py — The same, in homogeneous transforms.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python localization/pool_localization_homogeneous.py
+#
+# Same as pool_localization.py, written with 4x4 homogeneous transforms.
+# Fill in TAG_MAP below, run it, show a known tag.
+#
+# KEYS: q = quit
+# ===========================================================================
 # The same result as pool_localization.py, but written with HOMOGENEOUS
 # TRANSFORMS (4x4 matrices) -> cleaner, and ready to handle tags oriented
 # differently (which the real pool needs).

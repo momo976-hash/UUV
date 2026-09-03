@@ -1,5 +1,3 @@
-from pathlib import Path
-import sys
 # check_camera.py — Check the calibration from the CAMERA'S MOTION.
 # ===========================================================================
 # HOW TO USE IT
@@ -25,6 +23,8 @@ import sys
 #   T_tag_camera = inverse(T_camera_tag)
 #       position    = where the camera is relative to the tag
 #       orientation = how the camera is oriented relative to the tag
+from pathlib import Path
+import sys
 import csv
 import os
 from collections import deque

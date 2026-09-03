@@ -12,9 +12,9 @@ WHY THIS EXISTS
     frame-matched to each incoming image. Point apriltag_ros at the output
     topics and it will use your calibration instead of the factory one.
 
-USAGE
+HOW TO USE IT
     ros2 run <your_pkg> camera_info_relay --ros-args \
-        -p calibration_file:=<repo>/calibration/montages/tube_eau_ros.yaml \
+        -p calibration_file:=<repo>/calibration/mountings/tube_water_ros.yaml \
         -p image_topic:=/camera/color/image_raw \
         -p output_namespace:=/camera_calibrated
 
@@ -22,8 +22,8 @@ USAGE
     /camera_calibrated/camera_info.
 
 PICK THE RIGHT FILE — IT IS NOT INTERCHANGEABLE
-    calibrate.py writes one YAML per mounting, under calibration/montages/:
-    nue_air_ros.yaml, tube_air_ros.yaml, tube_eau_ros.yaml. The camera lies
+    calibrate.py writes one YAML per mounting, under calibration/mountings/:
+    bare_air_ros.yaml, tube_air_ros.yaml, tube_water_ros.yaml. The camera lies
     along the tube and looks out through its cylindrical wall, so the two
     image axes do not go through the same optics: underwater fx and fy end up
     about 1.4 apart (see optics.py). Feeding the air calibration to a

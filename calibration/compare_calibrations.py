@@ -1,5 +1,3 @@
-from pathlib import Path
-import sys
 # compare_calibrations.py — Compare the approximation and the board calibration.
 # ===========================================================================
 # HOW TO USE IT
@@ -28,6 +26,8 @@ import sys
 # Both are computed with the TWO sets of parameters at the same time:
 #   A) the approximation: focal length = width x 0.95, no distortion
 #   B) the checkerboard calibration: fx, fy, cx, cy + distortion
+from pathlib import Path
+import sys
 import csv
 import os
 from collections import deque

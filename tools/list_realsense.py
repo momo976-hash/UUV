@@ -1,4 +1,14 @@
 # list_realsense.py — List the RealSense devices and say if they have an IMU.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python tools/list_realsense.py
+#
+# Run it when the SDK says "Couldn't resolve requests", or before any
+# measurement that depends on the IMU. It lists the devices, their serial
+# numbers and their streams, and says plainly whether an inertial IMU is
+# available.
+# ===========================================================================
 #
 #     python list_realsense.py
 #

@@ -1,4 +1,13 @@
 # demo_single_image.py — Read the tags in a single image file.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python demos/demo_single_image.py
+#
+# No camera, no tag, no calibration needed: the image is generated in the
+# script. Useful to check that OpenCV and its aruco module are installed and
+# that pose estimation runs at all.
+# ===========================================================================
 # The program generates an image containing an AprilTag itself, detects it,
 # computes the pose and shows the result. No webcam needed.
 import os

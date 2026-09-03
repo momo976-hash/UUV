@@ -1,4 +1,18 @@
 # validation.py — Minimal AprilTag pose read-out, for a quick check.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python calibration/validation.py
+#
+# Set TAG_SIZE below to your tag's real black-square side first. Then show
+# the tag, keep it still and squarely facing you, and press 's' to record
+# each reading. Compare the recorded values with a tape measure afterwards.
+#
+# KEYS: s = record the stabilised measurement | q = quit
+#
+# For the fuller version, with the calibration comparison and a verdict, use
+# calibration/check_distance.py instead.
+# ===========================================================================
 # Shows a STABILISED distance (the mean of the last measurements) and records
 # it in validation.csv when 's' is pressed. Then compare with a tape measure.
 import csv

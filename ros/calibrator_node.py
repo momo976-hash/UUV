@@ -5,18 +5,18 @@ our calibration and republish it for apriltag_ros. (ROS 2)
 WHAT IT DOES
     - Subscribes to /camera/camera/color/image_raw.
     - Reads K, D and the rest of a standard ROS camera_calibration YAML file
-      (calibration/montages/<mounting>_ros.yaml in this repo).
+      (calibration/mountings/<mounting>_ros.yaml in this repo).
     - Publishes /my_camera_info and /my_image_rect, timestamp- and
       frame_id-matched to the incoming image, for apriltag_ros to consume.
 
-USAGE
+HOW TO USE IT
     ros2 run <your_pkg> calibrator_node --ros-args \
-        -p calyaml_path:=<repo>/calibration/montages/tube_eau_ros.yaml
+        -p calyaml_path:=<repo>/calibration/mountings/tube_water_ros.yaml
 
-    calyaml_path defaults to tube_eau_ros.yaml resolved relative to this
+    calyaml_path defaults to tube_water_ros.yaml resolved relative to this
     file, so it runs with no parameter at all as long as this script stays
     inside the repo checkout on the Pi. Pass calyaml_path explicitly to test
-    another mounting (tube_air_ros.yaml, nue_air_ros.yaml) without touching
+    another mounting (tube_air_ros.yaml, bare_air_ros.yaml) without touching
     the default — see calibration/optics.py for which mounting is which.
 
 WHY camera_info.d IS FORCED TO ZERO, EVEN THOUGH THE YAML CARRIES REAL VALUES
@@ -50,22 +50,26 @@ import yaml
 import cv2
 from cv_bridge import CvBridge
 
-# tube_eau_ros.yaml, found the same way the rest of this repo finds it — next
-# to this file, in montages/ or calibration/montages/ depending on whether
-# this script lives at the repo root or inside calibration/.
-_ICI = Path(__file__).resolve().parent
-_DEFAUT_YAML = next(
-    (d / "tube_eau_ros.yaml" for d in (_ICI / "montages",
-                                        _ICI / "calibration" / "montages")
-     if (d / "tube_eau_ros.yaml").exists()),
-    _ICI / "montages" / "tube_eau_ros.yaml")
+# tube_water_ros.yaml, found the same way the rest of this repo finds it —
+# next to this file, in mountings/ or calibration/mountings/ depending on
+# where this script sits. Both the current names and the pre-handover ones
+# (montages/, tube_eau_ros.yaml) are tried, so a Pi that was set up before the
+# translation keeps working with no intervention.
+_HERE = Path(__file__).resolve().parent
+_FOLDERS = [base / sub
+            for base in (_HERE, _HERE.parent, _HERE.parent / "calibration")
+            for sub in ("mountings", "montages")]
+_NAMES = ("tube_water_ros.yaml", "tube_eau_ros.yaml")
+_DEFAULT_YAML = next(
+    (d / n for d in _FOLDERS for n in _NAMES if (d / n).exists()),
+    _HERE.parent / "calibration" / "mountings" / "tube_water_ros.yaml")
 
 
 class CalibratorNode(Node):
     def __init__(self):
         super().__init__('calibrator_node')
         self.bridge = CvBridge()
-        self.declare_parameter('calyaml_path', str(_DEFAUT_YAML))
+        self.declare_parameter('calyaml_path', str(_DEFAULT_YAML))
         calyaml_path = self.get_parameter('calyaml_path').get_parameter_value().string_value
         self.camera_info_msg = self.get_calibration(calyaml_path)
         self.get_logger().info(f"calibration loaded from: {calyaml_path}")

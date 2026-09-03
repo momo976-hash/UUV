@@ -1,4 +1,15 @@
 # webcam_test.py — Minimal webcam + AprilTag test.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python demos/webcam_test.py
+#
+# The smallest possible check: a webcam, a tag, one distance on screen. Set
+# TAG_SIZE below to your printed tag's real side. Nothing is calibrated here,
+# so the distance is approximate — this only proves the chain runs.
+#
+# KEYS: q = quit
+# ===========================================================================
 # Uses the AprilTag detector built into OpenCV (cv2.aruco): no library
 # to compile, and works even on Python 3.14.
 import cv2

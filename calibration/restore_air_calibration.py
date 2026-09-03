@@ -1,4 +1,13 @@
 # restore_air_calibration.py — Put the in-air calibration back.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python calibration/restore_air_calibration.py
+#
+# Run it when the in-air reference has been overwritten. It never overwrites
+# silently: whatever is there is moved aside first, so an underwater
+# calibration filed under the wrong name is not lost.
+# ===========================================================================
 #
 # WHY THIS SCRIPT EXISTS EXISTE
 # Running `calibrate.py` WITHOUT the --mounting option writes under the

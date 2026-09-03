@@ -1,4 +1,17 @@
 # orientation_localization.py — Position and orientation from one tag.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python localization/orientation_localization.py
+#
+# Fill in TAG_MAP below with each tag's position AND its yaw heading, then
+# run it and show a known tag.
+#
+# KEYS: q = quit
+#
+# This is the teaching version. The pool script that builds its own map is
+# localization/world_frame_check.py.
+# ===========================================================================
 # Locating the camera/UUV in the pool, with tags ORIENTED DIFFERENTLY (on
 # different walls). Each tag has a position (x, y, z) AND a "yaw" heading =
 # a rotation about the vertical.

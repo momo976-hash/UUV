@@ -1,4 +1,19 @@
 # demo_trajectory.py — Robust trajectory demo, for showing to people.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python demos/demo_trajectory.py
+#
+#   1) Frame TWO tags together -> the 2nd records itself (progress in %)
+#   2) Repeat for the 3rd tag, then press 'v' to CHECK the map against a
+#      tape measure BEFORE presenting anything
+#   3) Press 'c', then move around: the trajectory draws itself
+#
+# KEYS: s=save map | c=clear trail | t=tags | v=check map | r=reset | q=quit
+#
+# This is a DEMO. For a real measurement session use
+# localization/world_frame_check.py.
+# ===========================================================================
 #
 #   1. A tag is only recorded after N agreeing observations (the median).
 #   2. Localisation through the BEST visible tag (the largest = the nearest).
