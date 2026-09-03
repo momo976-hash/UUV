@@ -7,29 +7,29 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "calibration"))
-import optique  # noqa: E402
+import optics  # noqa: E402
 
 # Index de la camera (None = detection automatique).
 CAMERA_INDEX = None
 # Resolution FIGEE : doit etre identique pour la calibration et les mesures.
 RESOLUTION = (640, 480)
 
-TAILLE_TAG = optique.TAILLE_TAG_GRAND   # mesure au pied a coulisse, pas 223 mm nominal
+TAILLE_TAG = optics.TAILLE_TAG_GRAND   # mesure au pied a coulisse, pas 223 mm nominal
 
 
 # --- Calibration reelle de la camera (damier 5x7, 22 vues, RMS 0.169 px) ---
 # Si le fichier calibration_camera.npz est a cote du script, il est utilise.
-MONTAGE = optique.MONTAGE_ACTIF
-# L'optique vient de optique.py : camera, tube, hublot, milieu. Le montage
-# n'est ecrit dans aucun fichier de code : optique.py le lit dans
+MONTAGE = optics.MONTAGE_ACTIF
+# L'optics vient de optics.py : camera, tube, hublot, milieu. Le montage
+# n'est ecrit dans aucun fichier de code : optics.py le lit dans
 # calibration/montage_local.txt, propre a CETTE machine, et le demande une
 # fois s'il n'existe pas encore. Pour le changer :
-#     python calibration/regler_montage.py
+#     python calibration/set_mounting.py
 # Pour une seule commande, sans rien deregler :
 #     UUV_MONTAGE=nue_air python ce_script.py
-# Tant qu'il n'est pas calibre, optique.py retombe sur la camera nue en le
+# Tant qu'il n'est pas calibre, optics.py retombe sur la camera nue en le
 # disant.
-K_CALIB, DIST_CALIB = optique.charger(MONTAGE)
+K_CALIB, DIST_CALIB = optics.charger(MONTAGE)
 LARGEUR_CALIB = 640          # resolution utilisee lors de la calibration
 
 
@@ -55,7 +55,7 @@ def ouvrir_camera():
     (640x480 en 4:3 est recadre, 1280x720 en 16:9 utilise tout le capteur).
     Une calibration faite a une resolution n'est donc PAS transposable a une
     autre par simple mise a l'echelle. On fige la resolution pour que la
-    calibration et les mesures portent sur exactement la meme optique.
+    calibration et les mesures portent sur exactement la meme optics.
     """
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)

@@ -184,7 +184,7 @@ class WebcamSource:
         self.cap = cv2.VideoCapture(index)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        # Approximation grossière : focale ~ largeur de l'image, centre optique au milieu
+        # Approximation grossière : focale ~ largeur de l'image, centre optics au milieu
         f = float(width)
         self.K = np.array(
             [[f, 0, width / 2], [0, f, height / 2], [0, 0, 1]], dtype=np.float64

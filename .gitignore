@@ -1,28 +1,36 @@
-# Environnement virtuel Python
+# Python virtual environment
 venv/
 .venv/
 
-# Cache Python
+# Python cache
 __pycache__/
 *.py[cod]
 
-# Données enregistrées (poses, logs)
+# Recorded data (poses, logs, measurement history)
 *.csv
 logs/
 
-# Images produites par les scripts (--png), regenerables a la demande
-plan_piscine_3d.png
+# Images produced by the scripts (--png): regenerated on demand
+pool_layout_3d.png
 demo_kalman.png
+kalman_live_plots_demo.png
+kalman_live_plots_session.png
 
-# Fichiers IDE
+# IDE files
 .vscode/
 .idea/
-bruit_tag.csv
-limites_tag.csv
+
+# Calibration files written per machine, never shared
+calibration/mountings/
 calibration/montages/
 
-# Le montage physique de CETTE machine (nue_air / tube_air / tube_eau).
-# Volontairement pas versionne : le PC du bassin et le portable de bureau
-# n'ont pas la meme camera dans le meme milieu, et il ne faut surtout pas
-# qu'un git pull vienne changer le reglage de l'autre.
+# The physical mounting of THIS machine (bare_air / tube_air / tube_water).
+# Deliberately not versioned: the pool PC and the office laptop do not have
+# the same camera in the same medium, and a git pull must never change the
+# other machine's setting.
+calibration/local_mounting.txt
 calibration/montage_local.txt
+
+# Proof screenshots captured by demo_distance.py
+proofs/
+preuves/

@@ -34,8 +34,8 @@
 # Entre la calibration nue et celle du tube, cy passe de 242.9 a 258.5 (15.6
 # px, ~1.5 deg de visee) — c'est ce que la colonne "3D offset" attrape. La
 # tentation est d'y voir l'effet du tube. Le modele de ce depot ne le dit pas :
-# une paroi cylindrique vue de face est symetrique autour de l'axe optique,
-# elle change la FOCALE (voir grandissement_section dans optique.py) et ne
+# une paroi cylindrique vue de face est symetrique autour de l'axe optics,
+# elle change la FOCALE (voir grandissement_section dans optics.py) et ne
 # deplace pas le point principal. Deux causes plus vraisemblables, qu'on ne
 # sait pas departager ici : la camera est legerement inclinee dans son support
 # imprime, ou une part vient de l'ecart entre deux seances de calibration.
@@ -78,14 +78,14 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import optique  # noqa: E402
+import optics  # noqa: E402
 
 CAMERA_INDEX = None
 FAMILLE = cv2.aruco.DICT_APRILTAG_36h11
 
 # Les deux tags dont on dispose : celui du bassin et le petit. Mesures au
-# pied a coulisse, voir optique.py — ne pas revenir au nominal (0.223/0.115).
-TAILLES = (optique.TAILLE_TAG_GRAND, optique.TAILLE_TAG_PETIT)
+# pied a coulisse, voir optics.py — ne pas revenir au nominal (0.223/0.115).
+TAILLES = (optics.TAILLE_TAG_GRAND, optics.TAILLE_TAG_PETIT)
 
 DOSSIER_PREUVES = Path(__file__).resolve().parent / "preuves"
 
@@ -103,8 +103,8 @@ def ouvrir_camera():
         for backend, nom in backends:
             cap = cv2.VideoCapture(index, backend) if backend else cv2.VideoCapture(index)
             if cap.isOpened():
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, optique.RESOLUTION[0])
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, optique.RESOLUTION[1])
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, optics.RESOLUTION[0])
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, optics.RESOLUTION[1])
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
@@ -119,7 +119,7 @@ def modeles(montage, largeur, hauteur):
 
     La premiere n'est pas une calibration ratee : c'est l'absence de
     calibration, telle qu'on l'ecrit quand on n'a rien mesure — focale prise
-    egale a la largeur de l'image (~60 deg de champ), centre optique suppose
+    egale a la largeur de l'image (~60 deg de champ), centre optics suppose
     au centre geometrique, distorsion supposee nulle.
     """
     devine = np.array([
@@ -128,13 +128,13 @@ def modeles(montage, largeur, hauteur):
         [0.0, 0.0, 1.0],
     ], dtype=np.float64)
 
-    K_tube, dist_tube = optique.charger(montage, silencieux=True)
+    K_tube, dist_tube = optics.charger(montage, silencieux=True)
     return [
         ("NO CALIBRATION", "guessed focal length, distortion ignored",
          devine, np.zeros(5, dtype=np.float64), ROUGE),
         ("NOT CALIBRATED IN THE TUBE", "bare camera, calibrated before mounting",
-         optique.K_NUE_AIR.astype(np.float64),
-         optique.DIST_NUE_AIR.astype(np.float64), JAUNE),
+         optics.K_NUE_AIR.astype(np.float64),
+         optics.DIST_NUE_AIR.astype(np.float64), JAUNE),
         ("CALIBRATED IN THE TUBE", f"mounting '{montage}' — the one we use",
          K_tube.astype(np.float64), dist_tube.ravel().astype(np.float64), VERT),
     ]
@@ -299,8 +299,8 @@ def main():
                            metavar="METRES",
                            help="distance vraie mesuree au metre a ruban ; "
                                 "active l'affichage des erreurs")
-    analyseur.add_argument("--montage", default=optique.MONTAGE_ACTIF,
-                           choices=optique.MONTAGES,
+    analyseur.add_argument("--montage", default=optics.MONTAGE_ACTIF,
+                           choices=optics.MONTAGES,
                            help="calibration a mettre en 3e ligne "
                                 "(defaut %(default)s)")
     analyseur.add_argument("--zoom", type=float, default=1.5,
@@ -308,11 +308,11 @@ def main():
                                 "%(default)s) — pour etre lisible a deux")
     options = analyseur.parse_args()
 
-    if optique.source(options.montage) != options.montage:
+    if optics.source(options.montage) != options.montage:
         print(f"ATTENTION : le montage '{options.montage}' n'a jamais ete "
               "calibre. La 3e ligne affichera la camera nue, et la demo ne "
               "montrera rien.")
-        print(f"  python calibration.py --montage {options.montage}")
+        print(f"  python calibrate.py --montage {options.montage}")
 
     taille_tag = options.tag
     reference = max(options.reference, 0.0)
@@ -321,7 +321,7 @@ def main():
     # tag de 90 px cela suffit a fausser la distance de pres de 2 % — soit
     # plus que tout ce que la demo cherche a montrer, et la ligne calibree
     # tomberait a cote devant tout le monde. Meme reglage que le reste du
-    # depot (mesurer_bruit_tag.py, avec lequel les 0.215 px ont ete mesures).
+    # depot (measure_tag_noise.py, avec lequel les 0.215 px ont ete mesures).
     dictionnaire = cv2.aruco.getPredefinedDictionary(FAMILLE)
     parametres = cv2.aruco.DetectorParameters()
     parametres.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX

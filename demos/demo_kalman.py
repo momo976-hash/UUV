@@ -19,7 +19,8 @@ from pathlib import Path
 import numpy as np
 
 RACINE = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(RACINE / "localisations"))
+sys.path.insert(0, str(RACINE / "kalman"))
+sys.path.insert(0, str(RACINE / "localization"))
 
 EXPORT = "--png" in sys.argv
 import matplotlib
@@ -27,10 +28,10 @@ if EXPORT:
     matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from filtre_kalman import (FiltrePose, covariance_position_tag,
+from kalman_filter import (FiltrePose, covariance_position_tag,
                            ecart_type_angle_tag, matrice_vers_quaternion,
                            angle_quaternions)
-from plan_piscine_3d import TAGS, LONGUEUR, LARGEUR, visibles_depuis
+from pool_layout_3d import TAGS, LONGUEUR, LARGEUR, visibles_depuis
 
 IMAGE = Path(__file__).resolve().with_name("demo_kalman.png")
 
@@ -44,7 +45,7 @@ PROBA_ABERRATION = 0.015
 # Trop petites, le filtre sous-pondere les mesures et retarde sur la realite.
 # Ici la trajectoire simulee tourne a 7.2 deg/s en mediane, 10.2 deg/s au pic.
 #
-# Ces valeurs sont VOLONTAIREMENT independantes du bloc de filtre_kalman.py :
+# Ces valeurs sont VOLONTAIREMENT independantes du bloc de kalman_filter.py :
 # elles decrivent la trajectoire SIMULEE ci-dessous, pas l'engin reel. Les
 # faire suivre les mesures du bassin rendrait la demo non reproductible, et
 # ferait varier son resultat a chaque nouvelle session de mesure.

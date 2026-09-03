@@ -8,7 +8,7 @@ AprilTags, à travers la paroi d'un tube étanche, sous l'eau.
 ## START HERE — one command
 
 ```
-python localisations/preuve_imu_kalman.py
+python kalman/proof_imu_kalman.py
 ```
 
 It re-runs the verifications live and answers the two requests that were
@@ -40,12 +40,12 @@ two.
 | | État | Preuve / ce qu'il reste |
 |---|---|---|
 | Calibration sous l'eau | ✅ | `fx = 838.45`, `fy = 652.10` — vérifiées sur le terrain |
-| IMU lue du SDK Intel | ✅ | `python localisations/imu_realsense.py` |
+| IMU lue du SDK Intel | ✅ | `python kalman/imu_realsense.py` |
 | Maths IMU → orientation | ✅ | 0.03° sur un quart de tour connu |
-| Filtre de Kalman cinématique | ✅ | `python localisations/kalman_du_cours.py` — les 9 valeurs publiées de Becker, à la 4ᵉ décimale |
+| Filtre de Kalman cinématique | ✅ | `python kalman/kalman_reference_check.py` — les 9 valeurs publiées de Becker, à la 4ᵉ décimale |
 | Bruit gyro / accéléromètre | ✅ mesuré | engin immobile, 400 Hz |
 | **Dynamique réelle de l'engin** | ⏳ **à faire** | demande l'engin **en mouvement dans l'eau** — voir plus bas |
-| `SIGMA_PIXEL` sous l'eau | ⏳ à faire | mesuré en air (0.215 px) ; `calibration/mesurer_bruit_tag.py` |
+| `SIGMA_PIXEL` sous l'eau | ⏳ à faire | mesuré en air (0.215 px) ; `calibration/measure_tag_noise.py` |
 
 ### La mesure qui reste — étape 5
 
@@ -58,7 +58,7 @@ calcul ni fiche technique ne peut les donner.
 ce cas le filtre ne les lit jamais. Démontré chiffres en main :
 
 ```
-python localisations/sensibilite_reglages.py
+python kalman/settings_sensitivity.py
 ```
 
 Les faire varier d'un facteur 4572 ne change pas le résultat d'un millimètre.
@@ -73,16 +73,16 @@ tout seul une fois la mesure faite. Rien à désactiver à la main.
 
 | Je veux… | Commande |
 |---|---|
-| prouver que l'IMU et le filtre sont faits | `python localisations/preuve_imu_kalman.py` |
+| prouver que l'IMU et le filtre sont faits | `python kalman/proof_imu_kalman.py` |
 | **voir le filtre travailler, en image** | `python demos/demo_kalman.py` |
-| **les figures du cours EN DIRECT, vraies mesures** | `python localisations/verification_monde.py --graphiques` |
+| **les figures du cours EN DIRECT, vraies mesures** | `python localization/world_frame_check.py --graphiques` |
 | montrer que la calibration donne la bonne distance | `python calibration/demo_distance.py --montage tube_eau` |
-| vérifier une distance connue, au mètre | `python calibration/verifier_distance.py --reel 1.5 --tag 0.22389` |
-| **faire l'étape 5 (engin dans l'eau)** | `python localisations/verification_monde.py` |
-| voir l'IMU tourner en direct | `python localisations/imu_realsense.py` |
-| les mêmes maths sans caméra | `python localisations/imu_realsense.py --simulation` |
-| lancer les auto-tests du filtre | `python localisations/filtre_kalman.py` |
-| régler le montage de cette machine | `python calibration/regler_montage.py` |
+| vérifier une distance connue, au mètre | `python calibration/check_distance.py --reel 1.5 --tag 0.22389` |
+| **faire l'étape 5 (engin dans l'eau)** | `python localization/world_frame_check.py` |
+| voir l'IMU tourner en direct | `python kalman/imu_realsense.py` |
+| les mêmes maths sans caméra | `python kalman/imu_realsense.py --simulation` |
+| lancer les auto-tests du filtre | `python kalman/kalman_filter.py` |
+| régler le montage de cette machine | `python calibration/set_mounting.py` |
 
 ---
 
@@ -93,7 +93,7 @@ propriété de **la machine**, pas du code — le PC du bureau et celui du bassi
 n'ont pas la même réponse. Il se règle une fois :
 
 ```
-python calibration/regler_montage.py tube_eau
+python calibration/set_mounting.py tube_eau
 ```
 
 C'est écrit dans `calibration/montage_local.txt`, qui n'est **pas** versionné.
@@ -107,15 +107,15 @@ l'image contredit le montage déclaré, mais ils ne peuvent pas tout attraper.
 
 | Dossier | Contenu |
 |---|---|
-| `calibration/` | Optique, calibration, vérifications de distance. `optique.py` fait foi pour toutes les constantes. |
-| `localisations/` | Filtre de Kalman, IMU, localisation dans un repère monde. |
-| `documents/` | `protocole_kalman.md` — le protocole complet, du bassin au filtre. |
+| `calibration/` | Optique, calibration, vérifications de distance. `optics.py` fait foi pour toutes les constantes. |
+| `localization/` | Filtre de Kalman, IMU, localisation dans un repère monde. |
+| `docs/` | `kalman_protocol.md` — le protocole complet, du bassin au filtre. |
 | `demos/` | Démonstrations autonomes, focale devinée : à ne pas confondre avec la chaîne calibrée. |
 | `src/`, `autres/` | Utilitaires et travaux antérieurs. |
 
 **Le document de référence du filtre** est Alex Becker, *Kalman Filter
 Explained Through Examples* (kalmanfilter.net), modèle cinématique à vitesse
-constante. Ce n'est pas une inspiration lointaine : `kalman_du_cours.py` fait
+constante. Ce n'est pas une inspiration lointaine : `kalman_reference_check.py` fait
 passer son exemple chiffré dans la classe qui tourne réellement sur l'engin
 et retrouve ses 9 valeurs publiées.
 
