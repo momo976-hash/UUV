@@ -35,14 +35,14 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optics  # noqa: E402
 
-CAMERA_INDEX = None          # None = detection automatique
+CAMERA_INDEX = None          # None = automatic detection
 RESOLUTION = (640, 480)      # must be identical to the calibration's
 
-TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au calipers, pas 223 mm nominal
-FACTEUR_APPROX = 0.95        # ancienne approximation (focal_length = width x facteur)
-SMOOTHING = 20                 # frames moyennees pour stabiliser l'display
+TAG_SIZE = optics.LARGE_TAG_SIZE   # caliper-measured, not the nominal 223 mm
+APPROX_FACTOR = 0.95         # the old approximation (focal length = width x factor)
+SMOOTHING = 20                 # frames averaged to stabilise the display
 
-# Calibration par checkerboard
+# Checkerboard calibration
 MOUNTING = optics.ACTIVE_MOUNTING
 # The optics come from optics.py: camera, tube, viewport, medium. The mounting
 # is written in no code file: optics.py reads it from
@@ -57,7 +57,7 @@ K_CALIB, DIST_CALIB = optics.load(MOUNTING)
 CALIB_WIDTH, CALIB_HEIGHT = 640, 480
 
 
-def ouvrir_camera():
+def open_camera():
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
     for index in indices:
@@ -69,7 +69,7 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
+                    print(f"Camera used: index={index}, backend={name}, {ww}x{hh}")
                     return cap, ww, hh
             cap.release()
     return None, 0, 0
@@ -80,35 +80,35 @@ def pose_camera(pts, K, dist):
 
     solvePnP gives the tag's pose as seen from the camera; it is inverted to
     get the camera's pose as seen from the tag, which is the quantity
-    reellement used pour localiser l'UUV.
+    really used to locate the UUV.
     """
     ok, rvec, tvec = cv2.solvePnP(corners_3d, pts, K, dist,
                                   flags=cv2.SOLVEPNP_IPPE_SQUARE)
     if not ok:
         return None, None
     R_cam_tag = cv2.Rodrigues(rvec)[0]
-    R_tag_cam = R_cam_tag.T                       # rotation inverse
+    R_tag_cam = R_cam_tag.T                       # the inverse rotation
     p_tag_cam = (-R_cam_tag.T @ tvec).flatten()   # the camera's position
     return p_tag_cam, R_tag_cam
 
 
-def angle_entre(R1, R2):
+def angle_between(R1, R2):
     """Angle (degrees) of the rotation taking orientation 1 onto orientation 2."""
     cos = (np.trace(R1.T @ R2) - 1.0) / 2.0
     return float(np.degrees(np.arccos(np.clip(cos, -1.0, 1.0))))
 
 
-cam, L, H = ouvrir_camera()
+cam, L, H = open_camera()
 if cam is None:
     print("ERROR: no camera opened.")
     raise SystemExit
 
-# A) approximation
-f = L * FACTEUR_APPROX
+# A) the approximation
+f = L * APPROX_FACTOR
 K_approx = np.array([[f, 0, L / 2], [0, f, H / 2], [0, 0, 1]], dtype=np.float64)
 dist_approx = np.zeros(5)
 
-# B) calibration par checkerboard
+# B) the checkerboard calibration
 K_calib, dist_calib = K_CALIB.copy(), DIST_CALIB.copy()
 Lc, Hc = CALIB_WIDTH, CALIB_HEIGHT
 try:
@@ -158,19 +158,19 @@ while True:
     ok, image = cam.read()
     if not ok:
         continue
-    gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    corners, ids, _ = detector.detectMarkers(gris)
+    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    corners, ids, _ = detector.detectMarkers(grey)
 
     pa = Ra = pb = Rb = None
-    tag_vu = None
+    seen_tag = None
     if ids is not None and len(ids) > 0:
         cv2.aruco.drawDetectedMarkers(image, corners, ids)
-        liste = ids.flatten().tolist()
+        seen_list = ids.flatten().tolist()
         # Once the reference is set we MUST stay on the same tag: the
-        # positions are expressed in the tag's frame, so comparing
-        # poses vues via deux tags differents n'aurait aucun sens.
-        if ref_tag is not None and ref_tag in liste:
-            i = liste.index(ref_tag)
+        # positions are expressed in the tag's frame, so comparing poses
+        # seen through two different tags would mean nothing.
+        if ref_tag is not None and ref_tag in seen_list:
+            i = seen_list.index(ref_tag)
         elif ref_tag is not None:
             i = None                    # reference tag absent from the image
         else:
@@ -178,23 +178,23 @@ while True:
             i = int(np.argmax(areas))   # before the reference: the largest
         if i is not None:
             pts = corners[i].reshape(4, 2).astype(np.float64)
-            tag_vu = int(liste[i])
+            seen_tag = int(seen_list[i])
             pa, Ra = pose_camera(pts, K_approx, dist_approx)
             pb, Rb = pose_camera(pts, K_calib, dist_calib)
 
     # --- the movement measured from the reference ---
-    mesure_a = mesure_b = None
+    measured_a = measured_b = None
     if pa is not None and ref_pa is not None:
         if mode == 0:
-            mesure_a = float(np.linalg.norm(pa - ref_pa))
-            mesure_b = float(np.linalg.norm(pb - ref_pb))
+            measured_a = float(np.linalg.norm(pa - ref_pa))
+            measured_b = float(np.linalg.norm(pb - ref_pb))
         else:
-            mesure_a = angle_entre(ref_Ra, Ra)
-            mesure_b = angle_entre(ref_Rb, Rb)
+            measured_a = angle_between(ref_Ra, Ra)
+            measured_b = angle_between(ref_Rb, Rb)
 
-    if mesure_a is not None:
-        hist_a.append(mesure_a)
-        hist_b.append(mesure_b)
+    if measured_a is not None:
+        hist_a.append(measured_a)
+        hist_b.append(measured_b)
     else:
         hist_a.clear()
         hist_b.clear()
@@ -202,20 +202,20 @@ while True:
     d_b = sum(hist_b) / len(hist_b) if hist_b else None
 
     # --- display ---
-    unite = "m" if mode == 0 else "deg"
-    titre = f"MODE : {MODES[mode]}"
+    unit = "m" if mode == 0 else "deg"
+    title = f"MODE: {MODES[mode]}"
     if ref_tag is not None:
-        titre += f"   [reference : tag {ref_tag}]"
-    cv2.putText(image, titre, (10, 26),
+        title += f"   [reference: tag {ref_tag}]"
+    cv2.putText(image, title, (10, 26),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
 
     if pb is not None:
         # the camera's absolute pose in the tag frame (board calibration)
         roll, pitch, yaw = cv2.RQDecomp3x3(Rb)[0]
-        cv2.putText(image, f"CAMERA / tag {tag_vu} : "
+        cv2.putText(image, f"CAMERA / tag {seen_tag}: "
                            f"x={pb[0]:+.2f} y={pb[1]:+.2f} z={pb[2]:+.2f} m",
                     (10, 52), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (0, 255, 255), 2)
-        cv2.putText(image, f"   orientation : r={roll:+.0f} p={pitch:+.0f} y={yaw:+.0f} deg",
+        cv2.putText(image, f"   orientation: r={roll:+.0f} p={pitch:+.0f} y={yaw:+.0f} deg",
                     (10, 74), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1)
     elif ref_tag is not None:
         cv2.putText(image, f"Reference tag {ref_tag} out of frame", (10, 52),
@@ -228,9 +228,9 @@ while True:
         cv2.putText(image, "Press 'o' to set the reference pose",
                     (10, 104), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 170, 255), 2)
     elif d_a is not None:
-        cv2.putText(image, f"A) approximation : {d_a:.3f} {unite}", (10, 104),
+        cv2.putText(image, f"A) approximation: {d_a:.3f} {unit}", (10, 104),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
-        cv2.putText(image, f"B) calibration   : {d_b:.3f} {unite}", (10, 128),
+        cv2.putText(image, f"B) calibration  : {d_b:.3f} {unit}", (10, 128),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
         if typed:
             try:
@@ -238,14 +238,14 @@ while True:
                 ea, eb = d_a - real, d_b - real
                 fa = f"{ea*100:+.1f} cm" if mode == 0 else f"{ea:+.2f} deg"
                 fb = f"{eb*100:+.1f} cm" if mode == 0 else f"{eb:+.2f} deg"
-                cv2.putText(image, f"gap A : {fa}", (10, 156),
+                cv2.putText(image, f"gap A: {fa}", (10, 156),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
-                cv2.putText(image, f"gap B : {fb}", (10, 180),
+                cv2.putText(image, f"gap B: {fb}", (10, 180),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
             except ValueError:
                 pass
 
-    cv2.putText(image, f"value reelle ({unite}) : {typed or '...'}", (10, H - 38),
+    cv2.putText(image, f"real value ({unit}): {typed or '...'}", (10, H - 38),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
     cv2.putText(image, "m=mode  o=reference  digits=type  s=record  q=quit",
                 (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
@@ -268,7 +268,7 @@ while True:
             ref_tag = tag_vu
             hist_a.clear(); hist_b.clear()
             print(f"Reference set on tag {ref_tag}: keep THAT tag visible "
-                  f"pendant toute la measurement.")
+                  f"for the whole measurement.")
             if mode == 0:
                 print("  Move the CAMERA by a known distance (tape measure),")
                 print("  then type that distance and press 's'.")
