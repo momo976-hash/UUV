@@ -73,25 +73,25 @@ from kalman_filter import (PoseFilter, quaternion_angle,  # noqa: E402
 
 DT = 1 / 30
 IMAGES = 600
-ECHAUFFEMENT = 100        # frames ignorees : le filter part d'un P enorme
+WARMUP = 100        # frames ignored: the filter starts from a huge P
 
 
 def _vehicle(k):
-    """Acceleration d'un vehicle sous-marin : douce, continue, quelques 0.1 m/s2."""
+    """A UUV's acceleration: gentle, continuous, a few 0.1 m/s2."""
     return 0.3 * np.array([np.sin(k * DT * 0.7), np.cos(k * DT * 0.5), 0.0])
 
 
 def rms_position(sigma_acceleration, with_imu, seed=7):
-    """RMS d'error de position, en mm, sur une trajectoire connue."""
+    """RMS position error, in mm, over a known trajectory."""
     rng = np.random.default_rng(seed)
     filter = PoseFilter(sigma_acceleration=sigma_acceleration,
                         derive_gyro_deg_s=GYRO_DRIFT_DEG_S)
     p = np.zeros(3)
     v = np.array([0.25, 0.0, 0.0])
     filter.position.start(p.copy())
-    # Sans cette row, orientation.started reste faux et PoseFilter IGNORE
-    # l'accelerometre en silence : le test comparerait alors deux fois le
-    # meme cas et conclurait a tort que sigma_acceleration compte.
+    # Without this line, orientation.started stays false and PoseFilter
+    # silently IGNORES the accelerometer: the test would then compare the same
+    # case twice and wrongly conclude that SIGMA_ACCELERATION matters.
     filter.orientation.start(np.array([1.0, 0.0, 0.0, 0.0]))
 
     errors = []
@@ -108,17 +108,17 @@ def rms_position(sigma_acceleration, with_imu, seed=7):
                                np.array([2.0, 0.0, 0.0]), 15.0)
             filter.apply()
         errors.append(np.linalg.norm(filter.position.x[:3] - p))
-    return (1000 * float(np.sqrt(np.mean(np.square(errors[ECHAUFFEMENT:])))),
+    return (1000 * float(np.sqrt(np.mean(np.square(errors[WARMUP:])))),
             filter.position.accel_used)
 
 
 def incertitude_cap(derive_gyro_deg_s, avec_gyro, seconds=3.0):
-    """Incertitude de cap ANNONCEE apres `seconds` sans aucun tag, en deg.
+    """Heading uncertainty REPORTED after `seconds` with no tag at all, in deg.
 
-    C'est bien l'uncertainty, pas l'error : derive_gyro n'agit que sur la
-    variance du filter — de combien il s'avoue ignorant — et pas sur l'estime
-    lui-meme. Un filter qui se croit sur alors qu'il ne l'est pas est
-    pourtant exactement ce qui fait accepter une measurement aberrante.
+    This really is the uncertainty, not the error: GYRO_DRIFT_DEG_S acts only
+    on the filter's variance — how ignorant it admits to being — and not on
+    the estimate itself. And yet a filter that believes itself sure when it is
+    not is exactly what makes an outlier measurement get accepted.
     """
     filter = PoseFilter(sigma_acceleration=SIGMA_ACCELERATION,
                         derive_gyro_deg_s=derive_gyro_deg_s)
@@ -142,15 +142,15 @@ def main():
     print("-" * 70)
     print(f"  {'sigma_acc (m/s2)':>18} | {'WITH IMU':>9} | {'WITHOUT IMU':>9}")
     print("  " + "-" * 44)
-    avec = []
+    with_imu = []
     for s in (0.05, SIGMA_ACCELERATION, 4.0, 40.0, 228.6):
-        a, utilise = rms_position(s, True)
+        a, used = rms_position(s, True)
         sans, _ = rms_position(s, False)
-        avec.append(a)
+        with_imu.append(a)
         marque = "  <- installed value" if s == SIGMA_ACCELERATION else ""
         print(f"  {s:>18} | {a:>8.2f}  | {sans:>8.2f}{marque}")
-    assert utilise, "l'accelerometre doit alimenter le filter dans la WITH"
-    spread = max(avec) - min(avec)
+    assert used, "the accelerometer must feed the filter in the WITH column"
+    spread = max(with_imu) - min(with_imu)
     print(f"\n  WITH IMU column: spread {spread:.4f} mm over a factor "
           f"{228.6/0.05:.0f} of sigma_acc.")
     assert spread < 1e-6, "sigma_acceleration must change NOTHING with the IMU"

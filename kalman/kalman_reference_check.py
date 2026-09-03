@@ -43,8 +43,8 @@ from kalman_filter import PositionKalmanFilter, LinearKalman  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
-# Les values imprimees dans le document, recopiees telles quelles.
-# Ce sont les references : le code n'a pas le droit de les toucher.
+# The values printed in the document, copied across as they stand.
+# These are the references: the code is not allowed to touch them.
 # ---------------------------------------------------------------------------
 DOC = {
     "Q": np.array([[6.25, 2.5], [2.5, 1.0]]),
@@ -57,25 +57,25 @@ DOC = {
     "P(2,1)": np.array([[52.86, 7.47], [7.47, 1.71]]),
 }
 
-# Le document arrondit ses tableaux a deux decimales, et le gain a quatre.
-# On tolere donc un demi-last-chiffre, pas davantage.
+# The document rounds its tables to two decimals, and the gain to four. So
+# half a last digit is tolerated, no more.
 TOLERANCE = {"K(1)": 5e-5}
-TOLERANCE_PAR_DEFAUT = 5e-3
+DEFAULT_TOLERANCE = 5e-3
 
-_resultats = []
+_results = []
 
 
-def comparer(name, calcule):
+def compare(name, computed):
     """Compare a computed value with the one printed in the document."""
-    attendu = DOC[name]
-    calcule = np.asarray(calcule, dtype=float)
-    gap = float(np.max(np.abs(calcule - attendu)))
-    threshold = TOLERANCE.get(name, TOLERANCE_PAR_DEFAUT)
+    expected = DOC[name]
+    computed = np.asarray(computed, dtype=float)
+    gap = float(np.max(np.abs(computed - expected)))
+    threshold = TOLERANCE.get(name, DEFAULT_TOLERANCE)
     ok = gap <= threshold
-    _resultats.append((name, ok, gap))
+    _results.append((name, ok, gap))
 
-    plat = " ".join(f"{v:12.4f}" for v in np.ravel(calcule))
-    doc = " ".join(f"{v:12.4f}" for v in np.ravel(attendu))
+    plat = " ".join(f"{v:12.4f}" for v in np.ravel(computed))
+    doc = " ".join(f"{v:12.4f}" for v in np.ravel(expected))
     marque = "OK " if ok else "NON"
     print(f"  [{marque}] {name:8s} computed: {plat}")
     print(f"          {'':8s} document: {doc}     gap {gap:.2e}")
@@ -90,57 +90,57 @@ def example_du_document():
     print("  kalmanfilter.net")
     print("=" * 74)
 
-    # --- le probleme, tel que pose par le document -------------------------
-    dt = 5.0                         # time de revisite du radar
-    sigma_a = 0.2                    # m/s^2, acceleration aleatoire de l'avion
-    sigma_portee, sigma_vitesse = 4.0, 0.5        # noise de la 1re measurement
-    z1 = np.array([11020.0, 202.0])               # 2e measurement
-    R1 = np.diag([6.0 ** 2, 1.5 ** 2])            # elle est plus bruitee
+    # --- the problem, exactly as the document sets it out ------------------
+    dt = 5.0                         # the radar's revisit time
+    sigma_a = 0.2                    # m/s^2, the aircraft's random acceleration
+    sigma_range, sigma_speed = 4.0, 0.5           # noise of the 1st measurement
+    z1 = np.array([11020.0, 202.0])               # 2nd measurement
+    R1 = np.diag([6.0 ** 2, 1.5 ** 2])            # it is noisier
 
-    # Etat : x = [portee, velocity]. Modele CINEMATIQUE a velocity constante.
+    # State: x = [range, velocity]. A constant-velocity KINEMATIC model.
     F = np.array([[1.0, dt],
                   [0.0, 1.0]])
-    # Q tel qu'ecrit dans le document, section 8.2.2 :
+    # Q exactly as written in the document, section 8.2.2:
     #     Q = sigma_a^2 [[dt^4/4, dt^3/2], [dt^3/2, dt^2]]
     Q = sigma_a ** 2 * np.array([[dt ** 4 / 4, dt ** 3 / 2],
                                  [dt ** 3 / 2, dt ** 2]])
-    H = np.eye(2)                    # le radar measurement portee ET velocity
+    H = np.eye(2)                    # the radar measures range AND velocity
 
     print(f"\n  dt = {dt} s, sigma_a = {sigma_a} m/s2")
     print(f"  F = {F.tolist()}")
-    comparer("Q", Q)
+    compare("Q", Q)
 
-    # --- ITERATION 0 : initialisation puis prediction ----------------------
+    # --- ITERATION 0: initialisation, then prediction ----------------------
     print("\nITERATION 0 — initialised from the first measurement")
     filter = LinearKalman(
         x=np.array([10000.0, 200.0]),
-        P=np.diag([sigma_portee ** 2, sigma_vitesse ** 2]))
+        P=np.diag([sigma_range ** 2, sigma_speed ** 2]))
     print(f"  x(0,0) = {filter.x.tolist()}   P(0,0) = "
           f"{np.diag(filter.P).tolist()} (diagonal)")
 
     print("\nITERATION 0 — prediction")
     filter.predict(F, Q)
-    comparer("x(1,0)", filter.x)
-    comparer("P(1,0)", filter.P)
+    compare("x(1,0)", filter.x)
+    compare("P(1,0)", filter.P)
 
-    # --- ITERATION 1 : mise a jour ----------------------------------------
+    # --- ITERATION 1: the update -------------------------------------------
     print("\nITERATION 1 — update from the second measurement")
     print(f"  z(1) = {z1.tolist()}   R(1) = {np.diag(R1).tolist()} (diagonal)")
     K, _ = filter.gain(H, R1)
-    comparer("K(1)", K)
+    compare("K(1)", K)
 
-    P_avant = filter.P.copy()
+    P_before = filter.P.copy()
     innovation, _ = filter.correct(z1, H, R1)
     print(f"  innovation z - Hx = {innovation.tolist()}   "
-          f"(le document donne [20, 2])")
-    comparer("x(1,1)", filter.x)
-    comparer("P(1,1)", filter.P)
+          f"(the document gives [20, 2])")
+    compare("x(1,1)", filter.x)
+    compare("P(1,1)", filter.P)
 
-    # Joseph contre la forme simplifiee : le document dit qu'elles sont egales
-    # en arithmetique exacte et recommande Joseph. On le verifie plutot que de
-    # le croire.
-    simplifiee = (np.eye(2) - K @ H) @ P_avant
-    gap = float(np.max(np.abs(filter.P - simplifiee)))
+    # Joseph against the simplified form: the document says they are equal in
+    # exact arithmetic and recommends Joseph. We check that rather than take
+    # it on trust.
+    simplified = (np.eye(2) - K @ H) @ P_before
+    gap = float(np.max(np.abs(filter.P - simplified)))
     print(f"\n  Joseph form vs simplified form: gap {gap:.1e}")
     print("    -> identical, as the document states. Joseph is kept, since it")
     print("       stays symmetric positive-definite after thousands of")
@@ -149,8 +149,8 @@ def example_du_document():
     # --- ITERATION 1 : prediction suivante ---------------------------------
     print("\nITERATION 1 — prediction")
     filter.predict(F, Q)
-    comparer("x(2,1)", filter.x)
-    comparer("P(2,1)", filter.P)
+    compare("x(2,1)", filter.x)
+    compare("P(2,1)", filter.P)
 
 
 def modele_de_lvehicle():
@@ -180,12 +180,12 @@ def modele_de_lvehicle():
                 ("croise    dt^3/2", Q3[0, 3], sigma_a ** 2 * dt ** 3 / 2),
                 ("velocity   dt^2  ", Q3[3, 3], sigma_a ** 2 * dt ** 2))
     tout_bon = True
-    for name, got, attendu in attendus:
-        ok = abs(got - attendu) < 1e-12
+    for name, got, expected in attendus:
+        ok = abs(got - expected) < 1e-12
         tout_bon &= ok
         print(f"    [{'OK ' if ok else 'NON'}] block {name} : "
-              f"G G' donne {got:8.4f}, formule du document {attendu:8.4f}")
-    _resultats.append(("Q en 3D = Q du document", tout_bon, 0.0))
+              f"G G' donne {got:8.4f}, formule du document {expected:8.4f}")
+    _results.append(("Q en 3D = Q du document", tout_bon, 0.0))
 
     print("""
   ONE SINGLE DIFFERENCE, AND IT IS IN H. The document's radar measures range
@@ -228,12 +228,12 @@ def main():
     modele_de_lvehicle()
 
     print("=" * 74)
-    echecs = [name for name, ok, _ in _resultats if not ok]
+    echecs = [name for name, ok, _ in _results if not ok]
     if echecs:
         print(f"DISAGREEMENT with the document on: {', '.join(echecs)}")
         print("=" * 74)
         return 1
-    print(f"THE {len(_resultats)} PUBLISHED VALUES ARE ALL RECOVERED")
+    print(f"THE {len(_results)} PUBLISHED VALUES ARE ALL RECOVERED")
     print("")
     print("  The project's position filter is not inspired by the document:")
     print("  it IS the same filter. It reproduces the document's worked")
