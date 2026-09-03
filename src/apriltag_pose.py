@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# apriltag_pose.py — AprilTag detection and pose estimation, standalone.
 """
 Localisation par AprilTag avec une caméra Intel RealSense
 ==========================================================

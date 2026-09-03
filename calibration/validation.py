@@ -1,4 +1,4 @@
-# validation.py — Mesure la precision de la distance estimee par AprilTag.
+# validation.py — Minimal AprilTag pose read-out, for a quick check.
 # Affiche une distance STABILISEE (mean des dernieres measurements) et l'enregistre
 # dans validation.csv quand on appuie sur 's'. Comparer ensuite au metre ruban.
 import csv

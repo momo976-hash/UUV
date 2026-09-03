@@ -1,4 +1,4 @@
-# demo_finale.py — DEMO : lecture des AprilTags + tag_map 2D vue de dessus.
+# demo_full_pipeline.py — DEMO: read AprilTags + draw a top-down 2D map.
 #
 # Tout est automatique : aucun ID de tag a saisir, aucune position a mesurer.
 #   - Le 1er tag seen devient l'origin du frame.

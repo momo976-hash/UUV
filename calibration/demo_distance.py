@@ -1,4 +1,14 @@
-# demo_distance.py — La calibration, montree plutot que racontee.
+# demo_distance.py — The calibration, shown rather than described.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python calibration/demo_distance.py --mounting tube_water --reference 1.50
+#
+# Put a tag squarely in front of the camera at a distance measured with a
+# tape, pass it as --reference, and read the GREEN line against the tape. The
+# other two lines are commentary. Press 's' to capture the screen as a PNG
+# for a report, 'q' to quit.
+# ===========================================================================
 #
 # POURQUOI CE SCRIPT
 # Dire "la camera est calibree" ne prouve rien : les chiffres d'une matrix K

@@ -1,4 +1,4 @@
-# list_realsense.py — Qu'est-ce qui est reellement branche, et sait-il quoi ?
+# list_realsense.py — List the RealSense devices and say if they have an IMU.
 #
 #     python list_realsense.py
 #

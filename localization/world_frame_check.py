@@ -1,27 +1,77 @@
-# world_frame_check.py — Deplacement / rotation de la camera dans un REPERE MONDE.
+# world_frame_check.py — Camera motion in a WORLD FRAME, and the pool protocol.
 #
-# But : mesurer le mouvement de la camera SANS avoir a garder le meme tag dans
-# le champ. On relie d'abord les tags dans un seul frame world (methode de
-# Thein : un tag est seen en meme time qu'un tag deja known), puis la pose de la
-# camera est calculee dans ce frame commun, quel que soit le tag regarde.
+# ===========================================================================
+# HOW TO USE IT — THIS IS THE SCRIPT FOR STEPS 5 AND 6 OF THE PROTOCOL
+# ===========================================================================
+#     python localization/world_frame_check.py
+#     python localization/world_frame_check.py --plots     with live figures
 #
-# DEROULE (pas d'etape de liaison separee)
-#   1. 'o' : regarde le tag de reference -> il devient l'origin du world.
-#   2. Deplace la camera vers le 2e tag (mode DEPLACEMENT) ou fais-la pivoter
-#      (mode ROTATION). La liaison des tags se fait TOUTE SEULE en path : il
-#      suffit que les deux tags soient un timestamp visible ensemble. Ensuite le
-#      tag de reference peut sortir du champ, la measurement continue.
-#   3. Tape la value reelle, 's' pour enregistrer.
+# Keys:  o = set the reference tag (origin)   m = distance/rotation mode
+#        f = filter on/off                    r = reset everything
+#        0-9 and '.' = type a real value      BACKSPACE = erase
+#        s = save that measurement            q = quit
 #
-# FILTRE DE KALMAN (key 'f')
-#   A chaque image, TOUS les tags known visible nourrissent le filter
-#   (kalman_filter.py) : leurs estimations se fusionnent et se lissent dans le
-#   time. L'ecran affiche la position raw ET la position filtered l'une sous
-#   l'autre, avec l'uncertainty annoncee par le filter, pour comparer en direct.
+# ---------------------------------------------------------------------------
+# STEP 5 — measure the vehicle's real dynamics  (10 minutes, once)
+# ---------------------------------------------------------------------------
+#   1. Vehicle in the water, camera seeing the tags.
+#   2. Aim at a tag and press  o . It becomes the world origin.
+#   3. Drive ~30 seconds LIKE A REAL MISSION. Usual speeds — neither parked,
+#      nor deliberately shaken. Keep going after the "tag linked" message:
+#      that message is a confirmation, not a signal to stop.
+#   4. Press  q . The script prints two ready-made lines to copy into
+#      kalman/kalman_filter.py.
 #
-# Touches : m = deplacement/rotation | o = reference (origin) | r = tout remettre a zero
-#           f = filter on/off | 0-9 et '.' = value reelle | RET.ARRIERE = effacer
-#           s = save | q = quit
+#   You do NOT need the m / s keys for this. They belong to step 6.
+#
+# ---------------------------------------------------------------------------
+# STEP 6 — check the filter actually improves things  (tape measure needed)
+# ---------------------------------------------------------------------------
+#   1. Press  o  on the reference tag.
+#   2. Check the display reads  filter : ON  (key  f  toggles it).
+#   3. Move the camera by a distance MEASURED WITH A TAPE.
+#   4. Type that real value on the keyboard, then press  s  to record it.
+#   5. Repeat about FIFTEEN times, at varied distances.
+#   6. Press  q . The script prints the verdict on its own: how much the
+#      filter reduces the error, and — more important — whether the filter
+#      tells the truth about its own precision.
+#
+#   Do not announce an expected gain in advance. The self-tests show 33x, but
+#   that is a simulation in which the filter's assumptions are true by
+#   construction. Expect 1.5-2x in reality. The only defensible number is the
+#   one measured here.
+#
+# ===========================================================================
+# WHAT THE SCRIPT DOES
+# ===========================================================================
+# Aim: measure the camera's motion WITHOUT having to keep the same tag in
+# view. The tags are first linked into a single world frame (a tag is seen at
+# the same time as an already-known tag), after which the camera pose is
+# computed in that common frame, whichever tag is being looked at.
+#
+# The linking happens BY ITSELF along the way: it is enough for two tags to be
+# visible together for a moment. The reference tag can then leave the field of
+# view and the measurement continues.
+#
+# KALMAN FILTER (key 'f')
+#   On every frame, ALL known visible tags feed the filter
+#   (kalman/kalman_filter.py): their estimates fuse and smooth over time. The
+#   screen shows the raw position AND the filtered position one under the
+#   other, with the uncertainty the filter reports, to compare live.
+#
+# ===========================================================================
+# ONE TRAP WORTH KNOWING ABOUT
+# ===========================================================================
+# Two consecutive poses are only comparable if they come from THE SAME map of
+# THE SAME reference tag. The map of a tag keeps being refined as long as that
+# tag stays co-visible with another known one, and the reference tag itself is
+# re-chosen every frame as whichever known tag looks largest.
+#
+# Differencing across a change of either produces a jump that is not motion —
+# it is the gap between two maps — and divided by a frame interval it turns a
+# few millimetres into hundreds of deg/s. Measured on real pool data before
+# this was handled: 283 deg/s and 470 m/s2 as MEDIANS, from a hand-held
+# camera. Both cases are now treated exactly like a lost tag.
 import csv
 import os
 import sys
@@ -203,7 +253,7 @@ def ouvrir_camera():
                 return source, ww, hh
             source.release()
         except Exception as souci:
-            print(f"RealSense indisponible ({souci}) — trial par OpenCV, sans IMU")
+            print(f"RealSense unavailable ({souci}) — trying OpenCV, no IMU")
 
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
@@ -216,7 +266,7 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera : OpenCV index={index}, {name}, {ww}x{hh}, sans IMU")
+                    print(f"Camera : OpenCV index={index}, {name}, {ww}x{hh}, no IMU")
                     return SourceOpenCV(cap), ww, hh
             cap.release()
     return None, 0, 0
@@ -224,7 +274,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERREUR : aucune camera ouverte.")
+    print("ERROR: no camera could be opened.")
     raise SystemExit
 
 K, dist = K_CALIB.copy(), DIST_CALIB.copy()
@@ -233,11 +283,11 @@ try:
     path = np.load("calibration_camera.npz")
     K, dist = path["K"].astype(np.float64), path["dist"].ravel()
     Lc, Hc = int(path["width"]), int(path["height"])
-    print("Calibration chargee depuis calibration_camera.npz")
+    print("Calibration loaded from calibration_camera.npz")
 except Exception:
-    print("Calibration integree au script used")
+    print("Using the calibration built into the script")
 if (L, H) != (Lc, Hc):
-    print(f"  >>> ATTENTION : capture {L}x{H} mais calibration {Lc}x{Hc}.")
+    print(f"  >>> WARNING: capture is {L}x{H} but the calibration is {Lc}x{Hc}.")
 
 h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
@@ -313,21 +363,21 @@ if os.path.exists(CSV):
         # de cote plutot que d'y toucher.
         archive = CSV.replace(".csv", "_ancien_format.csv")
         os.replace(CSV, archive)
-        print(f"Ancien path de measurements deplace vers : {archive}")
+        print(f"Previous measurement file moved to: {archive}")
 if not os.path.exists(CSV):
     with open(CSV, "w", newline="") as fic:
         csv.writer(fic).writerow(ENTETE)
 
 print("=" * 66)
 optics.announce_mounting("MONTAGE :")
-print("VERIFICATION DANS UN REPERE MONDE (deplacement libre entre tags)")
-print("  1. regarde le tag de reference, appuie sur 'o'")
-print("  2. bouge vers le 2e tag : la liaison se fait TOUTE SEULE en path")
-print("     (il suffit que les 2 tags soient un timestamp visible ensemble)")
-print("  'm' mode | 'r' repartir a zero | 's' enregistrer | 'q' quitter")
-if "--graphiques" not in sys.argv:
-    print("  Pour VOIR le filter travailler (4 figures du cours, en direct) :")
-    print("      relancer avec  --graphiques")
+print("WORLD-FRAME CHECK (move freely between tags)")
+print("  1. look at the reference tag, press 'o'")
+print("  2. move towards the 2nd tag: linking happens BY ITSELF on the way")
+print("     (the 2 tags only need to be visible together for a moment)")
+print("  'm' mode | 'r' reset | 's' record | 'q' quit")
+if "--plots" not in sys.argv:
+    print("  To SEE the filter working (6 course figures, live):")
+    print("      re-run with  --plots")
 print("=" * 66)
 
 # Le rappel est affiche AVANT la session, pas seulement apres : c'est
@@ -340,18 +390,18 @@ remind_missing_measurements(with_imu=cam.with_imu)
 # ne se refait pas parce qu'une bibliotheque d'display n'est pas installee.
 windows = None
 debut_session = time.time()
-if "--graphiques" in sys.argv:
+if "--plots" in sys.argv:
     try:
         from kalman_live_plots import FenetresKalman, disponible
         if disponible():
             windows = FenetresKalman(axis=0)
-            print("Graphiques du filter : window ouverte (4 figures du cours).")
+            print("Filter plots: window open (6 course figures).")
         else:
-            print("--graphiques demande mais matplotlib n'est pas installe :")
+            print("--plots was requested but matplotlib is not installed:")
             print("    python -m pip install matplotlib")
-            print("La measurement continue sans les graphiques.")
+            print("The measurement continues without plots.")
     except Exception as souci:
-        print(f"--graphiques indisponible ({souci}) — la measurement continue sans.")
+        print(f"--plots unavailable ({souci}) — the measurement continues without it.")
 
 while True:
     ok, image = cam.read()
@@ -362,7 +412,7 @@ while True:
     # optics.check_image_matches_mounting).
     alerte = optics.check_image_matches_mounting(image, MONTAGE)
     if alerte:
-        print(f"\n*** MONTAGE SUSPECT : {alerte}\n")
+        print(f"\n*** SUSPICIOUS MOUNTING: {alerte}\n")
 
     gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     corners, ids, _ = detector.detectMarkers(gris)
@@ -402,7 +452,7 @@ while True:
                 new = B not in tag_map
                 tag_map[B] = T
                 if new:
-                    print(f"Tag {B} relie automatiquement. Monde : {sorted(tag_map)}")
+                    print(f"Tag {B} linked automatically. World: {sorted(tag_map)}")
 
     # pose de la camera dans le frame world (meilleur tag known visible)
     cam_p = cam_R = ref = carte_ref = None
@@ -602,7 +652,7 @@ while True:
     if key == ord("f"):
         filtre_actif = not filtre_actif
         lissage_filtre.clear()
-        print(f"Filtre de Kalman : {'ON' if filtre_actif else 'OFF'}")
+        print(f"Kalman filter: {'ON' if filtre_actif else 'OFF'}")
     if key == ord("o"):
         if poses:
             # le tag regarde devient l'origin du world ET la reference.
@@ -616,10 +666,10 @@ while True:
             filter = PoseFilter()
             ref_p_filtre = ref_R_filtre = None
             lissage_filtre.clear()
-            print(f"Reference = tag {origin}. Bouge vers le 2e tag : la "
+            print(f"Reference = tag {origin}. Move towards the 2nd tag: "
                   "liaison se fait toute seule quand les 2 tags se croisent.")
         else:
-            print("Aucun tag visible : impossible de fixer la reference.")
+            print("No tag visible: cannot set the reference.")
     if key == ord("r"):
         tag_map.clear(); candidats.clear()
         origin = None
@@ -628,7 +678,7 @@ while True:
         filter = PoseFilter()
         ref_p_filtre = ref_R_filtre = None
         lissage_filtre.clear()
-        print("Remis a zero : regarde le tag de reference et appuie sur 'o'.")
+        print("Reset: look at the reference tag and press 'o'.")
     if ord("0") <= key <= ord("9") or key == ord("."):
         saisie += chr(key)
     if key == 8 and saisie:
@@ -637,7 +687,7 @@ while True:
         try:
             reel = float(saisie)
         except ValueError:
-            print("Valeur invalide.")
+            print("Invalid value.")
             continue
         e = d - reel
         ef = None if d_filtre is None else d_filtre - reel
@@ -664,7 +714,7 @@ while True:
 
 cam.release()
 cv2.destroyAllWindows()
-print(f"\nTermine. Mesures dans : {CSV}")
+print(f"\nDone. Measurements in: {CSV}")
 
 # La figure est ENREGISTREE avant d'etre fermee : sans cela, tout ce que les
 # quatre graphiques ont montre pendant la session disparait a la fermeture de
@@ -673,7 +723,7 @@ if windows is not None:
     windows.rafraichir(force=True)
     image_figures = os.path.abspath("graphiques_kalman_session.png")
     if windows.enregistrer(image_figures):
-        print(f"Figures du filter enregistrees : {image_figures}")
+        print(f"Filter figures saved to: {image_figures}")
     windows.fermer()
 
 
@@ -705,7 +755,7 @@ def bilan_filtre():
     except OSError:
         return
     if len(rows) < 3:
-        print("\n(Moins de 3 measurements de deplacement : pas de bilan du filter.)")
+        print("\n(Fewer than 3 displacement measurements: no filter verdict.)")
         return
 
     def column(name):
@@ -722,19 +772,19 @@ def bilan_filtre():
                 if b is not None and f is not None]
 
     print("\n" + "=" * 66)
-    print(f"LE FILTRE FAIT-IL SON TRAVAIL ?   ({len(rows)} measurements de deplacement)")
+    print(f"IS THE FILTER DOING ITS JOB?   ({len(rows)} displacement measurements)")
     print("=" * 66)
 
     if not apparies:
-        print("  Aucune measurement prise avec le filter allume (key 'f').")
-        print("  Refaire une serie filter ON pour pouvoir conclure.")
+        print("  No measurement was taken with the filter ON (key 'f').")
+        print("  Redo a series with the filter ON to be able to conclude.")
         print("=" * 66)
         return
 
     rms = lambda v: float(np.sqrt(np.mean(np.square(v))))
     rms_raw = rms([b for b, _ in apparies])
     rms_filtered = rms([f for _, f in apparies])
-    print(f"  error RMS   raw   {rms_raw*1000:7.1f} mm")
+    print(f"  RMS error   raw    {rms_raw*1000:7.1f} mm")
     print(f"               filter {rms_filtered*1000:7.1f} mm", end="")
     if rms_filtered > 0:
         print(f"     -> gain {rms_raw/rms_filtered:.2f}x")
@@ -742,17 +792,17 @@ def bilan_filtre():
         print()
     gain = rms_raw / rms_filtered if rms_filtered > 0 else float("inf")
     if gain >= 1.2:
-        print("  [OK] le filter reduit l'error.")
+        print("  [OK] the filter reduces the error.")
     elif gain > 1.0:
         # Sur une dizaine de measurements, un gain de quelques pourcents ne se
         # distingue pas du hasard. L'annoncer comme un succes serait se
         # mentir : autant dire qu'on ne sait pas encore.
-        print("  [PEU CONCLUANT] gain trop faible pour etre distingue du")
-        print("       hasard sur si peu de measurements. En faire une vingtaine,")
-        print("       ou check sigma_acceleration (etape 5 du protocole).")
+        print("  [INCONCLUSIVE] gain too small to be told apart from chance on so")
+        print("       few measurements. Take about twenty, or check")
+        print("       sigma_acceleration (protocol step 5).")
     else:
-        print("  [NON] le filter n'ameliore pas. Cause la plus frequente :")
-        print("       sigma_acceleration mal regle (etape 5 du protocole).")
+        print("  [NO] the filter does not improve things. Most common cause:")
+        print("       sigma_acceleration badly set (protocol step 5).")
 
     # -- le filter est-il honnete sur son uncertainty ? ----------------------
     couples = [(abs(f), s) for (_, f), s in zip(apparies, column("sigma_filtre_mm"))
@@ -761,34 +811,34 @@ def bilan_filtre():
         reel = float(np.median([f * 1000 for f, _ in couples]))
         annonce = float(np.median([s for _, s in couples]))
         report = reel / annonce
-        print(f"\n  uncertainty annoncee par le filter : {annonce:6.1f} mm (median)")
-        print(f"  error reellement constatee        : {reel:6.1f} mm (median)")
-        print(f"  report reel / annonce : {report:.1f}")
+        print(f"\n  uncertainty reported by the filter: {annonce:6.1f} mm (median)")
+        print(f"  error actually observed            : {reel:6.1f} mm (median)")
+        print(f"  actual / reported ratio: {report:.1f}")
         if report < 0.5:
-            print("  [OK] le filter est prudent : il annonce plus d'error qu'il")
-            print("       n'en fait. Sans danger, mais il se sous-estime.")
+            print("  [OK] the filter is cautious: it reports more error than it makes.")
+            print("       Harmless, but it under-rates itself.")
         elif report <= 2.0:
-            print("  [OK] le filter dit la truth sur sa precision.")
+            print("  [OK] the filter tells the truth about its precision.")
         elif report <= 4.0:
-            print("  [ATTENTION] le filter se croit plus precis qu'il n'est.")
-            print("       Ne pas se fier au +/- affiche tel quel.")
+            print("  [WARNING] the filter believes itself more precise than it is.")
+            print("       Do not take the displayed +/- at face value.")
         else:
-            print("  [NON] le filter MENT sur sa precision. Ne pas utiliser son")
-            print("       +/- pour decider quoi que ce soit. Verifier d'abord")
-            print("       SIGMA_PIXEL (measurement-t-il bien le noise du bassin ?)")
-            print("       puis les positions des tags dans la tag_map.")
+            print("  [NO] the filter LIES about its precision. Do not use its +/- to")
+            print("       decide anything. Check SIGMA_PIXEL first (does it really")
+            print("       measure the pool's noise?), then the tag positions in the map.")
+            print("")
 
     # -- rejections et recoveries --------------------------------------------------
     total_rejets = filter.position.rejections + filter.orientation.rejections
     recoveries = filter.position.recoveries + filter.orientation.recoveries
-    print(f"\n  measurements rejetees : {total_rejets}   recoveries apres blocage : {recoveries}")
+    print(f"\n  measurements rejected: {total_rejets}   recoveries after lock-out: {recoveries}")
     if recoveries > 3:
-        print("  [ATTENTION] beaucoup de recoveries : le filter se bloque puis se")
-        print("       recale. Souvent le signe de tags mal places dans la tag_map.")
+        print("  [WARNING] many recoveries: the filter locks out then re-anchors.")
+        print("       Often a sign of tags misplaced in the map.")
 
     suspects = filter.watchdog.report()
     if "aucun tag suspect" not in suspects:
-        print("\n  SUPPORTS QUI ONT BOUGE")
+        print("\n  SUPPORTS THAT HAVE MOVED")
         print(suspects)
     print("=" * 66)
 
@@ -800,7 +850,7 @@ if len(vitesses_angulaires) > 100:
     rotation_95 = centile(vitesses_angulaires, 95)
     accel_95 = centile(accelerations, 95)
     print("\n" + "=" * 66)
-    print("DYNAMIQUE OBSERVEE")
+    print("OBSERVED DYNAMICS")
     print("=" * 66)
     print(f"  rotation    median {centile(vitesses_angulaires, 50):6.1f} deg/s"
           f"   95e centile {rotation_95:6.1f} deg/s")
@@ -810,29 +860,29 @@ if len(vitesses_angulaires) > 100:
     # Le noise de model doit couvrir ce que l'engin fait REELLEMENT sans que
     # le filter le sache. Le 95e centile evite a la fois de sous-estimer, ce
     # qui ferait retarder le filter, et de se caler sur un pic isole.
-    print("  VOICI LES DEUX NOMBRES CHERCHES. Marche a suivre :")
+    print("  HERE ARE THE TWO NUMBERS. What to do with them:")
     print()
-    print("   1. Ouvrir le path   kalman/kalman_filter.py")
-    print("      (avec le Bloc-notes, VS Code, n'importe quel editeur de text)")
-    print("   2. Chercher (Ctrl+F) :  SIGMA_ACCELERATION")
-    print("   3. Deux rows existent DEJA quelque part vers le start du")
-    print("      path. Elles ressemblent a ceci :")
+    print("   1. Open the file   kalman/kalman_filter.py")
+    print("      (Notepad, VS Code, any text editor will do)")
+    print("   2. Search (Ctrl+F) for:  SIGMA_ACCELERATION")
+    print("   3. Two lines ALREADY exist near the top of the file. They look")
+    print("      like this:")
     print()
     print(f"          SIGMA_ACCELERATION = {SIGMA_ACCELERATION}")
     print(f"          GYRO_DRIFT_DEG_S = {GYRO_DRIFT_DEG_S}")
     print()
-    print("   4. Remplacer UNIQUEMENT les numbers, pour obtenir :")
+    print("   4. Replace ONLY the numbers, to get:")
     print()
     print(f"          SIGMA_ACCELERATION = {accel_95:.1f}")
     print(f"          GYRO_DRIFT_DEG_S = {rotation_95:.0f}")
     print()
-    print("   5. Enregistrer le path. C'est tout — rien d'autre a modifier")
-    print("      nulle part, et le rappel au demarrage disparaitra tout seul.")
+    print("   5. Save the file. That is all — nothing else to change anywhere,")
+    print("      and the reminder at startup will disappear by itself.")
     print()
-    print("  ENGLISH — open kalman/kalman_filter.py in any text editor,")
+    print("")
     print("  find the two lines starting with SIGMA_ACCELERATION and")
-    print("  GYRO_DRIFT_DEG_S, and change ONLY the numbers to the two values")
-    print("  shown above. Save. Nothing else to change anywhere.")
+    print("")
+    print("")
     print("=" * 66)
     print("  Valable si ce que tu viens de faire ressemble a une true mission.")
-    print("  Une session ou la camera reste posee ne measurement rien d'utile.")
+    print("  A session with the camera left sitting still measures nothing useful.")

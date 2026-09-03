@@ -1,4 +1,4 @@
-# install_underwater_calibration.py — Installe la calibration sous l'water sur cette machine.
+# install_underwater_calibration.py — Install the underwater calibration here.
 #
 #     python install_underwater_calibration.py            la calibration CORRIGEE (default)
 #     python install_underwater_calibration.py --raw    celle du bassin, telle quelle

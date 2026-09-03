@@ -1,4 +1,4 @@
-# localisation_piscine.py — Position de la CAMERA/UUV dans le frame "piscine".
+# pool_localization.py — Locate the camera from a known tag layout.
 #
 # Idee : on connait la position de chaque tag dans la piscine (CARTE_DES_TAGS).
 # La camera measurement ou est le tag par report a elle. En combinant les deux, on

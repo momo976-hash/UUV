@@ -1,4 +1,4 @@
-# auto_enregistrement.py — Construit la tag_map des tags AUTOMATIQUEMENT.
+# auto_mapping.py — Build the tag map AUTOMATICALLY, no tape measure.
 #
 # Principe (comme le "Step 2" de Thein) :
 #   - Le first tag seen devient l'ORIGINE (l'ancre) : T_monde_ancre = identity.

@@ -1,4 +1,19 @@
-# calibrate.py — Calibration de la camera avec un damier (chessboard).
+# calibrate.py — Calibrate the camera on a checkerboard, per mounting.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python calibration/calibrate.py --mounting tube_water
+#
+# Print the checkerboard, hold it in front of the camera, and move it around:
+# tilted, close, far, and ESPECIALLY into the IMAGE CORNERS — that is where
+# the distortion coefficients are read from. About thirty views. The script
+# says when it has enough and writes two files under calibration/mountings/:
+# a .npz for this repository and a _ros.yaml for the ROS node.
+#
+# Use --mounting to say WHICH configuration you are calibrating. Getting it
+# wrong does not crash anything; it silently files a set of numbers under the
+# wrong name, and everything measured afterwards is wrong by tens of percent.
+# ===========================================================================
 #
 # Mesure les VRAIS params internes de la camera :
 #   fx, fy   focales reelles (en pixels)

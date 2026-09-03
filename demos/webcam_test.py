@@ -1,4 +1,4 @@
-# webcam_test.py — Detection AprilTag avec la webcam (OpenCV seul, sans compilation)
+# webcam_test.py — Minimal webcam + AprilTag test.
 # Utilise le detector AprilTag integre a OpenCV (cv2.aruco) : aucune librairie
 # a compiler, fonctionne meme avec Python 3.14.
 import cv2

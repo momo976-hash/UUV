@@ -1,4 +1,17 @@
-# measure_tag_noise.py — Mesurer le VRAI noise de detection de ta camera.
+# measure_tag_noise.py — Measure your camera's REAL detection noise.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python calibration/measure_tag_noise.py
+#
+# Camera still, tag still. The script watches the detected corners dance and
+# turns that into SIGMA_PIXEL, the number the Kalman filter uses to know how
+# much to trust a tag. It prints the line to copy into kalman/kalman_filter.py.
+#
+# The value in the repository (0.215 px) was measured IN AIR. It must be
+# redone underwater: murkier water and poorer contrast make it worse, and the
+# filter would otherwise believe the tags more than it should.
+# ===========================================================================
 #
 # POURQUOI CE SCRIPT
 # Le filter de Kalman a besoin de savoir a quel point une measurement de tag est

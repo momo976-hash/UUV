@@ -1,4 +1,4 @@
-# restaurer_tube_air.py — Remet la calibration tube_air du 12/08/2026.
+# restore_air_calibration.py — Put the in-air calibration back.
 #
 # POURQUOI CE SCRIPT EXISTE
 # Lancer `calibrate.py` SANS l'option --mounting ecrit sous le name par

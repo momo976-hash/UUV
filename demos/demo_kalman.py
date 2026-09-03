@@ -1,4 +1,4 @@
-# demo_kalman.py — Le filter de Kalman mis a l'epreuve dans TON bassin.
+# demo_kalman.py — The Kalman filter put to the test in OUR pool.
 #
 # On simule un UUV qui longe la paroi B en regardant la paroi A, avec la
 # true implantation des 10 tags et le vrai champ de vision sous l'water. Les

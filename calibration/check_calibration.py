@@ -1,4 +1,4 @@
-# verifier_calibration.py — Verifie si CE QUI EST BRANCHE EN CE MOMENT correspond
+# check_calibration.py — Is a recorded calibration self-consistent?
 # encore a une calibration deja enregistree.
 #
 # Principe : une calibration est propre a UN EXEMPLAIRE de camera, pas a un

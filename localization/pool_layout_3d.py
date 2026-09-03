@@ -1,4 +1,4 @@
-# pool_layout_3d.py — Vue 3D MANIPULABLE du plan de pose des tags dans le bassin.
+# pool_layout_3d.py — Interactive 3D view of where the tags go in the pool.
 #
 # Le meme plan que le schema, mais qu'on peut tourner, zoomer et inspecter.
 # En plus : une camera virtuelle qu'on deplace pour check, avant de mouiller

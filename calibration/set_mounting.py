@@ -1,4 +1,15 @@
-# set_mounting.py — Dire a CET ordinateur dans quoi la camera se trouve.
+# set_mounting.py — Pin down this machine's physical mounting, once.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python calibration/set_mounting.py              asks, then remembers
+#     python calibration/set_mounting.py tube_water   sets it directly
+#
+# Run ONCE per computer, not once per session. The three mountings are
+# bare_air, tube_air and tube_water. The answer is written to
+# calibration/local_mounting.txt, which is deliberately not versioned so the
+# pool PC and the office laptop can disagree without fighting over git.
+# ===========================================================================
 #
 #     python calibration/set_mounting.py            montre l'state, puis demande
 #     python calibration/set_mounting.py tube_eau   regle sans rien demander

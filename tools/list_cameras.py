@@ -1,4 +1,4 @@
-# list_cameras.py — Identifie les cameras disponibles et leur index.
+# list_cameras.py — List every camera this computer can open.
 #
 # Indispensable quand plusieurs cameras sont branchees (webcam du PC +
 # RealSense) : calibrer une camera et mesurer avec une autre fausse tout.

@@ -1,4 +1,4 @@
-# demo_trajectoire.py — Version ROBUSTE pour demonstration.
+# demo_trajectory.py — Robust trajectory demo, for showing to people.
 #
 #   1. Un tag n'est enregistre qu'apres N observations concordantes (median).
 #   2. Localisation via le MEILLEUR tag visible (le plus gros = le plus proche).

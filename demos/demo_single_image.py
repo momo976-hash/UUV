@@ -1,4 +1,4 @@
-# demo_image.py — Detection AprilTag SANS camera.
+# demo_single_image.py — Read the tags in a single image file.
 # Le programme genere lui-meme une image contenant un AprilTag, la detecte,
 # calcule la pose et affiche le result. Aucune webcam necessaire.
 import os

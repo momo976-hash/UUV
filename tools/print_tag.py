@@ -1,4 +1,4 @@
-# print_tag.py — Genere une page A4 avec un tag AprilTag a la size exacte
+# print_tag.py — Generate AprilTags to print, at a known physical size.
 #
 # POURQUOI
 # Pour mesurer PIXELS_MIN il faut voir le tag devenir tout petit dans l'image.

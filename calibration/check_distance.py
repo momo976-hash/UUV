@@ -1,4 +1,18 @@
-# check_distance.py — La calibration donne-t-elle la bonne distance ?
+# check_distance.py — Does the calibration give the right distance?
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python calibration/check_distance.py --reel 1.500 --tag 0.22389
+#     python calibration/check_distance.py --reel 1.500 --pi     (camera on the Pi)
+#
+# Put a tag at a distance MEASURED WITH A TAPE, pass that distance, and the
+# script reports what the camera makes of it. Repeat at three or more
+# distances, including 0.5 m: that is where a fixed offset separates from a
+# scale error, and the script then fits a line and tells you which it is.
+#
+# --focale FX[,FY] tries candidate focal lengths WITHOUT installing them, so
+# the calibration in service is never overwritten for a trial.
+# ===========================================================================
 #
 #     python check_distance.py --reel 1.000
 #

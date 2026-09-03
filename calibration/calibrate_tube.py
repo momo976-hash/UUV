@@ -1,4 +1,4 @@
-# calibration_tube.py — Calibration de la camera, pour les TROIS montages.
+# calibrate_tube.py — Checkerboard calibration through the tube wall.
 #
 # UN SEUL FICHIER, AUCUNE OPTION A TAPER :
 #

@@ -1,4 +1,4 @@
-# localisation_piscine_homogene.py
+# pool_localization_homogeneous.py — The same, in homogeneous transforms.
 # Meme result que localisation_piscine.py, mais ecrit avec des
 # TRANSFORMATIONS HOMOGENES (matrices 4x4) -> plus propre, et pret a gerer
 # des tags orientes differemment (indispensable pour la true piscine).

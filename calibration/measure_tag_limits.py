@@ -1,4 +1,4 @@
-# measure_tag_limits.py — Jusqu'ou un tag reste-t-il detectable ?
+# measure_tag_limits.py — How far, and how far off-axis, a tag stays readable.
 #
 # POURQUOI CE SCRIPT
 # Le plan de pose des tags s'appuie sur deux limites qui, jusqu'ici, venaient

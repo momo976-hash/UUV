@@ -1,4 +1,4 @@
-# modele_paroi_cylindrique.py — Trace de rayons a travers la paroi du tube.
+# cylindrical_wall_model.py — Ray tracing through the tube's curved wall.
 #
 # A QUOI CA SERT
 # Verifier, par le calcul, ce que la paroi du tube fait a la focal_length sous

@@ -1,4 +1,4 @@
-# localisation_orientation.py
+# orientation_localization.py — Position and orientation from one tag.
 # Localisation de la camera/UUV dans la piscine, avec des tags ORIENTES
 # DIFFEREMMENT (sur des murs differents). Chaque tag a une position (x,y,z)
 # ET un cap "yaw" = rotation autour de la verticale.

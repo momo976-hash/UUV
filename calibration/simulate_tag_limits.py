@@ -1,4 +1,4 @@
-# simuler_limites_tag.py — Les limites de detection, sans salle et sans recul
+# simulate_tag_limits.py — The same limits, predicted instead of measured.
 #
 # POURQUOI CE SCRIPT
 # measure_tag_limits.py cherche PIXELS_MIN et INCIDENCE_MAX sur la true
