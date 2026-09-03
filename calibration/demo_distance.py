@@ -11,73 +11,75 @@
 # ===========================================================================
 #
 # WHY THIS SCRIPT EXISTS
-# Dire "la camera est calibree" ne prouve rien : les chiffres d'une matrix K
-# ne se verifient pas a l'oeil. Ce script rend la calibration TESTABLE par
-# quelqu'un qui n'a qu'un tape measure. On pose un tag a une distance connue,
-# et l'ecran affiche cote a cote ce que TROIS modeles de camera repondent a la
-# meme image. Le panneau est en anglais : il est fait pour etre montre.
+# Saying "the camera is calibrated" proves nothing: the numbers in a K matrix
+# cannot be checked by eye. This script makes the calibration TESTABLE by
+# someone holding nothing but a tape measure. A tag is placed at a known
+# distance, and the screen shows side by side what THREE camera models make of
+# the same image. The panel is in English: it is meant to be shown.
 #
-#   1. NO CALIBRATION              focal_length devinee (= width de l'image),
-#                                  centre au milieu, distortion nulle. Ce
-#                                  qu'on ecrit quand on n'a rien measurement.
-#   2. NOT CALIBRATED IN THE TUBE  la calibration de la camera nue, faite
-#                                  avant de la monter dans le tube.
-#   3. CALIBRATED IN THE TUBE      la calibration du mounting reel.
+#   1. NO CALIBRATION              what you write when you have measured
+#                                  nothing.
+#   2. NOT CALIBRATED IN THE TUBE  the bare camera's calibration, made before
+#                                  mounting it in the tube.
+#   3. CALIBRATED IN THE TUBE      the real mounting's calibration.
 #
-# Les trois lisent EXACTEMENT les memes corners de tag : elles ne different que
-# par les numbers avec lesquels on interprete ces pixels. La camera, elle, ne
-# bouge pas et ne sort jamais du tube.
+# All three read EXACTLY the same tag corners: they differ only in the numbers
+# those pixels are interpreted with. The camera itself does not move and never
+# leaves the tube.
 #
-# CE QUE CHAQUE LIGNE PROUVE — ET CE QU'ELLE NE PROUVE PAS
-# Une seule row est une proof : la 3e, confrontee au tape measure. Si elle
-# annonce la distance measured, la calibration est bonne. C'est tout le reste
-# de la demo qui demande de la prudence :
+# WHAT EACH ROW PROVES — AND WHAT IT DOES NOT
+# Only one row is a proof: the 3rd, put against the tape measure. If it
+# announces the measured distance, the calibration is good. The rest of the
+# demo calls for caution:
 #
-#   - la row 1 montre ce que coute l'absence totale de calibration (~6 %).
-#     C'est une illustration, pas une measurement : la focal_length devinee est un choix.
-#   - la row 2 montre que reutiliser une calibration faite hors du tube
-#     donne un desaccord. Elle ne montre PAS qui a tort : sur la portee les
-#     rows 2 et 3 s'accordent, et le desaccord est surtout vertical — or le
-#     tape measure ne measurement pas le vertical. On constate, on ne tranche pas.
+#   - row 1 shows what the total absence of calibration costs (~6 %). It is an
+#     illustration, not a measurement: the guessed focal length is a choice.
+#   - row 2 shows that reusing a calibration made outside the tube gives a
+#     disagreement. It does NOT show which one is wrong: on the range, rows 2
+#     and 3 agree, and the disagreement is mostly vertical — and a tape
+#     measure held square on does not measure the vertical. We observe; we do
+#     not settle it.
 #
-# D'OU VIENT LE DESACCORD DE LA LIGNE 2 : ON NE SAIT PAS
-# Entre la calibration nue et celle du tube, cy passe de 242.9 a 258.5 (15.6
-# px, ~1.5 deg de visee) — c'est ce que la column "3D offset" attrape. La
-# tentation est d'y voir l'effet du tube. Le model de ce depot ne le dit pas :
-# une wall cylindrique vue de face est symetrique autour de l'axis optics,
-# elle change la FOCALE (voir section_magnification dans optics.py) et ne
-# deplace pas le point principal. Deux causes plus vraisemblables, qu'on ne
-# sait pas departager ici : la camera est legerement inclinee dans son support
-# imprime, ou une part vient de l'gap entre deux seances de calibration.
-# Indice pour la seconde : fx est passe de 604.19 a 595.79 (-1.4 %) alors
-# qu'in air, le long de l'axis, la wall est une plane-parallel slab et ne
-# devrait rien changer a fx.
+# WHERE ROW 2'S DISAGREEMENT COMES FROM: WE DO NOT KNOW
+# Between the bare calibration and the tube's, cy goes from 242.9 to 258.5
+# (15.6 px, ~1.5 deg of aim) — that is what the "3D offset" column catches.
+# The temptation is to read it as the tube's effect. This repository's model
+# does not say so: a cylindrical wall seen head-on is symmetric about the
+# optical axis, it changes the FOCAL LENGTH (see section_magnification in
+# optics.py) and does not move the principal point. Two more likely causes,
+# which cannot be told apart here: the camera is slightly tilted in its
+# printed bracket, or part of it comes from the gap between two calibration
+# sessions. A clue for the second: fx went from 604.19 to 595.79 (-1.4 %),
+# where in air, along the axis, the wall is a plane-parallel slab and deviates
+# nothing.
 #
-# CE QUI JUSTIFIE MALGRE TOUT DE CALIBRER DANS LE TUBE
-# Pas cette demo : le principe. On calibre l'objet qu'on utilise. Quelle que
-# soit la cause du decalage, la calibration faite dans le tube en tient
-# compte et celle faite dehors ne le peut pas, par construction. L'argument
-# sans ambiguite viendra underwater, ou la wall devient une true lentille
-# (focales attendues 804 / 625 px au lieu de 596 / 608) : la, l'gap se
-# compte en dizaines de pourcents et le tape measure le verra.
+# WHAT STILL JUSTIFIES CALIBRATING IN THE TUBE
+# Not this demo: the principle. You calibrate the object you use. Whatever the
+# cause of the offset, the calibration made in the tube accounts for it and
+# the one made outside cannot, by construction. The unambiguous argument will
+# come underwater, where the wall becomes a real lens (focal lengths expected
+# at 804 / 625 px instead of 596 / 608): there the gap runs into tens of
+# percent and the tape measure will see it.
 #
-# NE PAS ATTENDRE QUE L'ERREUR EXPLOSE DANS LES COINS
-# On pourrait croire que la row 1 s'effondre loin du centre, faute de
-# correct la distortion. Verifie : son error de distance passe de 6.0 % au
-# centre a 3.8 % au bord — elle DIMINUE, la distortion negligee compensant en
-# partie la focal_length fausse. Ne pas conclure sur une seule position du tag.
+# DO NOT EXPECT THE ERROR TO BLOW UP IN THE CORNERS
+# One might think row 1 collapses far from the centre, for want of correcting
+# the distortion. Checked: its distance error goes from 6.0 % at the centre to
+# 3.8 % at the edge — it DECREASES, the neglected distortion partly
+# compensating the wrong focal length. Do not conclude from a single tag
+# position.
 #
-# HOW TO USE IT DEVANT QUELQU'UN
-#   1. Poser le tag bien en face, a une distance measured au metre (1 a 2 m).
-#   2. python demo_distance.py --tag 0.223 --reference 1.50
-#   3. Lire la row verte contre le metre. Le reste est du commentaire.
-#   4. 's' capture l'ecran en PNG : la proof part dans le report.
+# THE PROCEDURE
+#   1. Put the tag squarely facing the camera, at a tape-measured distance
+#      (1 to 2 m).
+#   2. Pass that distance with --reference, or adjust it live with + / -.
+#   3. Read the green row against the tape. The rest is commentary.
+#   4. 's' captures the screen as a PNG: the evidence goes into the report.
 #
-# ON MESURE DEPUIS LA PUPILLE, PAS DEPUIS LA PAROI DU TUBE
-# Le metre part du verre de l'objectif, a ~2 cm pres. A 1.5 m cela pese 1 % :
-# ne pas conclure sur un gap plus petit que cela.
+# WE MEASURE FROM THE PUPIL, NOT FROM THE TUBE WALL
+# The tape starts at the lens glass, to within ~2 cm. At 1.5 m that is worth
+# 1 %: do not conclude from a gap smaller than that.
 #
-# Keys: t = changer de size de tag | + / - = ajuster la reference
+# KEYS: t = change tag size | + / - = adjust the reference
 #           0 = oublier la reference     | s = capturer l'ecran | q = quitter
 import argparse
 import sys
@@ -91,22 +93,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optics  # noqa: E402
 
 CAMERA_INDEX = None
-FAMILLE = cv2.aruco.DICT_APRILTAG_36h11
+TAG_FAMILY = cv2.aruco.DICT_APRILTAG_36h11
 
-# Les deux tags dont on dispose : celui du pool et le petit. Mesures au
-# calipers, voir optics.py — ne pas revenir au nominal (0.223/0.115).
-TAILLES = (optics.LARGE_TAG_SIZE, optics.SMALL_TAG_SIZE)
+# The two tags available: the pool's and the small one. Caliper-measured, see
+# optics.py — do not go back to the nominal values (0.223/0.115).
+TAG_SIZES = (optics.LARGE_TAG_SIZE, optics.SMALL_TAG_SIZE)
 
-DOSSIER_PREUVES = Path(__file__).resolve().parent / "preuves"
+EVIDENCE_FOLDER = Path(__file__).resolve().parent / "evidence"
 
-VERT = (90, 220, 90)
-JAUNE = (70, 225, 245)
-ROUGE = (70, 70, 240)
-GRIS = (170, 170, 170)
-BLANC = (245, 245, 245)
+GREEN = (90, 220, 90)
+YELLOW = (70, 225, 245)
+RED = (70, 70, 240)
+GREY = (170, 170, 170)
+WHITE = (245, 245, 245)
 
 
-def ouvrir_camera():
+def open_camera():
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
     for index in indices:
@@ -118,21 +120,21 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera : index={index}, backend={name}, {ww}x{hh}")
+                    print(f"Camera: index={index}, backend={name}, {ww}x{hh}")
                     return cap, ww, hh
             cap.release()
     return None, 0, 0
 
 
-def modeles(mounting, width, height):
-    """Les trois cameras qu'on va faire repondre a la meme image.
+def camera_models(mounting, width, height):
+    """The three cameras that will be made to answer the same image.
 
-    La premiere n'est pas une calibration ratee : c'est l'absence de
-    calibration, telle qu'on l'ecrit quand on n'a rien measurement — focal_length prise
-    egale a la width de l'image (~60 deg de champ), centre optics assumed
-    au centre geometrique, distortion supposee nulle.
+    The first is not a botched calibration: it is the ABSENCE of calibration,
+    as it gets written when nothing has been measured — focal length taken
+    equal to the image width (~60 deg of field), optical centre assumed at the
+    geometric centre, distortion assumed zero.
     """
-    devine = np.array([
+    guessed = np.array([
         [float(width), 0.0, width / 2.0],
         [0.0, float(width), height / 2.0],
         [0.0, 0.0, 1.0],
@@ -141,27 +143,27 @@ def modeles(mounting, width, height):
     K_tube, dist_tube = optics.load(mounting, quiet=True)
     return [
         ("NO CALIBRATION", "guessed focal length, distortion ignored",
-         devine, np.zeros(5, dtype=np.float64), ROUGE),
+         guessed, np.zeros(5, dtype=np.float64), RED),
         ("NOT CALIBRATED IN THE TUBE", "bare camera, calibrated before mounting",
          optics.K_BARE_AIR.astype(np.float64),
-         optics.DIST_BARE_AIR.astype(np.float64), JAUNE),
+         optics.DIST_BARE_AIR.astype(np.float64), YELLOW),
         ("CALIBRATED IN THE TUBE", f"mounting '{mounting}' — the one we use",
-         K_tube.astype(np.float64), dist_tube.ravel().astype(np.float64), VERT),
+         K_tube.astype(np.float64), dist_tube.ravel().astype(np.float64), GREEN),
     ]
 
 
-def coins_du_tag(size):
-    demi = size / 2.0
+def tag_corners_3d(size):
+    half = size / 2.0
     return np.array([
-        [-demi,  demi, 0.0],
-        [ demi,  demi, 0.0],
-        [ demi, -demi, 0.0],
-        [-demi, -demi, 0.0],
+        [-half,  half, 0.0],
+        [ half,  half, 0.0],
+        [ half, -half, 0.0],
+        [-half, -half, 0.0],
     ], dtype=np.float64)
 
 
 def banner(image, x, y, width, height, alpha=0.72):
-    """Un fond sombre translucide, pour que le text reste lisible."""
+    """A translucent dark background, so the text stays legible."""
     x0, y0 = max(x, 0), max(y, 0)
     x1, y1 = min(x + width, image.shape[1]), min(y + height, image.shape[0])
     if x1 <= x0 or y1 <= y0:
@@ -171,221 +173,231 @@ def banner(image, x, y, width, height, alpha=0.72):
         zone, 1 - alpha, np.zeros_like(zone), alpha, 0)
 
 
-def ecrire(image, text, position, size=0.5, colour=BLANC, gras=1):
+def write(image, text, position, size=0.5, colour=WHITE, weight=1):
     cv2.putText(image, text, position, cv2.FONT_HERSHEY_SIMPLEX,
-                size, colour, gras, cv2.LINE_AA)
+                size, colour, weight, cv2.LINE_AA)
 
 
-def dessiner_panneau(toile, rows, reference, taille_tag, seen):
-    """Le tableau des trois reponses, en bas de l'image.
+def draw_panel(canvas, rows, reference, tag_size, seen):
+    """The table of the three answers, at the bottom of the image.
 
-    Deux colonnes de chiffres, parce que les deux disent des choses
-    differentes : la DISTANCE, que le tape measure peut contredire, et
-    l'ECART 3D avec la calibration du tube, qui attrape le decalage lateral
-    qu'aucun metre tenu de face ne fera apparaitre.
+    Two columns of numbers, because the two say different things: the
+    DISTANCE, which the tape measure can contradict, and the 3D OFFSET from
+    the tube's calibration, which catches the lateral shift no tape held
+    square on will ever reveal.
     """
-    H, L = toile.shape[:2]
-    hauteur_ligne = 54
-    haut = H - (hauteur_ligne * 3 + 60)
-    banner(toile, 0, haut, L, H - haut)
+    H, L = canvas.shape[:2]
+    row_height = 54
+    top = H - (row_height * 3 + 60)
+    banner(canvas, 0, top, L, H - top)
 
-    colonne_d = L - 300      # la distance
-    colonne_e = L - 150      # l'gap 3D
+    col_distance = L - 300      # la distance
+    col_offset = L - 150      # l'gap 3D
 
-    titre = (f"tag {taille_tag*100:.1f} cm"
+    title = (f"tag {tag_size*100:.1f} cm"
              + (f"   |   tape measure: {reference:.3f} m" if reference
                 else "   |   no reference set (keys + / -)"))
-    ecrire(toile, titre, (14, haut + 22), 0.5, GRIS)
-    ecrire(toile, "mahalanobis", (colonne_d, haut + 22), 0.42, GRIS)
-    ecrire(toile, "3D offset", (colonne_e, haut + 22), 0.42, GRIS)
+    write(canvas, title, (14, top + 22), 0.5, GREY)
+    write(canvas, "distance", (col_distance, top + 22), 0.42, GREY)
+    write(canvas, "3D offset", (col_offset, top + 22), 0.42, GREY)
 
-    y = haut + 34
-    for name, detail, distance, ecart_3d, colour in rows:
-        cv2.rectangle(toile, (14, y + 8), (20, y + hauteur_ligne - 12),
+    y = top + 34
+    for name, detail, distance, offset_3d, colour in rows:
+        cv2.rectangle(canvas, (14, y + 8), (20, y + row_height - 12),
                       colour, -1)
-        ecrire(toile, name, (32, y + 24), 0.52, colour, 2)
-        ecrire(toile, detail, (32, y + 42), 0.40, GRIS)
+        write(canvas, name, (32, y + 24), 0.52, colour, 2)
+        write(canvas, detail, (32, y + 42), 0.40, GREY)
 
         if distance is None:
-            ecrire(toile, "--", (colonne_d, y + 30), 0.8, GRIS, 2)
+            write(canvas, "--", (col_distance, y + 30), 0.8, GREY, 2)
         else:
-            ecrire(toile, f"{distance:.3f} m", (colonne_d, y + 30), 0.8,
+            write(canvas, f"{distance:.3f} m", (col_distance, y + 30), 0.8,
                    colour, 2)
             if reference:
                 gap = distance - reference
-                pourcent = 100.0 * gap / reference
-                ecrire(toile, f"{gap*100:+.1f} cm  ({pourcent:+.1f} %)",
-                       (colonne_d, y + 47), 0.44,
-                       VERT if abs(pourcent) < 2 else colour, 1)
+                percent = 100.0 * gap / reference
+                write(canvas, f"{gap*100:+.1f} cm  ({percent:+.1f} %)",
+                       (col_distance, y + 47), 0.44,
+                       GREEN if abs(percent) < 2 else colour, 1)
 
-            # La 3e row est l'etalon : elle ne peut pas s'ecarter d'elle-meme.
-            if ecart_3d is None:
-                ecrire(toile, "reference", (colonne_e, y + 30), 0.5, GRIS, 1)
+            # The 3rd row is the standard: it cannot differ from itself.
+            if offset_3d is None:
+                write(canvas, "reference", (col_offset, y + 30), 0.5, GREY, 1)
             else:
-                ecrire(toile, f"{ecart_3d*100:.1f} cm", (colonne_e, y + 30),
+                write(canvas, f"{offset_3d*100:.1f} cm", (col_offset, y + 30),
                        0.8, colour, 2)
-                ecrire(toile, "away", (colonne_e, y + 47), 0.44, GRIS, 1)
-        y += hauteur_ligne
+                write(canvas, "away", (col_offset, y + 47), 0.44, GREY, 1)
+        y += row_height
 
     if not seen:
-        ecrire(toile, "no tag detected", (L // 2 - 65, haut - 14), 0.6, ROUGE, 2)
+        write(canvas, "no tag detected", (L // 2 - 65, top - 14), 0.6, RED, 2)
 
 
-def composer(image, cameras, detector, taille_tag, reference, mounting, echelle):
-    """Une image de la camera -> l'image annotee a afficher.
+def compose(image, cameras, detector, tag_size, reference, mounting, scale):
+    """One camera image -> the annotated image to display.
 
-    Tout le raisonnement de la demo tient ici : detecter le tag, faire
-    repondre les trois modeles aux MEMES corners, dessiner le verdict.
+    The whole reasoning of the demo sits here: detect the tag, make the three
+    models answer the SAME corners, draw the verdict.
     """
-    coins_vus, ids, _ = detector.detectMarkers(image)
-    coins_3d = coins_du_tag(taille_tag)
+    seen_corners, ids, _ = detector.detectMarkers(image)
+    corners_3d = tag_corners_3d(tag_size)
 
-    # S'il y a plusieurs tags, on raisonne sur le plus grand : c'est le plus
-    # proche, celui que la personne tient devant la camera.
-    principal = None
+    # If several tags are visible, the largest is used: it is the nearest, the
+    # one the person is holding in front of the camera.
+    main = None
     if ids is not None and len(ids) > 0:
-        aires = [cv2.contourArea(c.reshape(4, 2).astype(np.float32))
-                 for c in coins_vus]
-        principal = int(np.argmax(aires))
+        areas = [cv2.contourArea(c.reshape(4, 2).astype(np.float32))
+                 for c in seen_corners]
+        main = int(np.argmax(areas))
 
-    toile = cv2.resize(image, None, fx=echelle, fy=echelle,
+    canvas = cv2.resize(image, None, fx=scale, fy=scale,
                        interpolation=cv2.INTER_LINEAR)
 
     rows = []
-    if principal is not None:
-        coins_2d = coins_vus[principal].reshape(4, 2).astype(np.float64)
-        pts = (coins_2d * echelle).astype(int)
+    if main is not None:
+        corners_2d = seen_corners[main].reshape(4, 2).astype(np.float64)
+        pts = (corners_2d * scale).astype(int)
         for j in range(4):
-            cv2.line(toile, tuple(pts[j]), tuple(pts[(j + 1) % 4]),
-                     VERT, 2, cv2.LINE_AA)
+            cv2.line(canvas, tuple(pts[j]), tuple(pts[(j + 1) % 4]),
+                     GREEN, 2, cv2.LINE_AA)
         for p in pts:
-            cv2.circle(toile, tuple(p), 4, BLANC, -1, cv2.LINE_AA)
+            cv2.circle(canvas, tuple(p), 4, WHITE, -1, cv2.LINE_AA)
 
-        # On resout la meme image avec les trois modeles. Le last, le
-        # mounting reel, sert d'etalon pour l'gap 3D des deux autres.
+        # The same image is solved with all three models. The last one, the
+        # real mounting, is the standard the other two's 3D offset is measured
+        # against.
         poses = []
         for _, _, K, dist, _ in cameras:
-            ok, _, tvec = cv2.solvePnP(coins_3d, coins_2d, K, dist)
+            ok, _, tvec = cv2.solvePnP(corners_3d, corners_2d, K, dist)
             poses.append(tvec if ok else None)
 
-        etalon = poses[-1]
+        standard = poses[-1]
         for index, ((name, detail, _, _, colour), tvec) in enumerate(
                 zip(cameras, poses)):
             distance = float(np.linalg.norm(tvec)) if tvec is not None else None
             last = index == len(cameras) - 1
-            if tvec is None or etalon is None or last:
-                ecart_3d = None
+            if tvec is None or standard is None or last:
+                offset_3d = None
             else:
-                ecart_3d = float(np.linalg.norm(tvec - etalon))
-            rows.append((name, detail, distance, ecart_3d, colour))
+                offset_3d = float(np.linalg.norm(tvec - standard))
+            rows.append((name, detail, distance, offset_3d, colour))
 
-        # L'label va AU-DESSUS du tag : ecrite au centre, elle masquerait
-        # le motif que la personne est justement en train de regarder.
-        cote_px = float(np.max(np.linalg.norm(
-            coins_2d - np.roll(coins_2d, -1, axis=0), axis=1)))
-        cx = int(coins_2d[:, 0].mean() * echelle)
-        haut_tag = int(coins_2d[:, 1].min() * echelle)
-        ecrire(toile, f"id {int(ids[principal])}   {cote_px:.0f} px",
-               (cx - 55, max(haut_tag - 16, 18)), 0.5, VERT, 2)
+        # The label goes ABOVE the tag: written at the centre it would hide
+        # the very pattern the person is looking at.
+        side_px = float(np.max(np.linalg.norm(
+            corners_2d - np.roll(corners_2d, -1, axis=0), axis=1)))
+        cx = int(corners_2d[:, 0].mean() * scale)
+        tag_top = int(corners_2d[:, 1].min() * scale)
+        write(canvas, f"id {int(ids[main])}   {side_px:.0f} px",
+               (cx - 55, max(tag_top - 16, 18)), 0.5, GREEN, 2)
     else:
         rows = [(name, detail, None, None, colour)
                   for name, detail, _, _, colour in cameras]
 
-    dessiner_panneau(toile, rows, reference, taille_tag,
-                     principal is not None)
-    return toile
+    draw_panel(canvas, rows, reference, tag_size,
+                     main is not None)
+    return canvas
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Compare en direct ce que repondent trois modeles de "
-                    "camera sur la meme image de tag : sans calibration, "
-                    "calibree hors tube, calibree dans le tube.")
-    parser.add_argument("--tag", type=float, default=TAILLES[0],
-                           help="cote du carre noir en metres "
-                                f"(default %(default)s ; 't' bascule entre "
-                                f"{TAILLES[0]} et {TAILLES[1]})")
+        description="Compares live what three camera models make of the same "
+                    "tag image: uncalibrated, calibrated outside the tube, "
+                    "calibrated in the tube.")
+    parser.add_argument("--tag", type=float, default=TAG_SIZES[0],
+                        help="side of the black square in metres "
+                             f"(default %(default)s; 't' toggles between "
+                             f"{TAG_SIZES[0]} and {TAG_SIZES[1]})")
     parser.add_argument("--reference", type=float, default=0.0,
-                           metavar="METRES",
-                           help="distance true measured au tape measure ; "
-                                "active l'display des errors")
-    parser.add_argument("--mounting", default=optics.ACTIVE_MOUNTING,
-                           choices=optics.MOUNTINGS,
-                           help="calibration a mettre en 3e row "
-                                "(default %(default)s)")
+                        metavar="METRES",
+                        help="the true tape-measured distance; turns on the "
+                             "error display")
+    # The French mounting names are accepted and translated, so notes written
+    # before the handover still run.
+    parser.add_argument("--mounting", "--montage", dest="mounting",
+                        default=optics.ACTIVE_MOUNTING,
+                        choices=(list(optics.MOUNTINGS)
+                                 + list(optics.LEGACY_MOUNTING_NAMES)),
+                        help="calibration to put in the 3rd row "
+                             "(default %(default)s)")
     parser.add_argument("--zoom", type=float, default=1.5,
-                           help="agrandissement de la window (default "
-                                "%(default)s) — pour etre lisible a deux")
+                        help="window magnification (default %(default)s) — "
+                             "so two people can read it")
     options = parser.parse_args()
+    options.mounting = optics.LEGACY_MOUNTING_NAMES.get(options.mounting,
+                                                        options.mounting)
 
     if optics.source(options.mounting) != options.mounting:
-        print(f"WARNING : le mounting '{options.mounting}' n'a jamais ete "
-              "calibre. La 3e row affichera la camera nue, et la demo ne "
-              "montrera rien.")
-        print(f"  python calibrate.py --mounting {options.mounting}")
+        print(f"WARNING: the mounting '{options.mounting}' has never been "
+              "calibrated. The 3rd row will show the bare camera, and the "
+              "demo will show nothing.")
+        print(f"  python calibration/calibrate.py "
+              f"--mounting {options.mounting}")
 
-    taille_tag = options.tag
+    tag_size = options.tag
     reference = max(options.reference, 0.0)
 
-    # Sans raffinement sous-pixel, les corners sortent a l'ENTIER pres. Sur un
-    # tag de 90 px cela suffit a fausser la distance de pres de 2 % — soit
-    # plus que tout ce que la demo cherche a montrer, et la row calibree
-    # tomberait a cote devant tout le world. Meme reglage que le reste du
-    # depot (measure_tag_noise.py, avec lequel les 0.215 px ont ete measurements).
-    dictionary = cv2.aruco.getPredefinedDictionary(FAMILLE)
+    # Without sub-pixel refinement, the corners come out to the nearest WHOLE
+    # pixel. On a 90 px tag that is enough to falsify the distance by nearly
+    # 2 % — more than everything the demo is trying to show, and the
+    # calibrated row would land wide of the mark in front of everyone. Same
+    # setting as the rest of the repository (measure_tag_noise.py, with which
+    # the 0.215 px were measured).
+    dictionary = cv2.aruco.getPredefinedDictionary(TAG_FAMILY)
     params = cv2.aruco.DetectorParameters()
     params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
     detector = cv2.aruco.ArucoDetector(dictionary, params)
 
-    cam, L, H = ouvrir_camera()
+    cam, L, H = open_camera()
     if cam is None:
-        print("ERROR: aucune camera detectee.")
+        print("ERROR: no camera detected.")
         return
 
-    cameras = modeles(options.mounting, L, H)
-    print("\nTrois modeles, une seule image :")
+    cameras = camera_models(options.mounting, L, H)
+    print("\nThree models, one image:")
     for name, detail, K, _, _ in cameras:
         print(f"  {name:<22} fx={K[0,0]:7.2f}  fy={K[1,1]:7.2f}   ({detail})")
-    print("\nPose le tag a une distance connue et compare. "
-          "'t' change la size, '+/-' la reference, 's' capture, 'q' quitte.\n")
+    print("\nPut the tag at a known distance and compare. "
+          "'t' changes the size, '+/-' the reference, 's' snapshots, "
+          "'q' quits.\n")
 
-    echelle = max(options.zoom, 1.0)
-    window = "Calibration : avant / apres"
+    scale = max(options.zoom, 1.0)
+    window = "Calibration: before / after"
 
     while True:
         ok, image = cam.read()
         if not ok:
             continue
 
-        toile = composer(image, cameras, detector, taille_tag, reference,
-                         options.mounting, echelle)
-        ecrire(toile, "t=tag size   +/-=reference   0=clear   s=snapshot   q=quit",
-               (14, toile.shape[0] - 10), 0.42, GRIS)
-        cv2.imshow(window, toile)
+        canvas = compose(image, cameras, detector, tag_size, reference,
+                         options.mounting, scale)
+        write(canvas, "t=tag size   +/-=reference   0=clear   s=snapshot   q=quit",
+               (14, canvas.shape[0] - 10), 0.42, GREY)
+        cv2.imshow(window, canvas)
 
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
             break
         if key == ord("t"):
-            autre = [t for t in TAILLES if abs(t - taille_tag) > 1e-6]
-            taille_tag = autre[0] if autre else TAILLES[0]
-            print(f"Taille de tag : {taille_tag*100:.1f} cm")
+            other = [t for t in TAG_SIZES if abs(t - tag_size) > 1e-6]
+            tag_size = other[0] if other else TAG_SIZES[0]
+            print(f"Tag size: {tag_size*100:.1f} cm")
         if key in (ord("+"), ord("=")):
             reference = round(reference + 0.05, 3)
-            print(f"Reference : {reference:.3f} m")
+            print(f"Reference: {reference:.3f} m")
         if key in (ord("-"), ord("_")):
             reference = max(round(reference - 0.05, 3), 0.0)
-            print(f"Reference : {reference:.3f} m")
+            print(f"Reference: {reference:.3f} m")
         if key == ord("0"):
             reference = 0.0
-            print("Reference effacee.")
+            print("Reference cleared.")
         if key == ord("s"):
-            DOSSIER_PREUVES.mkdir(parents=True, exist_ok=True)
-            name = DOSSIER_PREUVES / (
-                f"preuve_{options.mounting}_"
+            EVIDENCE_FOLDER.mkdir(parents=True, exist_ok=True)
+            name = EVIDENCE_FOLDER / (
+                f"evidence_{options.mounting}_"
                 f"{datetime.now():%Y%m%d_%H%M%S}.png")
-            cv2.imwrite(str(name), toile)
-            print(f"Capture ecrite : {name}")
+            cv2.imwrite(str(name), canvas)
+            print(f"Snapshot written: {name}")
 
     cam.release()
     cv2.destroyAllWindows()
