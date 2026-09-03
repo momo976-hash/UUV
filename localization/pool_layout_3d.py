@@ -83,8 +83,8 @@ _demi_h_air, _demi_v_air, _demi_d_air = optics.half_fields_of_view()
 # ELARGISSANT si elle est en retrait, comme c'est le cas ici. Le cone tracé
 # plus bas est donc plus large en height qu'en width, ce qui surprend mais
 # est bien ce que la camera voit.
-DEMI_FOV_H = np.radians(optics.demi_champ_eau(_demi_h_air, "axis"))
-DEMI_FOV_V = np.radians(optics.demi_champ_eau(_demi_v_air, "section"))
+DEMI_FOV_H = np.radians(optics.water_half_field(_demi_h_air, "axis"))
+DEMI_FOV_V = np.radians(optics.water_half_field(_demi_v_air, "section"))
 
 # Pour la size apparente d'un tag, c'est la direction la MOINS grossie qui
 # decide de la detection : un carre trop etroit dans un sens n'est pas decode,
@@ -94,12 +94,12 @@ DEMI_FOV_V = np.radians(optics.demi_champ_eau(_demi_v_air, "section"))
 WATER_FOCAL_LENGTH = optics.water_focal_length()
 
 # Vignettage : le tube est un tuyau, et la camera regarde par un bout.
-_VIGNETTAGE = optics.vignettage()
-_DEMI_TUBE = np.radians(_VIGNETTAGE["demi_angle_tube"])
-if _VIGNETTAGE["rogne_horizontal"]:
-    DEMI_FOV_H = min(DEMI_FOV_H, _DEMI_TUBE)
-if _VIGNETTAGE["rogne_vertical"]:
-    DEMI_FOV_V = min(DEMI_FOV_V, _DEMI_TUBE)
+_VIGNETTING = optics.vignetting()
+_HALF_TUBE = np.radians(_VIGNETTING["tube_half_angle"])
+if _VIGNETTING["clips_horizontal"]:
+    DEMI_FOV_H = min(DEMI_FOV_H, _HALF_TUBE)
+if _VIGNETTING["clips_vertical"]:
+    DEMI_FOV_V = min(DEMI_FOV_V, _HALF_TUBE)
 
 PORTEE = 3.0             # portee kept pour le trace du cone
 # Les deux limites de detection, measured puis simulees (voir

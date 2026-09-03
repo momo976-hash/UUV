@@ -182,9 +182,9 @@ def relire_le_montage(K, erreur_rms):
         if radial:
             ecart_mm = 1000 * optics.off_axis_offset_from_calibration(
                 K, nue, optics.AIR_INDEX)
-            attendu = nue[1, 1] * optics.grandissement_section(
-                indice_exterieur=optics.AIR_INDEX)
-            assumed = 1000 * optics.pupil_off_axis_offsetle()
+            attendu = nue[1, 1] * optics.section_magnification(
+                outer_index=optics.AIR_INDEX)
+            assumed = 1000 * optics.pupil_off_axis()
             print(f"\n  fy = {fy:.2f}  ({100*(fy/nue[1,1]-1):+.2f} % / camera nue)")
             print("    Selon la circonference la wall est un meniscus : il ne")
             print("    devie rien si la pupil est sur l'axis, et d'autant plus")
@@ -197,7 +197,7 @@ def relire_le_montage(K, erreur_rms):
                       f"PUPIL_BEHIND_FACE")
                 print(f"    ({1000*optics.PUPIL_BEHIND_FACE:.0f} mm dans "
                       "optics.py), qui n'etait qu'une estimation.")
-                corrige = (1000 * (optics.rayon_tube(pire_cas=False)
+                corrige = (1000 * (optics.tube_radius(worst_case=False)
                                    - optics.BACK_CLEARANCE
                                    - optics.CAMERA_DEPTH) + ecart_mm)
                 print(f"    Valeur compatible avec la measurement : "
@@ -207,7 +207,7 @@ def relire_le_montage(K, erreur_rms):
                 print("\n    Coherent avec la geometrie supposee : optics.py "
                       "decrit bien le mounting.")
             print(f"\n    residu apres calibration : "
-                  f"{optics.residu_section(ecart_mm/1000, optics.WATER_INDEX):.2f} px "
+                  f"{optics.section_residual(ecart_mm/1000, optics.WATER_INDEX):.2f} px "
                   f"underwater")
             print(f"    (noise de detection measurement : "
                   f"{optics.CORNER_NOISE_PX:.3f} px)")
@@ -228,8 +228,8 @@ def relire_le_montage(K, erreur_rms):
           f"{optics.WATER_INDEX}.")
     if radial:
         attendu_fy = float(K_air[1, 1]) * (
-            optics.grandissement_section(indice_exterieur=optics.WATER_INDEX)
-            / (optics.grandissement_section(indice_exterieur=optics.AIR_INDEX)
+            optics.section_magnification(outer_index=optics.WATER_INDEX)
+            / (optics.section_magnification(outer_index=optics.AIR_INDEX)
                if depart == "tube_air" else 1.0))
         print(f"\n  fy = {fy:.2f}   attendu {attendu_fy:.2f} "
               f"({100*(fy/attendu_fy-1):+.1f} %)")

@@ -97,7 +97,7 @@ print(f"VERIFICATION du mounting '{MONTAGE}'")
 print(f"Calibration enregistree : {Lc}x{Hc}, fx={K[0,0]:.1f}, fy={K[1,1]:.1f}, "
       f"cx={K[0,2]:.1f}, cy={K[1,2]:.1f}")
 if optics.ORIENTATION == "radiale" and MONTAGE != "nue_air":
-    print(f"Rappel : {optics.sensibilite_slip():.1f} % d'error de distance "
+    print(f"Rappel : {optics.slip_sensitivity():.1f} % d'error de distance "
           "par mm de slip")
     print("de la camera dans son support. C'est ce que ce check attrape.")
 print("=" * 62)

@@ -248,7 +248,7 @@ def besoin_du_pool(atteint, recul):
     rows.append(f"  un tag de {100*REAL_TAG_SIZE:.1f} cm paraitra {pire:.0f} px "
                   f"underwater, dans l'axis")
     rows.append(f"  le moins grossi par le tube (focal_length {optics.water_focal_length(MONTAGE):.0f} px "
-                  f"contre {max(optics.focales_eau(MONTAGE)):.0f} dans l'autre).")
+                  f"contre {max(optics.water_focal_lengths(MONTAGE)):.0f} dans l'autre).")
     rows.append("  C'est le plus petit que le pool produise.")
 
     if atteint <= pire:
@@ -311,7 +311,7 @@ def report(rows):
             portee = min(K_CALIB[0, 0], K_CALIB[1, 1]) * REAL_TAG_SIZE / limit
             output.append(f"  Pour un tag de {100*REAL_TAG_SIZE:.1f} cm, cela donne")
             output.append(f"  une portee de {portee:.2f} m in air, "
-                          f"{optics.portee_eau(portee, MONTAGE):.2f} m underwater")
+                          f"{optics.water_range(portee, MONTAGE):.2f} m underwater")
             output.append("  (pas de « x 1.33 » ici : la camera est couchee dans le "
                           "tube, et")
             output.append("   c'est l'axis le MOINS grossi qui decide de la detection)")

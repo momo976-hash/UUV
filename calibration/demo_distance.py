@@ -45,7 +45,7 @@
 # px, ~1.5 deg de visee) — c'est ce que la column "3D offset" attrape. La
 # tentation est d'y voir l'effet du tube. Le model de ce depot ne le dit pas :
 # une wall cylindrique vue de face est symetrique autour de l'axis optics,
-# elle change la FOCALE (voir grandissement_section dans optics.py) et ne
+# elle change la FOCALE (voir section_magnification dans optics.py) et ne
 # deplace pas le point principal. Deux causes plus vraisemblables, qu'on ne
 # sait pas departager ici : la camera est legerement inclinee dans son support
 # imprime, ou une part vient de l'gap entre deux seances de calibration.
