@@ -226,14 +226,15 @@ SIGMA_ACCELERATION = 0.4
 DERIVE_GYRO_DEG_S = 10.0
 
 # Bruit du gyroscope de la D435i, en deg/s (marche aleatoire angulaire).
-# Ordre de grandeur d'un MEMS de cette classe ; a mesurer en laissant l'engin
-# IMMOBILE une minute et en prenant l'ecart-type des vitesses angulaires.
-BRUIT_GYRO_DEG_S = 0.15
+# MESURE, plus suppose : centrale immobile, 5 s a 400 Hz (3963 echantillons),
+# ecart-type des vitesses angulaires — imu_realsense.py du 02/09. La valeur
+# precedente, 0.15, etait un ordre de grandeur pour un MEMS de cette classe.
+BRUIT_GYRO_DEG_S = 0.106
 
 # Bruit de l'accelerometre, en m/s2. Sert quand il alimente la prediction de
-# position a la place de l'hypothese "vitesse constante". Meme methode de
-# mesure : engin immobile, ecart-type des mesures.
-BRUIT_ACCEL = 0.05
+# position a la place de l'hypothese "vitesse constante". MESURE dans la meme
+# session que ci-dessus (precedemment 0.05, suppose).
+BRUIT_ACCEL = 0.015
 
 # L'echelle du tag, d'ou se deduit la distance, est lue sur QUATRE coins et
 # non un seul : moyenner divise le bruit par racine de 4. Sans ce facteur, le
