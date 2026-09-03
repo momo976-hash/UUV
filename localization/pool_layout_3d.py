@@ -190,7 +190,7 @@ state = {
     "camera": True,
 }
 camera = {
-    "position": np.array([1.00, 1.55, 0.50]),   # collee a la wall B, mi-depth
+    "position": np.array([1.00, 1.55, 0.50]),   # against wall B, mid-depth
     "azimuth": np.radians(270.0),            # looks at wall A, tags 0 and 1
 }
 
