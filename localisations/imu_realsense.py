@@ -58,7 +58,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from filtre_kalman import (FiltreOrientation, euler_vers_quaternion,  # noqa: E402
                            quaternion_vers_euler, quaternion_depuis_rotation,
-                           produit_quaternions)
+                           quaternion_vers_matrice, produit_quaternions)
 
 try:
     import pyrealsense2 as rs
@@ -442,7 +442,7 @@ def _simulation():
     verite, donc on peut chiffrer l'erreur, ce qu'aucune manip reelle ne
     permet.
     """
-    from filtre_kalman import angle_quaternions, quaternion_vers_matrice
+    from filtre_kalman import angle_quaternions
     generateur = np.random.default_rng(3)
     dt, bruit = 1 / 200, np.radians(0.15)
 
