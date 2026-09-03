@@ -1,34 +1,34 @@
 # demo_trajectory.py — Robust trajectory demo, for showing to people.
 #
-#   1. Un tag n'est enregistre qu'apres N observations concordantes (median).
-#   2. Localisation via le MEILLEUR tag visible (le plus gros = le plus proche).
-#   3. Rejet des sauts aberrants + lissage + pas minimal (anti-tremblement).
+#   1. A tag is only recorded after N agreeing observations (the median).
+#   2. Localisation through the BEST visible tag (the largest = the nearest).
+#   3. Outlier jumps rejected + smoothing + a minimum step (anti-shake).
 #   4. Carte 2D auto-cadree, grille de 1 m, distance parcourue.
-#   5. La trajectoire est COLOREE selon le tag de reference utilise : si la
-#      colour change au milieu d'un saut, c'est la tag_map qui est imprecise.
-#   6. Check de la tag_map : les distances entre tags sont affichees,
+#   5. The trajectory is COLOURED by the reference tag used: if the colour
+#      changes in the middle of a jump, it is the map that is imprecise.
+#   6. Map check: the distances between tags are displayed,
 #      a comparer au tape measure AVANT de presenter.
 #
-# Keys: s=sauver tag_map | c=effacer trace | t=tags | v=check tag_map
+# Keys: s=sauver tag_map | c=effacer trail | t=tags | v=check tag_map
 #           r=reset | q=quitter
 from collections import defaultdict, deque
 
 import cv2
 import numpy as np
 
-# Index de la camera (None = detection automatique).
+# Camera index (None = automatic detection).
 CAMERA_INDEX = None
-# Resolution FIGEE : doit etre identique pour la calibration et les measurements.
+# FIXED resolution: must be identical for the calibration and the measurements.
 RESOLUTION = (640, 480)
 
 TAG_SIZE = 0.22389        # cote du carre noir, measurement au calipers (nominal 223 mm)
 FACTEUR_FOCALE = 0.95       # correction de focal_length (calibration)
 
 ECHANTILLONS_REQUIS = 25    # observations avant d'enregistrer un tag
-SAUT_MAX = 0.40             # metres : au-dela, la measurement est jugee aberrante
+MAX_JUMP = 0.40             # metres: beyond this the measurement is an outlier
 LISSAGE = 9                 # positions moyennees (anti-tremblement)
-PAS_MIN = 0.04              # metres : deplacement minimal pour ajouter un point
-LONGUEUR_TRACE = 800
+MIN_STEP = 0.04             # metres: minimum movement before adding a point
+TRAIL_LENGTH = 800
 CARTE_PX = 560
 
 COULEURS = [(0, 255, 0), (0, 200, 255), (255, 200, 0), (255, 0, 200),
@@ -67,20 +67,20 @@ def sauver_carte(tag_map):
 
 
 def verifier_carte(tag_map):
-    """Affiche les distances entre tags : a comparer au tape measure."""
+    """Shows the distances between tags: to be compared with a tape measure."""
     ids = sorted(tag_map)
-    print("\n--- VERIFICATION DE LA CARTE (compare au tape measure) ---")
+    print("\n--- MAP CHECK (compare with a tape measure) ---")
     for i, a in enumerate(ids):
         for b in ids[i + 1:]:
             d = np.linalg.norm(tag_map[a][:3, 3] - tag_map[b][:3, 3])
             print(f"  distance tag {a} <-> tag {b} : {d:.3f} m")
-    print("Si ces distances sont fausses, appuie sur 'r' et refais la tag_map.\n")
+    print("If these distances are wrong, press 'r' and redo the map.\n")
 
 
-def dessiner_carte(tag_map, cam_xyz, cam_R, trace, montrer_tags, distance):
+def dessiner_carte(tag_map, cam_xyz, cam_R, trail, montrer_tags, distance):
     m = np.full((CARTE_PX, CARTE_PX, 3), 28, dtype=np.uint8)
 
-    pts_monde = [p for p, _ in trace]
+    pts_monde = [p for p, _ in trail]
     if montrer_tags:
         pts_monde += [T[:3, 3] for T in tag_map.values()]
     if cam_xyz is not None:
@@ -124,10 +124,10 @@ def dessiner_carte(tag_map, cam_xyz, cam_R, trace, montrer_tags, distance):
             cv2.putText(m, f"tag {tid}", (px + 9, py + 4),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.42, c, 1)
 
-    # --- trajectoire, coloree par tag de reference ---
-    for i in range(1, len(trace)):
-        p0, _ = trace[i - 1]
-        p1, tid = trace[i]
+    # --- the trajectory, coloured by reference tag ---
+    for i in range(1, len(trail)):
+        p0, _ = trail[i - 1]
+        p1, tid = trail[i]
         cv2.line(m, to_px(p0[0], p0[2]), to_px(p1[0], p1[2]), couleur_tag(tid), 2)
 
     # --- position actuelle ---
@@ -155,13 +155,13 @@ def dessiner_carte(tag_map, cam_xyz, cam_R, trace, montrer_tags, distance):
 
 
 def ouvrir_camera():
-    """Ouvre la camera en forcant TOUJOURS la meme resolution.
+    """Opens the camera, ALWAYS forcing the same resolution.
 
-    Important : le champ de vision d'une RealSense depend du format demande
-    (640x480 en 4:3 est recadre, 1280x720 en 16:9 utilise tout le capteur).
-    Une calibration faite a une resolution n'est donc PAS transposable a une
-    autre par simple mise a l'echelle. On fige la resolution pour que la
-    calibration et les measurements portent sur exactement la meme optics.
+    Important: a RealSense's field of view depends on the format requested
+    (640x480 in 4:3 is cropped, 1280x720 in 16:9 uses the whole sensor). So a
+    calibration made at one resolution is NOT transposable to another by
+    simple scaling. The resolution is pinned so that the calibration and the
+    measurements bear on exactly the same optics.
     """
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
@@ -177,8 +177,9 @@ def ouvrir_camera():
                     print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
                     if (ww, hh) != RESOLUTION:
                         print(f"  WARNING : resolution obtenue {ww}x{hh} au lieu de "
-                              f"{RESOLUTION[0]}x{RESOLUTION[1]}. La calibration ne sera "
-                              f"valable que si elle a ete faite dans ce meme format.")
+                              f"{RESOLUTION[0]}x{RESOLUTION[1]}. The calibration "
+                              f"will only be valid if it was made in that same "
+                              f"format.")
                     return cap, ww, hh
             cap.release()
     return None, 0, 0
@@ -202,7 +203,7 @@ detector = cv2.aruco.ArucoDetector(dictionary, params)
 
 tag_map = {}
 candidats = defaultdict(list)
-trace = deque(maxlen=LONGUEUR_TRACE)     # (position, id du tag de reference)
+trail = deque(maxlen=TRAIL_LENGTH)     # (position, reference tag id)
 lissage = deque(maxlen=LISSAGE)
 derniere_pos = None
 dernier_point = None
@@ -211,9 +212,9 @@ montrer_tags = True
 
 print("=" * 64)
 print("1) Cadre DEUX tags ensemble -> le 2e s'enregistre (progression en %)")
-print("2) Repete pour le 3e tag, puis appuie sur 'v' pour VERIFIER la tag_map")
-print("3) Appuie sur 'c' puis deplace-toi : la trajectoire se dessine")
-print("Keys: s=sauver  c=trace  t=tags  v=check  r=reset  q=quitter")
+print("2) Repeat for the 3rd tag, then press 'v' to CHECK the map")
+print("3) Press 'c' then move around: the trajectory draws itself")
+print("Keys: s=sauver  c=trail  t=tags  v=check  r=reset  q=quitter")
 print("=" * 64)
 
 while True:
@@ -259,26 +260,26 @@ while True:
             print(f"Tag {B} ENREGISTRE. Carte : {sorted(tag_map)}")
             verifier_carte(tag_map)
 
-    # localisation avec le meilleur tag known visible
+    # localisation using the best known visible tag
     known_seen = [i for i in poses if i in tag_map]
     cam_xyz, cam_R, ref = None, None, None
     if known_seen:
         ref = max(known_seen, key=lambda i: surfaces[i])
         T_monde_cam = tag_map[ref] @ inverse(poses[ref])
         measurement = T_monde_cam[:3, 3]
-        if derniere_pos is None or np.linalg.norm(measurement - derniere_pos) < SAUT_MAX:
+        if derniere_pos is None or np.linalg.norm(measurement - derniere_pos) < MAX_JUMP:
             lissage.append(measurement)
             cam_xyz = np.mean(lissage, axis=0)
             cam_R = T_monde_cam[:3, :3]
             derniere_pos = cam_xyz
-            # n'ajoute un point que si on a vraiment bouge (anti-tremblement)
+            # only add a point if we really moved (anti-shake)
             if dernier_point is None:
-                trace.append((cam_xyz, ref))
+                trail.append((cam_xyz, ref))
                 dernier_point = cam_xyz
             else:
                 pas = np.linalg.norm(cam_xyz - dernier_point)
-                if pas > PAS_MIN:
-                    trace.append((cam_xyz, ref))
+                if pas > MIN_STEP:
+                    trail.append((cam_xyz, ref))
                     distance_totale += pas
                     dernier_point = cam_xyz
         else:
@@ -296,17 +297,17 @@ while True:
         y += 22
     if cam_xyz is not None:
         X, Y, Z = cam_xyz
-        cv2.putText(image, f"CAMERA : X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m (ref tag {ref})",
+        cv2.putText(image, f"CAMERA: X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m (ref tag {ref})",
                     (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, couleur_tag(ref), 2)
     elif not known_seen:
         cv2.putText(image, "Aucun tag known visible", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-    cv2.putText(image, "s=sauver c=trace t=tags v=check r=reset q=quitter",
+    cv2.putText(image, "s=sauver c=trail t=tags v=check r=reset q=quitter",
                 (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1)
 
     cv2.imshow("Video (q pour quitter)", image)
     cv2.imshow("Trajectoire - vue de dessus",
-               dessiner_carte(tag_map, cam_xyz, cam_R, trace, montrer_tags,
+               dessiner_carte(tag_map, cam_xyz, cam_R, trail, montrer_tags,
                               distance_totale))
 
     key = cv2.waitKey(1) & 0xFF
@@ -317,13 +318,13 @@ while True:
     if key == ord("v") and tag_map:
         verifier_carte(tag_map)
     if key == ord("c"):
-        trace.clear()
+        trail.clear()
         dernier_point = None
         distance_totale = 0.0
     if key == ord("t"):
         montrer_tags = not montrer_tags
     if key == ord("r"):
-        tag_map.clear(); candidats.clear(); trace.clear(); lissage.clear()
+        tag_map.clear(); candidats.clear(); trail.clear(); lissage.clear()
         derniere_pos = dernier_point = None
         distance_totale = 0.0
         print("Reinitialise.")

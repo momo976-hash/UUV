@@ -1,30 +1,30 @@
 # demo_full_pipeline.py — DEMO: read AprilTags + draw a top-down 2D map.
 #
-# Tout est automatique : aucun ID de tag a saisir, aucune position a mesurer.
-#   - Le 1er tag seen devient l'origin du frame.
-#   - Les tags suivants s'enregistrent tout seuls quand ils sont seen en meme
-#     time qu'un tag deja known (methode de Thein), apres N observations.
-#   - La camera est localisee dans ce frame et tracee sur la tag_map 2D.
+# Everything is automatic: no tag id to type, no position to measure.
+#   - The 1st tag seen becomes the frame's origin.
+#   - The following tags record themselves when they are seen at the same
+#     time as an already-known tag (Thein's method), after N observations.
+#   - The camera is located in that frame and drawn on the 2D map.
 #
-# Keys: c = effacer la trace | s = sauver la tag_map | r = reset | q = quitter
+# KEYS: c = clear the trail | s = save the map | r = reset | q = quit
 from collections import defaultdict, deque
 
 import cv2
 import numpy as np
 
-# Index de la camera (None = detection automatique).
+# Camera index (None = automatic detection).
 CAMERA_INDEX = None
-# Resolution FIGEE : doit etre identique pour la calibration et les measurements.
+# FIXED resolution: must be identical for the calibration and the measurements.
 RESOLUTION = (640, 480)
 
 TAG_SIZE = 0.22389        # cote du carre noir, measurement au calipers (nominal 223 mm)
-FACTEUR_FOCALE = 0.95       # correction de focal_length issue de la validation
+FOCAL_FACTOR = 0.95         # focal-length correction from the validation
 
 ECHANTILLONS_REQUIS = 25    # observations avant d'enregistrer un tag
 SAUT_MAX = 0.40             # metres : au-dela, measurement jugee aberrante
 LISSAGE = 9                 # positions moyennees (anti-tremblement)
-PAS_MIN = 0.04              # deplacement minimal pour ajouter un point
-LONGUEUR_TRACE = 800
+MIN_STEP = 0.04             # minimum movement before adding a point
+TRAIL_LENGTH = 800
 CARTE_PX = 560
 
 
@@ -55,11 +55,11 @@ def sauver_carte(tag_map):
     print("Carte sauvegardee :\n" + "\n".join(rows))
 
 
-def dessiner_carte(tag_map, cam_xyz, cam_R, trace):
-    """Vue de dessus, cadrage automatique. Tags = carres, sans label."""
+def dessiner_carte(tag_map, cam_xyz, cam_R, trail):
+    """Seen from above, automatically framed. Tags = squares, unlabelled."""
     m = np.full((CARTE_PX, CARTE_PX, 3), 28, dtype=np.uint8)
 
-    pts_monde = list(trace) + [T[:3, 3] for T in tag_map.values()]
+    pts_monde = list(trail) + [T[:3, 3] for T in tag_map.values()]
     if cam_xyz is not None:
         pts_monde.append(cam_xyz)
     if not pts_monde:
@@ -96,7 +96,7 @@ def dessiner_carte(tag_map, cam_xyz, cam_R, trace):
         cv2.rectangle(m, (px - 6, py - 6), (px + 6, py + 6), (255, 150, 0), -1)
 
     # trajectoire (degrade : old sombre -> recent clair)
-    pts = [to_px(p[0], p[2]) for p in trace]
+    pts = [to_px(p[0], p[2]) for p in trail]
     for i in range(1, len(pts)):
         v = int(70 + 185 * i / len(pts))
         cv2.line(m, pts[i - 1], pts[i], (0, v, v // 3), 2)
@@ -126,13 +126,13 @@ def dessiner_carte(tag_map, cam_xyz, cam_R, trace):
 
 
 def ouvrir_camera():
-    """Ouvre la camera en forcant TOUJOURS la meme resolution.
+    """Opens the camera, ALWAYS forcing the same resolution.
 
-    Important : le champ de vision d'une RealSense depend du format demande
-    (640x480 en 4:3 est recadre, 1280x720 en 16:9 utilise tout le capteur).
-    Une calibration faite a une resolution n'est donc PAS transposable a une
-    autre par simple mise a l'echelle. On fige la resolution pour que la
-    calibration et les measurements portent sur exactement la meme optics.
+    Important: a RealSense's field of view depends on the format requested
+    (640x480 in 4:3 is cropped, 1280x720 in 16:9 uses the whole sensor). So a
+    calibration made at one resolution is NOT transposable to another by
+    simple scaling. The resolution is pinned so that the calibration and the
+    measurements bear on exactly the same optics.
     """
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
@@ -148,8 +148,9 @@ def ouvrir_camera():
                     print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
                     if (ww, hh) != RESOLUTION:
                         print(f"  WARNING : resolution obtenue {ww}x{hh} au lieu de "
-                              f"{RESOLUTION[0]}x{RESOLUTION[1]}. La calibration ne sera "
-                              f"valable que si elle a ete faite dans ce meme format.")
+                              f"{RESOLUTION[0]}x{RESOLUTION[1]}. The calibration "
+                              f"will only be valid if it was made in that same "
+                              f"format.")
                     return cap, ww, hh
             cap.release()
     return None, 0, 0
@@ -160,7 +161,7 @@ if cam is None:
     print("ERROR: aucune camera ouverte.")
     raise SystemExit
 
-FOCALE = L * FACTEUR_FOCALE
+FOCALE = L * FOCAL_FACTOR
 K = np.array([[FOCALE, 0, L / 2], [0, FOCALE, H / 2], [0, 0, 1]], dtype=np.float64)
 dist = np.zeros(5)
 h = TAG_SIZE / 2
@@ -173,13 +174,13 @@ detector = cv2.aruco.ArucoDetector(dictionary, params)
 
 tag_map = {}
 candidats = defaultdict(list)
-trace = deque(maxlen=LONGUEUR_TRACE)
+trail = deque(maxlen=TRAIL_LENGTH)
 lissage = deque(maxlen=LISSAGE)
 derniere_pos = dernier_point = None
 
 print("=" * 60)
-print("DEMO : montre les tags. Tout s'enregistre automatiquement.")
-print("Keys: c=effacer trace  s=sauver tag_map  r=reset  q=quitter")
+print("DEMO: show the tags. Everything records itself automatically.")
+print("Keys: c=effacer trail  s=sauver tag_map  r=reset  q=quitter")
 print("=" * 60)
 
 while True:
@@ -212,7 +213,7 @@ while True:
         tag_map[ancre] = np.eye(4)
         print(f"ANCRE (origin) = tag {ancre}")
 
-    # enregistrement automatique des tags inconnus (methode de Thein)
+    # automatic recording of unknown tags (Thein's method)
     for B in list(poses):
         if B in tag_map:
             continue
@@ -229,7 +230,7 @@ while True:
             candidats.pop(B)
             print(f"Tag {B} enregistre automatiquement. Carte : {sorted(tag_map)}")
 
-    # localisation avec le meilleur tag known visible
+    # localisation using the best known visible tag
     known_seen = [i for i in poses if i in tag_map]
     cam_xyz, cam_R = None, None
     if known_seen:
@@ -241,8 +242,8 @@ while True:
             cam_xyz = np.mean(lissage, axis=0)
             cam_R = T_monde_cam[:3, :3]
             derniere_pos = cam_xyz
-            if dernier_point is None or np.linalg.norm(cam_xyz - dernier_point) > PAS_MIN:
-                trace.append(cam_xyz)
+            if dernier_point is None or np.linalg.norm(cam_xyz - dernier_point) > MIN_STEP:
+                trail.append(cam_xyz)
                 dernier_point = cam_xyz
         else:
             lissage.clear()
@@ -263,24 +264,24 @@ while True:
         y += 22
     if cam_xyz is not None:
         X, Y, Z = cam_xyz
-        cv2.putText(image, f"CAMERA dans le frame : X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m",
+        cv2.putText(image, f"CAMERA in the frame: X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m",
                     (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-    cv2.putText(image, "c=trace  s=sauver  r=reset  q=quitter", (10, H - 14),
+    cv2.putText(image, "c=trail  s=sauver  r=reset  q=quitter", (10, H - 14),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
     cv2.imshow("Detection AprilTag (q pour quitter)", image)
-    cv2.imshow("Carte 2D - vue de dessus", dessiner_carte(tag_map, cam_xyz, cam_R, trace))
+    cv2.imshow("Carte 2D - vue de dessus", dessiner_carte(tag_map, cam_xyz, cam_R, trail))
 
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):
         break
     if key == ord("c"):
-        trace.clear()
+        trail.clear()
         dernier_point = None
     if key == ord("s") and tag_map:
         sauver_carte(tag_map)
     if key == ord("r"):
-        tag_map.clear(); candidats.clear(); trace.clear(); lissage.clear()
+        tag_map.clear(); candidats.clear(); trail.clear(); lissage.clear()
         derniere_pos = dernier_point = None
         print("Reinitialise.")
 

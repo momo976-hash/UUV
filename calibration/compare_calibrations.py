@@ -1,23 +1,33 @@
 from pathlib import Path
 import sys
-# comparaison_calibration.py — Compare l'approximation et la calibration checkerboard.
+# compare_calibrations.py — Compare the approximation and the board calibration.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python calibration/compare_calibrations.py
 #
-# DEUX grandeurs mesurables, a ne pas confondre :
-#   MODE 1  gap entre DEUX TAGS   (distance entre les centres des tags)
-#           -> facile a mesurer au ruban, independant de la position camera
-#   MODE 2  distance CAMERA -> TAG  (depth ; le point de reference cote
-#           camera est le centre optics, difficile a reperer physiquement)
-#   MODE 3  ANGLE entre DEUX TAGS   (orientation relative, en degres)
-#           -> si les 2 tags sont a plat sur la meme surface, la value exacte
-#              est 0 deg : tout gap measurement est de l'error, sans rapporteur
+# Show the tags, type the tape-measured value on the keyboard, press 's'. The
+# same observation is solved with BOTH sets of parameters at once, so the two
+# are compared on identical data.
 #
-# Les deux sont calculees avec les DEUX jeux de params en meme time :
-#   A) approximation : focal_length = width x 0.95, sans distortion
-#   B) calibration par checkerboard : fx, fy, cx, cy + distortion
+# KEYS: m = change mode | 0-9 and '.' = type the tape measurement
+#       o = set the orientation reference (mode 4)
+#       BACKSPACE = erase | s = record | q = quit
+# ===========================================================================
 #
-# Keys: m = changer de mode | 0-9 et '.' = saisir la measurement au ruban
-#           o = fixer la reference d'orientation (mode 4)
-#           RET. ARRIERE = effacer | s = enregistrer | q = quitter
+# FOUR measurable quantities, not to be confused:
+#   MODE 1  gap between TWO TAGS   (distance between the tags' centres)
+#           -> easy to measure with a tape, independent of the camera position
+#   MODE 2  CAMERA -> TAG distance  (depth; the reference point on the camera
+#           side is the optical centre, hard to locate physically)
+#   MODE 3  ANGLE between TWO TAGS  (relative orientation, in degrees)
+#           -> if the 2 tags are flat on the same surface, the exact value is
+#              0 deg: any measured gap is error, with no protractor needed
+#   MODE 4  rotation of ONE TAG from a reference pose
+#
+# Both are computed with the TWO sets of parameters at the same time:
+#   A) the approximation: focal length = width x 0.95, no distortion
+#   B) the checkerboard calibration: fx, fy, cx, cy + distortion
 import csv
 import os
 from collections import deque
@@ -29,11 +39,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optics  # noqa: E402
 
 CAMERA_INDEX = None          # None = detection automatique
-RESOLUTION = (640, 480)      # doit etre identique a celle de la calibration
+RESOLUTION = (640, 480)      # must be identical to the calibration's
 
 TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au calipers, pas 223 mm nominal
 FACTEUR_APPROX = 0.95        # ancienne approximation
-LISSAGE = 30                 # frames moyennees pour stabiliser l'display
+SMOOTHING = 30                 # frames moyennees pour stabiliser l'display
 
 # Calibration par checkerboard (5x7, 22 vues, RMS 0.169 px)
 MONTAGE = optics.ACTIVE_MOUNTING
@@ -47,11 +57,11 @@ MONTAGE = optics.ACTIVE_MOUNTING
 # Until it has been calibrated, optics.py falls back to the bare camera and
 # says so.
 K_CALIB, DIST_CALIB = optics.load(MONTAGE)
-LARGEUR_CALIB, HAUTEUR_CALIB = 640, 480
+CALIB_WIDTH, CALIB_HEIGHT = 640, 480
 
 
 def ouvrir_camera():
-    """Ouvre la camera en forcant toujours la meme resolution."""
+    """Opens the camera, always forcing the same resolution."""
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
     for index in indices:
@@ -70,7 +80,7 @@ def ouvrir_camera():
 
 
 def positions(pts_par_tag, K, dist):
-    """Pose (position, rotation) de chaque tag dans le frame camera."""
+    """Pose (position, rotation) of each tag in the camera frame."""
     result = {}
     for tag_id, pts in pts_par_tag.items():
         ok, rvec, tvec = cv2.solvePnP(coins_3d, pts, K, dist,
@@ -81,7 +91,7 @@ def positions(pts_par_tag, K, dist):
 
 
 def angle_entre(R1, R2):
-    """Angle (degres) de la rotation qui amene le frame 1 sur le frame 2."""
+    """Angle (degrees) of the rotation taking frame 1 onto frame 2."""
     R_rel = R1.T @ R2
     cos = (np.trace(R_rel) - 1.0) / 2.0
     return float(np.degrees(np.arccos(np.clip(cos, -1.0, 1.0))))
@@ -99,7 +109,7 @@ dist_approx = np.zeros(5)
 
 # B) calibration
 K_calib, dist_calib = K_CALIB.copy(), DIST_CALIB.copy()
-Lc, Hc = LARGEUR_CALIB, HAUTEUR_CALIB
+Lc, Hc = CALIB_WIDTH, CALIB_HEIGHT
 try:
     path = np.load("calibration_camera.npz")
     K_calib = path["K"].astype(np.float64)
@@ -110,7 +120,7 @@ except Exception:
     print("Calibration integree au script used")
 print(f"  calibration : {Lc}x{Hc} (fx = {K_calib[0, 0]:.1f})   capture : {L}x{H}")
 if (L, H) != (Lc, Hc):
-    print("  >>> WARNING : formats differents, la calibration n'est pas valable ici.")
+    print("  >>> WARNING: different formats, the calibration is not valid here.")
 
 h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
@@ -120,35 +130,35 @@ params = cv2.aruco.DetectorParameters()
 params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
 detector = cv2.aruco.ArucoDetector(dictionary, params)
 
-MODES = ["gap entre 2 tags", "distance camera -> tag",
-         "angle entre 2 tags (deg)", "rotation d'UN tag (deg)"]
+MODES = ["gap between 2 tags", "camera -> tag distance",
+         "angle between 2 tags (deg)", "rotation of ONE tag (deg)"]
 mode = 0
-ref_Ra = ref_Rb = None      # orientation de reference du mode 4
-hist_a, hist_b = deque(maxlen=LISSAGE), deque(maxlen=LISSAGE)
-saisie = ""
-CSV = os.path.abspath("comparaison_calibration.csv")
+ref_Ra = ref_Rb = None      # mode 4's reference orientation
+hist_a, hist_b = deque(maxlen=SMOOTHING), deque(maxlen=SMOOTHING)
+typed = ""
+CSV = os.path.abspath("compare_calibrations.csv")
 if not os.path.exists(CSV):
     with open(CSV, "w", newline="") as fic:
         csv.writer(fic).writerow(
-            ["mode", "reference", "approx", "erreur_approx", "erreur_approx_pct",
-             "calib", "erreur_calib", "erreur_calib_pct"])
+            ["mode", "reference", "approx", "approx_error", "approx_error_pct",
+             "calib", "calib_error", "calib_error_pct"])
 
 print("=" * 64)
-print("MODE 1 (default) : gap entre DEUX tags -> montre les 2 tags ensemble")
-print("MODE 2          : distance camera -> tag")
-print("MODE 3          : angle entre 2 tags coplanaires -> reference = 0 deg")
-print("MODE 4          : rotation d'UN tag -> 'o' fixe la reference, puis")
-print("                  fais tourner le tag d'un angle known (ex. 90 deg)")
-print("'m' change de mode | tape la measurement au ruban | 's' enregistre | 'q' quitte")
-print(f"Resultats dans : {CSV}")
+print("MODE 1 (default): gap between TWO tags -> show both tags together")
+print("MODE 2          : camera -> tag distance")
+print("MODE 3          : angle between 2 coplanar tags -> reference = 0 deg")
+print("MODE 4          : rotation of ONE tag -> 'o' sets the reference, then")
+print("                  turn the tag by a known angle (e.g. 90 deg)")
+print("'m' changes mode | type the tape measurement | 's' records | 'q' quits")
+print(f"Results in: {CSV}")
 print("=" * 64)
 
 while True:
     ok, image = cam.read()
     if not ok:
         continue
-    gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    corners, ids, _ = detector.detectMarkers(gris)
+    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    corners, ids, _ = detector.detectMarkers(grey)
 
     pts_par_tag = {}
     if ids is not None:
@@ -159,47 +169,47 @@ while True:
     pos_a = positions(pts_par_tag, K_approx, dist_approx)
     pos_b = positions(pts_par_tag, K_calib, dist_calib)
 
-    mesure_a = mesure_b = None
+    measured_a = measured_b = None
     detail = ""
-    communs = sorted(set(pos_a) & set(pos_b))
+    common = sorted(set(pos_a) & set(pos_b))
     if mode == 0:                                   # gap entre deux tags
-        if len(communs) >= 2:
-            t1, t2 = communs[0], communs[1]
-            mesure_a = float(np.linalg.norm(pos_a[t1][0] - pos_a[t2][0]))
-            mesure_b = float(np.linalg.norm(pos_b[t1][0] - pos_b[t2][0]))
+        if len(common) >= 2:
+            t1, t2 = common[0], common[1]
+            measured_a = float(np.linalg.norm(pos_a[t1][0] - pos_a[t2][0]))
+            measured_b = float(np.linalg.norm(pos_b[t1][0] - pos_b[t2][0]))
             detail = f"tags {t1} et {t2}"
         else:
-            detail = "montre DEUX tags en meme time"
+            detail = "show TWO tags at the same time"
     elif mode == 1:                                 # distance camera -> tag
-        if communs:
-            t1 = communs[0]
-            mesure_a = float(np.linalg.norm(pos_a[t1][0]))
-            mesure_b = float(np.linalg.norm(pos_b[t1][0]))
+        if common:
+            t1 = common[0]
+            measured_a = float(np.linalg.norm(pos_a[t1][0]))
+            measured_b = float(np.linalg.norm(pos_b[t1][0]))
             detail = f"tag {t1}"
         else:
-            detail = "aucun tag detecte"
+            detail = "no tag detected"
     elif mode == 2:                                 # angle entre deux tags
-        if len(communs) >= 2:
-            t1, t2 = communs[0], communs[1]
-            mesure_a = angle_entre(pos_a[t1][1], pos_a[t2][1])
-            mesure_b = angle_entre(pos_b[t1][1], pos_b[t2][1])
-            detail = f"tags {t1} et {t2} (coplanaires -> attendu 0 deg)"
+        if len(common) >= 2:
+            t1, t2 = common[0], common[1]
+            measured_a = angle_entre(pos_a[t1][1], pos_a[t2][1])
+            measured_b = angle_entre(pos_b[t1][1], pos_b[t2][1])
+            detail = f"tags {t1} and {t2} (coplanar -> expected 0 deg)"
         else:
-            detail = "montre DEUX tags en meme time"
-    else:                          # rotation d'UN SEUL tag depuis une reference
-        if not communs:
-            detail = "aucun tag detecte"
+            detail = "show TWO tags at the same time"
+    else:                       # rotation of ONE tag from a reference
+        if not common:
+            detail = "no tag detected"
         elif ref_Ra is None:
-            detail = "place le tag, puis 'o' pour fixer la reference"
+            detail = "place the tag, then 'o' to set the reference"
         else:
-            t1 = communs[0]
-            mesure_a = angle_entre(ref_Ra, pos_a[t1][1])
-            mesure_b = angle_entre(ref_Rb, pos_b[t1][1])
-            detail = f"tag {t1} : rotation depuis la reference"
+            t1 = common[0]
+            measured_a = angle_entre(ref_Ra, pos_a[t1][1])
+            measured_b = angle_entre(ref_Rb, pos_b[t1][1])
+            detail = f"tag {t1}: rotation from the reference"
 
-    if mesure_a is not None:
-        hist_a.append(mesure_a)
-        hist_b.append(mesure_b)
+    if measured_a is not None:
+        hist_a.append(measured_a)
+        hist_b.append(measured_b)
     else:
         hist_a.clear()
         hist_b.clear()
@@ -215,9 +225,9 @@ while True:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
         cv2.putText(image, f"B) calibration   : {d_b:.3f} {unite}", (10, 82),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        if saisie:
+        if typed:
             try:
-                ref = float(saisie)
+                ref = float(typed)
                 ea, eb = d_a - ref, d_b - ref
                 if mode >= 2:
                     cv2.putText(image, f"gap A : {ea:+.2f} deg", (10, 112),
@@ -238,12 +248,12 @@ while True:
             except ValueError:
                 pass
 
-    cv2.putText(image, f"reference ({'deg' if mode >= 2 else 'm'}) : {saisie or '...'}", (10, H - 38),
+    cv2.putText(image, f"reference ({'deg' if mode >= 2 else 'm'}) : {typed or '...'}", (10, H - 38),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
     cv2.putText(image, "m=mode  o=ref.orientation  chiffres=saisir  s=enregistrer  q=quitter",
                 (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1)
 
-    cv2.imshow("Comparaison des calibrations (q pour quitter)", image)
+    cv2.imshow("Calibration comparison (q to quit)", image)
 
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):
@@ -253,28 +263,28 @@ while True:
         hist_a.clear(); hist_b.clear()
         print(f"Mode : {MODES[mode]}")
     if key == ord("o"):
-        if communs:
-            t1 = communs[0]
+        if common:
+            t1 = common[0]
             ref_Ra = pos_a[t1][1].copy()
             ref_Rb = pos_b[t1][1].copy()
             hist_a.clear(); hist_b.clear()
-            print(f"Reference d'orientation fixee sur le tag {t1}. "
-                  f"Fais maintenant tourner le tag d'un angle known.")
+            print(f"Orientation reference set on tag {t1}. "
+                  f"Now turn the tag by a known angle.")
         else:
-            print("Aucun tag visible : impossible de fixer la reference.")
+            print("No tag visible: cannot set the reference.")
     if ord("0") <= key <= ord("9") or key == ord("."):
-        saisie += chr(key)
-    if key == 8 and saisie:
-        saisie = saisie[:-1]
-    if key == ord("s") and saisie and d_a is not None:
+        typed += chr(key)
+    if key == 8 and typed:
+        typed = typed[:-1]
+    if key == ord("s") and typed and d_a is not None:
         try:
-            ref = float(saisie)
+            ref = float(typed)
         except ValueError:
-            print("Mesure saisie invalide.")
+            print("Invalid measurement typed.")
             continue
         ea, eb = d_a - ref, d_b - ref
-        # Le pourcentage n'a pas de sens si la reference est nulle
-        # (cas du mode angle, ou l'angle attendu entre tags coplanaires est 0).
+        # The percentage is meaningless when the reference is zero (the angle
+        # mode, where the expected angle between coplanar tags is 0).
         pct_a = f"{ea / ref * 100:+.2f}" if ref else ""
         pct_b = f"{eb / ref * 100:+.2f}" if ref else ""
         with open(CSV, "a", newline="") as fic:
