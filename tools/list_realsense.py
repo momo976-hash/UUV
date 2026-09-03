@@ -36,45 +36,45 @@ except ImportError:
 
 
 def main():
-    contexte = rs.context()
-    appareils = list(contexte.query_devices())
+    context = rs.context()
+    devices = list(context.query_devices())
 
     print("=" * 68)
-    print("APPAREILS REALSENSE BRANCHES")
+    print("REALSENSE DEVICES PLUGGED IN")
     print("=" * 68)
-    if not appareils:
-        print("\nAUCUN appareil trouve.")
+    if not devices:
+        print("\nNO device found.")
         print("  - is the camera plugged in?")
         print("  - does another program already hold it? (close it)")
         print("  - try another USB port, preferably USB 3")
         return 1
 
     with_imu = []
-    for numero, appareil in enumerate(appareils):
-        name = appareil.get_info(rs.camera_info.name)
-        serie = appareil.get_info(rs.camera_info.serial_number)
-        print(f"\n[{numero}] {name}")
-        print(f"     numero de serie : {serie}")
+    for number, device in enumerate(devices):
+        name = device.get_info(rs.camera_info.name)
+        serial = device.get_info(rs.camera_info.serial_number)
+        print(f"\n[{number}] {name}")
+        print(f"     serial number   : {serial}")
         try:
-            print(f"     micrologiciel   : "
-                  f"{appareil.get_info(rs.camera_info.firmware_version)}")
+            print(f"     firmware        : "
+                  f"{device.get_info(rs.camera_info.firmware_version)}")
         except Exception:
             pass
 
-        flux = {}
-        for capteur in appareil.sensors:
-            nom_capteur = capteur.get_info(rs.camera_info.name)
-            types = sorted({p.stream_name() for p in capteur.get_stream_profiles()})
-            flux[nom_capteur] = types
-            print(f"     capteur : {nom_capteur}")
-            print(f"        flux : {', '.join(types)}")
+        streams = {}
+        for sensor in device.sensors:
+            sensor_name = sensor.get_info(rs.camera_info.name)
+            types = sorted({p.stream_name() for p in sensor.get_stream_profiles()})
+            streams[sensor_name] = types
+            print(f"     sensor  : {sensor_name}")
+            print(f"        streams : {', '.join(types)}")
 
-        tous = {t.lower() for types in flux.values() for t in types}
-        gyro = any("gyro" in t for t in tous)
-        accel = any("accel" in t for t in tous)
+        every_type = {t.lower() for types in streams.values() for t in types}
+        gyro = any("gyro" in t for t in every_type)
+        accel = any("accel" in t for t in every_type)
         if gyro and accel:
-            print("     -> CENTRALE INERTIELLE PRESENTE (accel + gyro)")
-            with_imu.append((numero, name, serie))
+            print("     -> INERTIAL IMU PRESENT (accel + gyro)")
+            with_imu.append((number, name, serial))
         else:
             missing = [n for n, present in (("gyro", gyro), ("accel", accel))
                       if not present]
@@ -94,14 +94,14 @@ def main():
         return 1
 
     print(f"{len(with_imu)} device(s) with an inertial IMU:")
-    for numero, name, serie in with_imu:
-        print(f"  [{numero}] {name}   serie {serie}")
-    if len(appareils) > 1:
+    for number, name, serial in with_imu:
+        print(f"  [{number}] {name}   serial {serial}")
+    if len(devices) > 1:
         print("\nWARNING: several devices are plugged in. The SDK takes the")
         print("first it finds, and nothing says which. For any measurement that")
         print("matters — gyro bias, noise — UNPLUG the others: the bias belongs")
         print("to one individual unit, like a calibration.")
-    print("\nTu peux lancer :  python imu_realsense.py")
+    print("\nYou can now run:  python kalman/imu_realsense.py")
     return 0
 
 

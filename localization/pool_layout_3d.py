@@ -400,9 +400,9 @@ def main():
         print(f"Image written: {IMAGE}")
         return
 
-    for cle in list(plt.rcParams):
-        if cle.startswith("keymap."):
-            plt.rcParams[cle] = []
+    for key in list(plt.rcParams):
+        if key.startswith("keymap."):
+            plt.rcParams[key] = []
 
     fig = plt.figure("Tag layout plan — UUV pool", figsize=(12, 7.5))
     ax = fig.add_subplot(111, projection="3d")

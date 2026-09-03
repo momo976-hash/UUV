@@ -82,7 +82,7 @@ def compare(name, computed):
     return ok
 
 
-def example_du_document():
+def document_example():
     """The radar example, worked through with the project's core."""
     print("=" * 74)
     print("THE DOCUMENT'S EXAMPLE — 1D radar tracking an aircraft")
@@ -153,7 +153,7 @@ def example_du_document():
     compare("P(2,1)", filter.P)
 
 
-def modele_de_lvehicle():
+def vehicle_model():
     """The same model, carried from 1 to 3 dimensions for the vehicle."""
     print("\n" + "=" * 74)
     print("THE SAME MODEL, APPLIED TO THE VEHICLE")
@@ -169,23 +169,23 @@ def modele_de_lvehicle():
            [0,  1]]              [ 0,    I3 ]]
 
       Q = sa^2 [[dt^4/4, dt^3/2],      Q = sa^2 . G G'
-                [dt^3/2, dt^2  ]]      avec G = [dt^2/2 . I3 ; dt . I3]
+                [dt^3/2, dt^2  ]]      with G = [dt^2/2 . I3 ; dt . I3]
 
   These two ways of writing Q are the same. Numerical check:""")
 
     dt, sigma_a = 5.0, 0.2
     _, G = PositionKalmanFilter.model(dt)
     Q3 = sigma_a ** 2 * (G @ G.T)
-    attendus = (("position  dt^4/4", Q3[0, 0], sigma_a ** 2 * dt ** 4 / 4),
-                ("croise    dt^3/2", Q3[0, 3], sigma_a ** 2 * dt ** 3 / 2),
-                ("velocity   dt^2  ", Q3[3, 3], sigma_a ** 2 * dt ** 2))
-    tout_bon = True
-    for name, got, expected in attendus:
+    expected_values = (("position  dt^4/4", Q3[0, 0], sigma_a ** 2 * dt ** 4 / 4),
+                       ("cross     dt^3/2", Q3[0, 3], sigma_a ** 2 * dt ** 3 / 2),
+                       ("velocity   dt^2  ", Q3[3, 3], sigma_a ** 2 * dt ** 2))
+    all_ok = True
+    for name, got, expected in expected_values:
         ok = abs(got - expected) < 1e-12
-        tout_bon &= ok
-        print(f"    [{'OK ' if ok else 'NON'}] block {name} : "
-              f"G G' donne {got:8.4f}, formule du document {expected:8.4f}")
-    _results.append(("Q en 3D = Q du document", tout_bon, 0.0))
+        all_ok &= ok
+        print(f"    [{'OK ' if ok else 'NO '}] block {name}: "
+              f"G G' gives {got:8.4f}, the document's formula {expected:8.4f}")
+    _results.append(("Q in 3D = the document's Q", all_ok, 0.0))
 
     print("""
   ONE SINGLE DIFFERENCE, AND IT IS IN H. The document's radar measures range
@@ -224,8 +224,8 @@ def modele_de_lvehicle():
 
 
 def main():
-    example_du_document()
-    modele_de_lvehicle()
+    document_example()
+    vehicle_model()
 
     print("=" * 74)
     echecs = [name for name, ok, _ in _results if not ok]

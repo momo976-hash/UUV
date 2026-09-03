@@ -30,7 +30,7 @@ TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au calipers, pas 223 mm nominal
 
 # --- The camera's real calibration (5x7 board, 22 views, RMS 0.169 px) ---
 # If calibration_camera.npz sits next to the script, it is used.
-MONTAGE = optics.ACTIVE_MOUNTING
+MOUNTING = optics.ACTIVE_MOUNTING
 # The optics come from optics.py: camera, tube, viewport, medium. The mounting
 # is written in no code file: optics.py reads it from
 # calibration/local_mounting.txt, which belongs to THIS machine, and asks for
@@ -40,7 +40,7 @@ MONTAGE = optics.ACTIVE_MOUNTING
 #     UUV_MOUNTING=bare_air python <this script>
 # Until it has been calibrated, optics.py falls back to the bare camera and
 # says so.
-K_CALIB, DIST_CALIB = optics.load(MONTAGE)
+K_CALIB, DIST_CALIB = optics.load(MOUNTING)
 CALIB_WIDTH = 640            # resolution used at calibration time
 
 

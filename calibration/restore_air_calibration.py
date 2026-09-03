@@ -9,23 +9,20 @@
 # calibration filed under the wrong name is not lost.
 # ===========================================================================
 #
-# WHY THIS SCRIPT EXISTS EXISTE
+# WHY THIS SCRIPT EXISTS
 # Running `calibrate.py` WITHOUT the --mounting option writes under the
 # default name, `tube_air`, and so overwrites the in-air calibration. The
-# folder
-# montages/ etant dans .gitignore, git n'en garde aucune copie.
+# mountings/ folder is in .gitignore, so git keeps no copy of it — the only
+# record of the 12/08 numbers is this script.
 #
 # The values below are those of the 12/08/2026 calibration: 31 views, RMS
-# 0.4445 px. They are also recorded in the 5_Nos_chiffres tab of
-# docs/calibration_function.xlsx and in demo_distance.py's header — which is
+# 0.4445 px. They are also recorded in demo_distance.py's header — which is
 # where this script takes them from.
 #
 # This in-air reference is not a comfort: it is what makes it possible to
 # say whether an underwater calibration is credible. Without it, there is no
-# longer any way to
-# comparer fx a sa value in air, ni mesurer l'anamorphic ratio apparue.
-#
-#   python calibration/restaurer_tube_air.py
+# longer any way to compare fx with its in-air value, nor to measure the
+# anamorphic ratio that appeared.
 import sys
 from pathlib import Path
 
@@ -52,12 +49,12 @@ if path.exists():
     if np.allclose(K_old, K, atol=1e-3):
         print("That is already the 12/08 calibration. Nothing to do.")
         raise SystemExit
-    backup = path.with_name("tube_air_remplace.npz")
-    numero = 2
+    backup = path.with_name("tube_air_replaced.npz")
+    number = 2
     while backup.exists():
-        backup = path.with_name(f"tube_air_remplace_{numero}.npz")
-        numero += 1
-    np.savez(backup, **{cle: old[cle] for cle in old.files})
+        backup = path.with_name(f"tube_air_replaced_{number}.npz")
+        number += 1
+    np.savez(backup, **{key: old[key] for key in old.files})
     print(f"Moved aside to: {backup.name}")
     print("  (if that was your underwater calibration, it is there, not lost)")
 

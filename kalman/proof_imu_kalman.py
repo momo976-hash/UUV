@@ -47,23 +47,23 @@ import subprocess
 import sys
 from pathlib import Path
 
-ICI = Path(__file__).resolve().parent
-RACINE = ICI.parent
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
 
 
-def _lancer(script, *arguments):
+def _run(script, *arguments):
     """Re-run one of the repository's scripts, return (success, output)."""
     result = subprocess.run(
-        [sys.executable, str(ICI / script), *arguments],
-        capture_output=True, text=True, cwd=str(RACINE),
-        env={**__import__("os").environ, "UUV_MONTAGE_MUET": "1"})
+        [sys.executable, str(HERE / script), *arguments],
+        capture_output=True, text=True, cwd=str(ROOT),
+        env={**__import__("os").environ, "UUV_MOUNTING_QUIET": "1"})
     return result.returncode == 0, result.stdout + result.stderr
 
 
-def _extraire(output, *motifs):
+def _extract(output, *patterns):
     """The rows of `output` containing any of the patterns."""
     return [row.rstrip() for row in output.splitlines()
-            if any(motif in row for motif in motifs)]
+            if any(pattern in row for pattern in patterns)]
 
 
 def request_1_imu():
@@ -85,10 +85,10 @@ def request_1_imu():
     print()
     print("  CHECK re-run right now (SIMULATED IMU, so the truth is known —")
     print("  the only way to put a NUMBER on the error):")
-    ok, output = _lancer("imu_realsense.py", "--simulation")
-    for row in _extraire(output, "max error", "read: roll",
-                           "error d'orientation", "tenus par l'accelerometre",
-                           "drift librement"):
+    ok, output = _run("imu_realsense.py", "--simulation")
+    for row in _extract(output, "max error", "read: roll",
+                        "orientation error", "held by the accelerometer",
+                        "drifts freely"):
         print(f"      {row.strip()}")
     print()
     print("  WHAT THIS ESTABLISHES, AND THE RESERVATION TO STATE")
@@ -126,16 +126,16 @@ def request_2_kalman():
     print("  CHECK 1 — this really is THE reference document's filter")
     print('  (Alex Becker, "Kalman Filter Explained Through Examples",')
     print("  kalmanfilter.net, constant-velocity kinematic model):")
-    ok1, output = _lancer("kalman_reference_check.py")
-    for row in _extraire(output, "PUBLISHED VALUES"):
+    ok1, output = _run("kalman_reference_check.py")
+    for row in _extract(output, "PUBLISHED VALUES"):
         print(f"      {row.strip()}")
     print("      -> the 9 published values are reproduced to the fourth decimal,")
     print("         by the class that actually runs on the vehicle — not by a")
     print("         throwaway copy written for the test.")
     print()
     print("  CHECK 2 — the filter's self-tests:")
-    ok2, output = _lancer("kalman_filter.py")
-    for row in _extraire(output, "raw RMS", "outliers injected",
+    ok2, output = _run("kalman_filter.py")
+    for row in _extract(output, "raw RMS", "outliers injected",
                            "tag dropout", "agreement with Becker",
                            "ALL TESTS"):
         print(f"      {row.strip()}")

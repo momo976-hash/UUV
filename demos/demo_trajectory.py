@@ -18,14 +18,11 @@
 #   1. A tag is only recorded after N agreeing observations (the median).
 #   2. Localisation through the BEST visible tag (the largest = the nearest).
 #   3. Outlier jumps rejected + smoothing + a minimum step (anti-shake).
-#   4. Carte 2D auto-cadree, grille de 1 m, distance parcourue.
+#   4. Auto-framed 2D map, 1 m grid, distance travelled.
 #   5. The trajectory is COLOURED by the reference tag used: if the colour
 #      changes in the middle of a jump, it is the map that is imprecise.
 #   6. Map check: the distances between tags are displayed,
 #      to be compared with a tape measure BEFORE presenting.
-#
-# KEYS: s=save map | c=clear trail | t=tags | v=check map
-#       r=reset | q=quit
 from collections import defaultdict, deque
 
 import cv2
@@ -36,22 +33,22 @@ CAMERA_INDEX = None
 # FIXED resolution: must be identical for the calibration and the measurements.
 RESOLUTION = (640, 480)
 
-TAG_SIZE = 0.22389        # cote du carre noir, measurement au calipers (nominal 223 mm)
-FACTEUR_FOCALE = 0.95       # correction de focal_length (calibration)
+TAG_SIZE = 0.22389          # side of the black square, caliper-measured (nominal 223 mm)
+FOCAL_FACTOR = 0.95         # focal-length correction (calibration)
 
 REQUIRED_SAMPLES = 25       # observations before a tag is recorded
 MAX_JUMP = 0.40             # metres: beyond this the measurement is an outlier
-LISSAGE = 9                 # positions moyennees (anti-tremblement)
+SMOOTHING = 9               # positions averaged (anti-shake)
 MIN_STEP = 0.04             # metres: minimum movement before adding a point
 TRAIL_LENGTH = 800
-CARTE_PX = 560
+MAP_PX = 560
 
-COULEURS = [(0, 255, 0), (0, 200, 255), (255, 200, 0), (255, 0, 200),
-            (0, 255, 255), (200, 120, 255)]
+COLOURS = [(0, 255, 0), (0, 200, 255), (255, 200, 0), (255, 0, 200),
+           (0, 255, 255), (200, 120, 255)]
 
 
-def couleur_tag(tid):
-    return COULEURS[tid % len(COULEURS)]
+def tag_colour(tid):
+    return COLOURS[tid % len(COLOURS)]
 
 
 def transformation(R, t):
@@ -69,72 +66,72 @@ def inverse(T):
     return Ti
 
 
-def sauver_carte(tag_map):
-    rows = ["CARTE_DES_TAGS = {"]
+def save_map(tag_map):
+    rows = ["TAG_MAP = {"]
     for tid, T in sorted(tag_map.items()):
         x, y, z = T[:3, 3]
         _, _, yaw = cv2.RQDecomp3x3(T[:3, :3])[0]
         rows.append(f"    {tid}: ({x:.3f}, {y:.3f}, {z:.3f}, {yaw:.1f}),")
     rows.append("}")
-    with open("carte_enregistree.py", "w") as f:
+    with open("saved_map.py", "w") as f:
         f.write("\n".join(rows) + "\n")
     print("Map saved to saved_map.py:\n" + "\n".join(rows))
 
 
-def verifier_carte(tag_map):
+def check_map(tag_map):
     """Shows the distances between tags: to be compared with a tape measure."""
     ids = sorted(tag_map)
     print("\n--- MAP CHECK (compare with a tape measure) ---")
     for i, a in enumerate(ids):
         for b in ids[i + 1:]:
             d = np.linalg.norm(tag_map[a][:3, 3] - tag_map[b][:3, 3])
-            print(f"  distance tag {a} <-> tag {b} : {d:.3f} m")
+            print(f"  distance tag {a} <-> tag {b}: {d:.3f} m")
     print("If these distances are wrong, press 'r' and redo the map.\n")
 
 
-def dessiner_carte(tag_map, cam_xyz, cam_R, trail, montrer_tags, distance):
-    m = np.full((CARTE_PX, CARTE_PX, 3), 28, dtype=np.uint8)
+def draw_map(tag_map, cam_xyz, cam_R, trail, show_tags, distance):
+    m = np.full((MAP_PX, MAP_PX, 3), 28, dtype=np.uint8)
 
-    pts_monde = [p for p, _ in trail]
-    if montrer_tags:
-        pts_monde += [T[:3, 3] for T in tag_map.values()]
+    world_pts = [p for p, _ in trail]
+    if show_tags:
+        world_pts += [T[:3, 3] for T in tag_map.values()]
     if cam_xyz is not None:
-        pts_monde.append(cam_xyz)
-    if not pts_monde:
+        world_pts.append(cam_xyz)
+    if not world_pts:
         return m
 
-    xs = [p[0] for p in pts_monde]
-    zs = [p[2] for p in pts_monde]
+    xs = [p[0] for p in world_pts]
+    zs = [p[2] for p in world_pts]
     cx, cz = (min(xs) + max(xs)) / 2, (min(zs) + max(zs)) / 2
-    etendue = max(max(xs) - min(xs), max(zs) - min(zs), 0.6)
-    echelle = (CARTE_PX * 0.78) / etendue
+    span = max(max(xs) - min(xs), max(zs) - min(zs), 0.6)
+    scale = (MAP_PX * 0.78) / span
 
     def to_px(X, Z):
-        return (int(CARTE_PX / 2 + (X - cx) * echelle),
-                int(CARTE_PX / 2 - (Z - cz) * echelle))
+        return (int(MAP_PX / 2 + (X - cx) * scale),
+                int(MAP_PX / 2 - (Z - cz) * scale))
 
     # --- 1 m grid ---
-    if echelle > 12:
+    if scale > 12:
         k = 0
         while True:
-            dx = k * echelle
-            if dx > CARTE_PX:
+            dx = k * scale
+            if dx > MAP_PX:
                 break
-            for sx in ({int(CARTE_PX / 2 - cx * echelle + dx),
-                        int(CARTE_PX / 2 - cx * echelle - dx)}):
-                if 0 <= sx < CARTE_PX:
-                    cv2.line(m, (sx, 0), (sx, CARTE_PX), (45, 45, 45), 1)
-            for sy in ({int(CARTE_PX / 2 + cz * echelle + dx),
-                        int(CARTE_PX / 2 + cz * echelle - dx)}):
-                if 0 <= sy < CARTE_PX:
-                    cv2.line(m, (0, sy), (CARTE_PX, sy), (45, 45, 45), 1)
+            for sx in ({int(MAP_PX / 2 - cx * scale + dx),
+                        int(MAP_PX / 2 - cx * scale - dx)}):
+                if 0 <= sx < MAP_PX:
+                    cv2.line(m, (sx, 0), (sx, MAP_PX), (45, 45, 45), 1)
+            for sy in ({int(MAP_PX / 2 + cz * scale + dx),
+                        int(MAP_PX / 2 + cz * scale - dx)}):
+                if 0 <= sy < MAP_PX:
+                    cv2.line(m, (0, sy), (MAP_PX, sy), (45, 45, 45), 1)
             k += 1
 
     # --- tags ---
-    if montrer_tags:
+    if show_tags:
         for tid, T in tag_map.items():
             px, py = to_px(T[0, 3], T[2, 3])
-            c = couleur_tag(tid)
+            c = tag_colour(tid)
             cv2.rectangle(m, (px - 6, py - 6), (px + 6, py + 6), c, -1)
             cv2.putText(m, f"tag {tid}", (px + 9, py + 4),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.42, c, 1)
@@ -143,9 +140,9 @@ def dessiner_carte(tag_map, cam_xyz, cam_R, trail, montrer_tags, distance):
     for i in range(1, len(trail)):
         p0, _ = trail[i - 1]
         p1, tid = trail[i]
-        cv2.line(m, to_px(p0[0], p0[2]), to_px(p1[0], p1[2]), couleur_tag(tid), 2)
+        cv2.line(m, to_px(p0[0], p0[2]), to_px(p1[0], p1[2]), tag_colour(tid), 2)
 
-    # --- position actuelle ---
+    # --- current position ---
     if cam_xyz is not None:
         px, py = to_px(cam_xyz[0], cam_xyz[2])
         cv2.circle(m, (px, py), 8, (255, 255, 255), -1)
@@ -157,19 +154,19 @@ def dessiner_carte(tag_map, cam_xyz, cam_R, trail, montrer_tags, distance):
                             (int(px + ex / n * 32), int(py - ez / n * 32)),
                             (255, 255, 255), 2, tipLength=0.35)
 
-    # --- barre d'echelle + distance parcourue ---
-    lg = int(echelle)
-    if 20 < lg < CARTE_PX - 60:
-        y = CARTE_PX - 24
+    # --- scale bar + distance travelled ---
+    lg = int(scale)
+    if 20 < lg < MAP_PX - 60:
+        y = MAP_PX - 24
         cv2.line(m, (20, y), (20 + lg, y), (220, 220, 220), 2)
         cv2.putText(m, "1 m", (20, y - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
                     (220, 220, 220), 1)
-    cv2.putText(m, f"parcouru : {distance:.2f} m", (CARTE_PX - 175, 24),
+    cv2.putText(m, f"travelled: {distance:.2f} m", (MAP_PX - 175, 24),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (220, 220, 220), 1)
     return m
 
 
-def ouvrir_camera():
+def open_camera():
     """Opens the camera, ALWAYS forcing the same resolution.
 
     Important: a RealSense's field of view depends on the format requested
@@ -182,16 +179,17 @@ def ouvrir_camera():
     indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
     for index in indices:
         for backend, name in backends:
-            cap = cv2.VideoCapture(index, backend) if backend else cv2.VideoCapture(index)
+            cap = (cv2.VideoCapture(index, backend) if backend
+                   else cv2.VideoCapture(index))
             if cap.isOpened():
                 cap.set(cv2.CAP_PROP_FRAME_WIDTH, RESOLUTION[0])
                 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, RESOLUTION[1])
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
+                    print(f"Camera used: index={index}, backend={name}, {ww}x{hh}")
                     if (ww, hh) != RESOLUTION:
-                        print(f"  WARNING : resolution obtenue {ww}x{hh} au lieu de "
+                        print(f"  WARNING: got {ww}x{hh} instead of "
                               f"{RESOLUTION[0]}x{RESOLUTION[1]}. The calibration "
                               f"will only be valid if it was made in that same "
                               f"format.")
@@ -200,16 +198,18 @@ def ouvrir_camera():
     return None, 0, 0
 
 
-cam, L, H = ouvrir_camera()
+cam, L, H = open_camera()
 if cam is None:
     print("ERROR: no camera opened.")
     raise SystemExit
 
-FOCALE = L * FACTEUR_FOCALE
-K = np.array([[FOCALE, 0, L / 2], [0, FOCALE, H / 2], [0, 0, 1]], dtype=np.float64)
+FOCAL_LENGTH = L * FOCAL_FACTOR
+K = np.array([[FOCAL_LENGTH, 0, L / 2], [0, FOCAL_LENGTH, H / 2], [0, 0, 1]],
+            dtype=np.float64)
 dist = np.zeros(5)
 h = TAG_SIZE / 2
-coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
+corners_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]],
+                      dtype=np.float64)
 
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
 params = cv2.aruco.DetectorParameters()
@@ -217,13 +217,13 @@ params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
 detector = cv2.aruco.ArucoDetector(dictionary, params)
 
 tag_map = {}
-candidats = defaultdict(list)
+candidates = defaultdict(list)
 trail = deque(maxlen=TRAIL_LENGTH)     # (position, reference tag id)
-lissage = deque(maxlen=LISSAGE)
-derniere_pos = None
-dernier_point = None
-distance_totale = 0.0
-montrer_tags = True
+smoothing = deque(maxlen=SMOOTHING)
+last_pos = None
+last_point = None
+total_distance = 0.0
+show_tags = True
 
 print("=" * 64)
 print("1) Frame TWO tags together -> the 2nd records itself (progress in %)")
@@ -236,84 +236,84 @@ while True:
     ok, image = cam.read()
     if not ok:
         continue
-    gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    corners, ids, _ = detector.detectMarkers(gris)
+    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    corners, ids, _ = detector.detectMarkers(grey)
 
-    poses, surfaces = {}, {}
+    poses, areas = {}, {}
     if ids is not None:
         cv2.aruco.drawDetectedMarkers(image, corners, ids)
         for c, tag_id in zip(corners, ids.flatten()):
             pts = c.reshape(4, 2).astype(np.float64)
-            ok2, rvec, tvec = cv2.solvePnP(coins_3d, pts, K, dist,
+            ok2, rvec, tvec = cv2.solvePnP(corners_3d, pts, K, dist,
                                            flags=cv2.SOLVEPNP_IPPE_SQUARE)
             if ok2:
                 cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAG_SIZE / 2, 2)
                 poses[int(tag_id)] = transformation(cv2.Rodrigues(rvec)[0], tvec)
-                surfaces[int(tag_id)] = cv2.contourArea(pts.astype(np.float32))
+                areas[int(tag_id)] = cv2.contourArea(pts.astype(np.float32))
 
-    # ancre = first tag seen
+    # anchor = the first tag seen
     if not tag_map and poses:
-        ancre = max(poses, key=lambda i: surfaces[i])
-        tag_map[ancre] = np.eye(4)
-        print(f"ANCRE (origin) = tag {ancre}")
+        anchor = max(poses, key=lambda i: areas[i])
+        tag_map[anchor] = np.eye(4)
+        print(f"ANCHOR (origin) = tag {anchor}")
 
-    # enregistrement progressif des tags inconnus
+    # progressive recording of unknown tags
     for B in poses:
         if B in tag_map:
             continue
         known = [A for A in poses if A in tag_map]
         if not known:
             continue
-        A = max(known, key=lambda i: surfaces[i])
-        candidats[B].append(tag_map[A] @ inverse(poses[A]) @ poses[B])
-        if len(candidats[B]) >= REQUIRED_SAMPLES:
-            obs = np.array(candidats[B])
+        A = max(known, key=lambda i: areas[i])
+        candidates[B].append(tag_map[A] @ inverse(poses[A]) @ poses[B])
+        if len(candidates[B]) >= REQUIRED_SAMPLES:
+            obs = np.array(candidates[B])
             T = np.median(obs, axis=0)
             T[:3, :3] = obs[len(obs) // 2][:3, :3]
             tag_map[B] = T
-            candidats.pop(B)
-            print(f"Tag {B} ENREGISTRE. Carte : {sorted(tag_map)}")
-            verifier_carte(tag_map)
+            candidates.pop(B)
+            print(f"Tag {B} RECORDED. Map: {sorted(tag_map)}")
+            check_map(tag_map)
 
     # localisation using the best known visible tag
     known_seen = [i for i in poses if i in tag_map]
     cam_xyz, cam_R, ref = None, None, None
     if known_seen:
-        ref = max(known_seen, key=lambda i: surfaces[i])
-        T_monde_cam = tag_map[ref] @ inverse(poses[ref])
-        measurement = T_monde_cam[:3, 3]
-        if derniere_pos is None or np.linalg.norm(measurement - derniere_pos) < MAX_JUMP:
-            lissage.append(measurement)
-            cam_xyz = np.mean(lissage, axis=0)
-            cam_R = T_monde_cam[:3, :3]
-            derniere_pos = cam_xyz
+        ref = max(known_seen, key=lambda i: areas[i])
+        T_world_cam = tag_map[ref] @ inverse(poses[ref])
+        measurement = T_world_cam[:3, 3]
+        if last_pos is None or np.linalg.norm(measurement - last_pos) < MAX_JUMP:
+            smoothing.append(measurement)
+            cam_xyz = np.mean(smoothing, axis=0)
+            cam_R = T_world_cam[:3, :3]
+            last_pos = cam_xyz
             # only add a point if we really moved (anti-shake)
-            if dernier_point is None:
+            if last_point is None:
                 trail.append((cam_xyz, ref))
-                dernier_point = cam_xyz
+                last_point = cam_xyz
             else:
-                pas = np.linalg.norm(cam_xyz - dernier_point)
-                if pas > MIN_STEP:
+                step = np.linalg.norm(cam_xyz - last_point)
+                if step > MIN_STEP:
                     trail.append((cam_xyz, ref))
-                    distance_totale += pas
-                    dernier_point = cam_xyz
+                    total_distance += step
+                    last_point = cam_xyz
         else:
-            lissage.clear()
-            derniere_pos = measurement
+            smoothing.clear()
+            last_pos = measurement
 
     # --- display video ---
-    cv2.putText(image, f"Carte : {sorted(tag_map)}", (10, 28),
+    cv2.putText(image, f"Map: {sorted(tag_map)}", (10, 28),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
     y = 52
-    for B, obs in candidats.items():
+    for B, obs in candidates.items():
         pct = int(100 * len(obs) / REQUIRED_SAMPLES)
-        cv2.putText(image, f"tag {B} : enregistrement {pct}%", (10, y),
+        cv2.putText(image, f"tag {B}: recording {pct}%", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 170, 255), 2)
         y += 22
     if cam_xyz is not None:
         X, Y, Z = cam_xyz
         cv2.putText(image, f"CAMERA: X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m (ref tag {ref})",
-                    (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, couleur_tag(ref), 2)
+                    (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, tag_colour(ref), 2)
     elif not known_seen:
         cv2.putText(image, "No known tag visible", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
@@ -321,28 +321,28 @@ while True:
                 (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1)
 
     cv2.imshow("Video (q to quit)", image)
-    cv2.imshow("Trajectoire - vue de dessus",
-               dessiner_carte(tag_map, cam_xyz, cam_R, trail, montrer_tags,
-                              distance_totale))
+    cv2.imshow("Trajectory - seen from above",
+               draw_map(tag_map, cam_xyz, cam_R, trail, show_tags,
+                       total_distance))
 
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):
         break
     if key == ord("s") and tag_map:
-        sauver_carte(tag_map)
+        save_map(tag_map)
     if key == ord("v") and tag_map:
-        verifier_carte(tag_map)
+        check_map(tag_map)
     if key == ord("c"):
         trail.clear()
-        dernier_point = None
-        distance_totale = 0.0
+        last_point = None
+        total_distance = 0.0
     if key == ord("t"):
-        montrer_tags = not montrer_tags
+        show_tags = not show_tags
     if key == ord("r"):
-        tag_map.clear(); candidats.clear(); trail.clear(); lissage.clear()
-        derniere_pos = dernier_point = None
-        distance_totale = 0.0
-        print("Reinitialise.")
+        tag_map.clear(); candidates.clear(); trail.clear(); smoothing.clear()
+        last_pos = last_point = None
+        total_distance = 0.0
+        print("Reset.")
 
 cam.release()
 cv2.destroyAllWindows()

@@ -269,8 +269,8 @@ ACCEL_NOISE = 0.015
 
 # The tag's scale, from which distance is deduced, is read on FOUR corners
 # rather than one: averaging divides the noise by the square root of 4.
-# Without this factor the model over-estimated the depth error by 2.3x
-# reelles ; avec lui l'gap tombe a 0.85x, soit 15 %.
+# Without this factor the model over-estimated the depth error by 2.3x on the
+# real measurements; with it the gap falls to 0.85x, i.e. 15 %.
 CORNERS_PER_TAG = 4.0
 
 
@@ -392,13 +392,13 @@ def quaternion_to_matrix(q):
 
 def slerp(q0, q1, t):
     """Interpolation on the quaternion sphere: the correct 'weighted mean'
-    correcte entre deux orientations. t=0 rend q0, t=1 rend q1."""
+    between two orientations. t=0 gives q0, t=1 gives q1."""
     q0 = q0 / np.linalg.norm(q0)
     q1 = q1 / np.linalg.norm(q1)
     product = float(q0 @ q1)
     if product < 0.0:          # q and -q are the same rotation: re-glue them
         q1, product = -q1, -product
-    if product > 0.9995:       # quasi confondus : interpolation lineaire
+    if product > 0.9995:       # almost identical: linear interpolation
         q = q0 + t * (q1 - q0)
         return q / np.linalg.norm(q)
     theta = np.arccos(np.clip(product, -1.0, 1.0))
@@ -407,7 +407,7 @@ def slerp(q0, q1, t):
 
 
 def quaternion_angle(q0, q1):
-    """Angle en degres entre deux orientations."""
+    """Angle in degrees between two orientations."""
     product = abs(float(q0 @ q1) / (np.linalg.norm(q0) * np.linalg.norm(q1)))
     return float(np.degrees(2.0 * np.arccos(np.clip(product, -1.0, 1.0))))
 
@@ -434,9 +434,9 @@ def quaternion_from_rotation(vector):
 
 
 # ===========================================================================
-# Passer d'une representation d'orientation a l'autre
+# Moving from one orientation representation to another
 #
-# POURQUOI CES CONVERSIONS SONT NECESSAIRES
+# WHY THESE CONVERSIONS ARE NECESSARY
 # No library returns orientation in the same format. The D435i's IMU gives
 # angular rates; some IMU stacks give a quaternion, others Euler angles;
 # AprilTag detectors return either an rvec (Rodrigues vector) or a
@@ -643,7 +643,7 @@ class LinearKalman:
 # Position filter: the core above, with the vehicle's F, Q and H
 # ===========================================================================
 class PositionKalmanFilter:
-    """Modele CINEMATIQUE a velocity constante, measurement de position seule.
+    """A constant-velocity KINEMATIC model, measuring position alone.
 
     This is the reference document's model, carried from 1 to 3 dimensions:
 
@@ -869,7 +869,7 @@ class OrientationFilter:
 
         omega: angular rate measured by the GYROSCOPE, in rad/s, in the
         camera frame. If given, the orientation is genuinely propagated
-        propagee au lieu d'etre supposee constante.
+        instead of being assumed constant.
 
         WHAT THE GYRO CHANGES. Without it, the vehicle is assumed still in
         rotation and the uncertainty is inflated by `drift` per second, i.e.
@@ -1347,18 +1347,18 @@ def _auto_test():
     assert values[-1] > 3 * values[0], "depth must be clearly worse"
 
     # -- two tags on different walls ----------------------------------------
-    seul = tag_position_covariance([1.0, 0.8, 0.5], [1.0, 0.0, 0.35], 10.0)
-    autre = tag_position_covariance([1.0, 0.8, 0.5], [0.0, 0.835, 0.65], 10.0)
-    _, fusion = fuse_positions([([1.0, 0.8, 0.5], seul), ([1.0, 0.8, 0.5], autre)])
-    worst_single = np.sqrt(np.linalg.eigvalsh(seul)).max()
-    pire_fusion = np.sqrt(np.linalg.eigvalsh(fusion)).max()
+    single = tag_position_covariance([1.0, 0.8, 0.5], [1.0, 0.0, 0.35], 10.0)
+    other = tag_position_covariance([1.0, 0.8, 0.5], [0.0, 0.835, 0.65], 10.0)
+    _, fusion = fuse_positions([([1.0, 0.8, 0.5], single), ([1.0, 0.8, 0.5], other)])
+    worst_single = np.sqrt(np.linalg.eigvalsh(single)).max()
+    worst_fusion = np.sqrt(np.linalg.eigvalsh(fusion)).max()
     # Two independent measurements of equal quality already gain a factor
     # sqrt(2) by plain averaging. Beating that threshold proves it is the
     # GEOMETRY doing the work: where one tag is blind (its depth), the other
     # is precise (its lateral).
-    gain = worst_single / pire_fusion
+    gain = worst_single / worst_fusion
     print(f"worst direction: 1 tag {worst_single*1000:.2f} mm -> "
-          f"2 tags on perpendicular walls {pire_fusion*1000:.2f} mm "
+          f"2 tags on perpendicular walls {worst_fusion*1000:.2f} mm "
           f"(gain {gain:.2f}x, plain averaging alone: 1.41x)")
     assert gain > np.sqrt(2), "perpendicular walls must beat plain averaging"
 
@@ -1434,7 +1434,7 @@ def _auto_test():
           f"{1000*confirmed[11][0]:.0f} mm (error {1000*error:.1f} mm)")
     assert error < 0.004, "the estimated displacement must be right to within 4 mm"
 
-    # -- conversions entre representations d'orientation --------------------
+    # -- conversions between orientation representations ---------------------
     for trial in range(200):
         angles = rng.uniform(-np.pi, np.pi, 3)
         angles[1] = rng.uniform(-1.4, 1.4)      # hors blocage de cardan

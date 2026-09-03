@@ -43,7 +43,7 @@ FACTEUR_APPROX = 0.95        # ancienne approximation (focal_length = width x fa
 SMOOTHING = 20                 # frames moyennees pour stabiliser l'display
 
 # Calibration par checkerboard
-MONTAGE = optics.ACTIVE_MOUNTING
+MOUNTING = optics.ACTIVE_MOUNTING
 # The optics come from optics.py: camera, tube, viewport, medium. The mounting
 # is written in no code file: optics.py reads it from
 # calibration/local_mounting.txt, which belongs to THIS machine, and asks for
@@ -53,7 +53,7 @@ MONTAGE = optics.ACTIVE_MOUNTING
 #     UUV_MOUNTING=bare_air python <this script>
 # Until it has been calibrated, optics.py falls back to the bare camera and
 # says so.
-K_CALIB, DIST_CALIB = optics.load(MONTAGE)
+K_CALIB, DIST_CALIB = optics.load(MOUNTING)
 CALIB_WIDTH, CALIB_HEIGHT = 640, 480
 
 

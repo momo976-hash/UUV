@@ -110,7 +110,7 @@ def simulate(seed=7):
                         derive_gyro_deg_s=GYRO_DRIFT)
 
     instants = np.arange(0.0, DURATION, 1.0 / FRAME_RATE)
-    log = {cle: [] for cle in ("t", "true", "raw", "filtered", "nb_tags",
+    log = {key: [] for key in ("t", "true", "raw", "filtered", "nb_tags",
                                    "err_brute", "err_filtree", "sigma",
                                    "err_angle_brut", "err_angle_filtre", "rejet")}
     previous = None
@@ -174,8 +174,8 @@ def simulate(seed=7):
             log["err_brute"].append(np.nan)
             log["err_angle_brut"].append(np.nan)
 
-    for cle in log:
-        log[cle] = np.array(log[cle])
+    for key in log:
+        log[key] = np.array(log[key])
     log["rejets_total"] = filter.position.rejections
     log["rejets_angle"] = filter.orientation.rejections
     log["recoveries"] = filter.position.recoveries + filter.orientation.recoveries
