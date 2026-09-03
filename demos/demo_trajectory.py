@@ -6,10 +6,10 @@
 #   4. Carte 2D auto-cadree, grille de 1 m, distance parcourue.
 #   5. La trajectoire est COLOREE selon le tag de reference utilise : si la
 #      colour change au milieu d'un saut, c'est la tag_map qui est imprecise.
-#   6. Verification de la tag_map : les distances entre tags sont affichees,
-#      a comparer au metre ruban AVANT de presenter.
+#   6. Check de la tag_map : les distances entre tags sont affichees,
+#      a comparer au tape measure AVANT de presenter.
 #
-# Touches : s=sauver tag_map | c=effacer trace | t=tags | v=check tag_map
+# Keys: s=sauver tag_map | c=effacer trace | t=tags | v=check tag_map
 #           r=reset | q=quitter
 from collections import defaultdict, deque
 
@@ -21,7 +21,7 @@ CAMERA_INDEX = None
 # Resolution FIGEE : doit etre identique pour la calibration et les measurements.
 RESOLUTION = (640, 480)
 
-TAG_SIZE = 0.22389        # cote du carre noir, measurement au pied a coulisse (nominal 223 mm)
+TAG_SIZE = 0.22389        # cote du carre noir, measurement au calipers (nominal 223 mm)
 FACTEUR_FOCALE = 0.95       # correction de focal_length (calibration)
 
 ECHANTILLONS_REQUIS = 25    # observations avant d'enregistrer un tag
@@ -67,9 +67,9 @@ def sauver_carte(tag_map):
 
 
 def verifier_carte(tag_map):
-    """Affiche les distances entre tags : a comparer au metre ruban."""
+    """Affiche les distances entre tags : a comparer au tape measure."""
     ids = sorted(tag_map)
-    print("\n--- VERIFICATION DE LA CARTE (compare au metre ruban) ---")
+    print("\n--- VERIFICATION DE LA CARTE (compare au tape measure) ---")
     for i, a in enumerate(ids):
         for b in ids[i + 1:]:
             d = np.linalg.norm(tag_map[a][:3, 3] - tag_map[b][:3, 3])
@@ -176,7 +176,7 @@ def ouvrir_camera():
                     hh, ww = img.shape[:2]
                     print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
                     if (ww, hh) != RESOLUTION:
-                        print(f"  ATTENTION : resolution obtenue {ww}x{hh} au lieu de "
+                        print(f"  WARNING : resolution obtenue {ww}x{hh} au lieu de "
                               f"{RESOLUTION[0]}x{RESOLUTION[1]}. La calibration ne sera "
                               f"valable que si elle a ete faite dans ce meme format.")
                     return cap, ww, hh
@@ -186,7 +186,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERREUR : aucune camera ouverte.")
+    print("ERROR: aucune camera ouverte.")
     raise SystemExit
 
 FOCALE = L * FACTEUR_FOCALE
@@ -213,7 +213,7 @@ print("=" * 64)
 print("1) Cadre DEUX tags ensemble -> le 2e s'enregistre (progression en %)")
 print("2) Repete pour le 3e tag, puis appuie sur 'v' pour VERIFIER la tag_map")
 print("3) Appuie sur 'c' puis deplace-toi : la trajectoire se dessine")
-print("Touches : s=sauver  c=trace  t=tags  v=check  r=reset  q=quitter")
+print("Keys: s=sauver  c=trace  t=tags  v=check  r=reset  q=quitter")
 print("=" * 64)
 
 while True:

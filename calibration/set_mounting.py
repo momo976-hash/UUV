@@ -16,10 +16,10 @@
 #     python calibration/set_mounting.py --montrer  montre seulement
 #     python calibration/set_mounting.py --effacer  oublie le reglage
 #
-# POURQUOI CE SCRIPT EXISTE
+# WHY THIS SCRIPT EXISTS EXISTE
 # Deux ordinateurs travaillent sur le meme depot : le portable de bureau, ou la
-# camera est nue sur une table, et le PC du bord du bassin, ou elle est dans le
-# tube sous l'water. Le bon mounting n'est donc pas une propriete du code, c'est
+# camera est nue sur une table, et le PC du bord du pool, ou elle est dans le
+# tube underwater. Le bon mounting n'est donc pas une propriete du code, c'est
 # une propriete de la machine — et une machine ne change pas de mounting entre
 # deux git pull.
 #
@@ -63,7 +63,7 @@ def montrer():
 
     reel = optics.source(optics.ACTIVE_MOUNTING)
     if reel != optics.ACTIVE_MOUNTING:
-        print(f"\n  ATTENTION : '{optics.ACTIVE_MOUNTING}' n'est pas calibre sur")
+        print(f"\n  WARNING : '{optics.ACTIVE_MOUNTING}' n'est pas calibre sur")
         print(f"  cette machine. Les scripts serviront les chiffres de "
               f"'{reel}'.")
         print(f"  Pour le calibrer :")
@@ -110,7 +110,7 @@ def choisir():
 def apply(name):
     """Ecrit le reglage et dit ce qui vient de changer."""
     if name not in optics.MOUNTINGS:
-        print(f"ERREUR : '{name}' inconnu. "
+        print(f"ERROR: '{name}' inconnu. "
               f"Possibles : {', '.join(optics.MOUNTINGS)}")
         return 1
 
@@ -120,11 +120,11 @@ def apply(name):
     print("  ce path n'est pas versionne : l'autre PC garde le sien.")
 
     if optics.source(name) != name:
-        print(f"\n  ATTENTION : '{name}' n'est pas encore calibre ici.")
+        print(f"\n  WARNING : '{name}' n'est pas encore calibre ici.")
         print(f"  En attendant, les scripts serviront les chiffres de "
               f"'{optics.source(name)}'.")
         if name.endswith("_eau"):
-            print("  Sous l'water ce n'est PAS acceptable : la paroi refracte, "
+            print("  Sous l'water ce n'est PAS acceptable : la wall refracte, "
                   "les")
             print("  distances seront trop courtes d'environ un quart.")
         print(f"  A faire :  python calibration/calibrate.py --mounting {name}")

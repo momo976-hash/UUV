@@ -1,517 +1,356 @@
-# Protocole — du bassin au filtre de Kalman
+# Protocol — from the pool to the Kalman filter
 
-Ce qu'il reste a faire APRES la calibration `tube_eau`, dans l'ordre.
+What remains to be done AFTER the `tube_water` calibration, in order.
 
-## Document de reference
+---
 
-Le filtre suit **Alex Becker, « Kalman Filter Explained Through Examples »**,
-kalmanfilter.net — modele **cinematique a vitesse constante**, c'est celui
-demande par Thein.
+## Reference document
 
-Ce n'est pas une inspiration lointaine : c'est le meme filtre. Pour le
-verifier, lancer
+The filter follows **Alex Becker, "Kalman Filter Explained Through Examples"**,
+kalmanfilter.net — a **constant-velocity kinematic model**.
+
+This is not a distant inspiration: it is the same filter. To check that, run
 
 ```
 python kalman/kalman_reference_check.py
 ```
 
-Ce script fait passer l'exemple chiffre du document (un radar 1D qui suit un
-avion) dans la classe qui filtre reellement la position de l'engin, et
-compare les 9 valeurs publiees — `Q`, `x(1,0)`, `P(1,0)`, `K(1)`, `x(1,1)`,
-`P(1,1)`, `x(2,1)`, `P(2,1)` — a celles calculees. Elles sont retrouvees a la
-quatrieme decimale. Le meme controle tourne en verrou dans les auto-tests de
-`kalman_filter.py` : toucher aux equations le fait echouer immediatement.
+That script runs the document's worked example (a 1D radar tracking an
+aircraft) through the class that actually filters the vehicle's position, and
+compares the 9 published values — `Q`, `x(1,0)`, `P(1,0)`, `K(1)`, `x(1,1)`,
+`P(1,1)`, `x(2,1)`, `P(2,1)` — with the computed ones. They are recovered to
+the fourth decimal. The same check is locked into `kalman_filter.py`'s
+self-tests: touching the equations makes it fail immediately.
 
-Le filtre est deja ecrit et teste (`kalman/kalman_filter.py`, lancer
-`python kalman/kalman_filter.py` passe 6 auto-tests). Il n'y a donc
-rien a coder. Ce qui manque, ce sont **quatre nombres mesures** que le filtre
-attend, et qui sont pour l'instant supposes ou mesures en air.
+The filter is written and tested (`python kalman/kalman_filter.py` runs 17
+self-tests). There is therefore **nothing to code**. What is missing is
+**four measured numbers** the filter expects, currently either assumed or
+measured in air.
 
-| Nombre | Valeur actuelle | Mesure comment | Etape |
+| Number | Current value | How to measure it | Step |
 |---|---|---|---|
-| focale sous l'eau | **predite** : 792 / 625 px | calibration `tube_eau` | 1 et 2 |
-| `SIGMA_PIXEL` | 0.215 px, **mesure en AIR** | `measure_tag_noise.py` | 4 |
-| `SIGMA_ACCELERATION` | 0.4 m/s2, **suppose** | `world_frame_check.py` | 5 |
-| `DERIVE_GYRO_DEG_S` | 10 deg/s, **suppose** | `world_frame_check.py` | 5 |
+| underwater focal length | **838.45 / 652.10 px**, verified in the field | `tube_water` calibration | 1 and 2 |
+| `SIGMA_PIXEL` | 0.215 px, **measured IN AIR** | `calibration/measure_tag_noise.py` | 4 |
+| `SIGMA_ACCELERATION` | 0.4 m/s2, **assumed** | `localization/world_frame_check.py` | 5 |
+| `GYRO_DRIFT_DEG_S` | 10 deg/s, **assumed** | `localization/world_frame_check.py` | 5 |
 
-## En tout : 3 lignes a changer, dans 1 seul fichier
+Two more are already measured, and they are the ones that govern whenever the
+IMU is connected: `GYRO_NOISE_DEG_S = 0.106` and `ACCEL_NOISE = 0.015`,
+both from `kalman/imu_realsense.py` with the vehicle at rest.
 
-Rien d'autre. Les scripts qui les utilisent vont tous y puiser.
+## In total: a few lines to change, in ONE file
 
-**Le montage (etape 2) ne se change plus a la main du tout.** Il se regle
-une fois par ordinateur, avec une commande :
+Nothing else. Every script that uses them reads them from there:
+**`kalman/kalman_filter.py`**, block "THE NUMBERS TO MEASURE", near line 200.
+
+```python
+SIGMA_PIXEL        = 0.215
+SIGMA_ACCELERATION = 0.4
+GYRO_DRIFT_DEG_S   = 10.0
+```
+
+The scripts that measure these values **print the exact line to copy** at the
+end of a session. You do not have to work out where it goes.
+
+**The mounting (step 2) is no longer changed by editing code at all.** It is
+set once per computer:
 
 ```
 python calibration/set_mounting.py
 ```
 
-**`kalman/kalman_filter.py`** — bloc « LES TROIS NOMBRES A
-MESURER », vers la ligne 190 (etapes 4 et 5)
-
-```python
-SIGMA_PIXEL        = 0.215
-SIGMA_ACCELERATION = 0.4
-DERIVE_GYRO_DEG_S  = 10.0
-```
-
-Les scripts qui mesurent ces valeurs **affichent la ligne exacte a recopier**
-en fin de session. Tu n'as pas a chercher ou ca va.
-
 ---
 
-## Etape 1 — Calibrer sous l'eau
+## Step 1 — Calibrate underwater
 
 ```
-python calibration/calibrate.py --montage tube_eau
+python calibration/calibrate.py --mounting tube_water
 ```
 
-Meme deroule que `tube_air` : le damier de 50 mm, une trentaine de vues,
-le damier bien present dans les COINS de l'image (c'est la que se lisent les
-coefficients de distorsion).
+Same procedure as `tube_air`: the 50 mm checkerboard, about thirty views, the
+board well into the IMAGE CORNERS — that is where the distortion coefficients
+are read from.
 
-Ce que ca ecrit :
-- `calibration/montages/tube_eau.npz` — les 9 parametres
-- `calibration/montages/tube_eau_ros.yaml` — pour le noeud de Josiah
+What it writes:
+- `calibration/mountings/tube_water.npz` — the 9 parameters
+- `calibration/mountings/tube_water_ros.yaml` — for the ROS node
 
-Verification immediate :
+Immediate check:
 
 ```
 python calibration/optics.py
 ```
 
-La section CALIBRATIONS ENREGISTREES doit maintenant lister `tube_eau` avec
-ses fx et fy mesures. Compare-les aux valeurs **predites** par le modele
-optics (fx 792, fy 625, anamorphose 1.27). Un ecart de quelques pourcents
-est normal ; un ecart de 30 % veut dire qu'on a mal compris le montage, et
-il faut comprendre pourquoi avant d'aller plus loin.
+The RECORDED CALIBRATIONS section must now list `tube_water` with its measured
+fx and fy. Compare them with the values **predicted** by the optical model. A
+few percent of difference is normal; 30 % means the mounting has been
+misunderstood, and that must be understood before going any further.
 
 ---
 
-## Etape 2 — Basculer sur `tube_eau`
+## Step 2 — Switch to `tube_water`
 
-**Aucun fichier Python a editer.** Sur l'ordinateur qui va mesurer :
-
-```
-python calibration/set_mounting.py tube_eau
-```
-
-C'est a faire **une fois par machine**, pas une fois par manip. Le reglage
-est ecrit dans `calibration/montage_local.txt`, qui n'est **pas** versionne :
-le PC du bord du bassin reste sur `tube_eau` et le portable de bureau sur
-`nue_air`, sans que l'un vienne deregler l'autre au prochain `git pull`.
-
-Si personne n'a encore repondu sur cette machine, le premier script lance
-pose la question tout seul et retient la reponse. Il n'y a donc rien a se
-transmettre par message.
-
-Pour verifier a tout moment :
+**No Python file to edit.** On the computer that will do the measuring:
 
 ```
-python calibration/set_mounting.py --montrer
+python calibration/set_mounting.py tube_water
 ```
 
-Variante le temps d'une seule commande, pour comparer deux montages sur la
-meme manip sans rien deregler :
+Do this **once per machine**, not once per session. The setting is written to
+`calibration/local_mounting.txt`, which is **not** versioned: the poolside PC
+stays on `tube_water` and the office laptop on `bare_air`, and a git pull
+never changes either.
+
+For a single command, without disturbing anything:
 
 ```
-UUV_MONTAGE=tube_air python localization/world_frame_check.py
+UUV_MOUNTING=bare_air python localization/world_frame_check.py
 ```
-
-Verifier tout de suite que la bascule a pris :
-
-```
-python calibration/optics.py
-```
-
-La ligne `MONTAGE ACTIF` en tete du rapport doit afficher `tube_eau`, et
-`source` doit valoir `tube_eau` (et non `nue_air`, qui voudrait dire que la
-calibration n'a pas ete trouvee).
-
-**Pourquoi ca compte a ce point.** Un script reste sur la focale de l'air
-sans jamais le dire : les distances sont fausses de pres d'un tiers et rien
-ne clignote. C'est le genre d'erreur qu'on ne decouvre qu'apres des semaines
-de mesures. Avant ce reglage il fallait editer dix fichiers et n'en oublier
-aucun.
-
-Deux appels sont concernes sans en avoir l'air, et se reglent tout seuls
-desormais : `kalman_filter.py` ligne 184 et `pool_layout_3d.py` ligne 94
-appellent `optics.focale_eau()`. Sur `tube_air`, cette fonction **predit**
-la focale sous l'eau par le modele optics ; sur `tube_eau`, elle rend la
-valeur **mesuree**. C'est exactement ce qu'on veut, mais seulement si la
-bascule a bien eu lieu.
-
-> Deux endroits gardent `tube_air` en dur, et c'est VOULU :
-> `calibrate.py` et `print_tag.py` comparent deliberement le resultat
-> immerge a la reference en air. Ne pas y toucher.
 
 ---
 
-## Etape 3 — Poser les tags et faire la carte
+## Step 3 — Place the tags and build the map
 
-Les tags doivent etre **fixes** et leurs positions **connues**. Le filtre
-suppose exactement cela ; s'il est trompe la-dessus, aucun reglage ne le
-rattrape (voir la section 7 de l'en-tete de `kalman_filter.py`).
+The tag layout is in `localization/pool_layout_3d.py`. To see it in 3D:
 
-Deux options :
-- positions mesurees au metre et entrees a la main ;
-- ou auto-enregistrement : `localization/world_frame_check.py`, touche
-  `o` sur le tag d'origine, puis se deplacer — les autres tags se relient
-  tout seuls des qu'ils sont vus en meme temps qu'un tag deja connu.
+```
+python localization/pool_layout_3d.py
+```
 
-Regle qui vient du filtre : **des tags sur des murs DIFFERENTS valent bien
-mieux que des tags sur le meme mur.** Un tag est precis lateralement et
-mauvais en profondeur ; deux tags perpendiculaires se couvrent mutuellement.
-C'est chiffre dans l'auto-test : sur la pire direction, 1 tag donne 0.52 mm,
-deux tags perpendiculaires 0.29 mm — gain 1.79x, la ou un simple moyennage
-de deux mesures ne donnerait que 1.41x. Le surplus vient de la GEOMETRIE.
+The map can also build itself, with no tape measure, by showing the camera
+pairs of tags that overlap:
+
+```
+python localization/auto_mapping.py
+```
+
+**Mechanical stability matters more than anything here.** The tags sit on
+ballasted acrylic boxes, not sealed into concrete. If a tag moves by delta,
+the camera position deduced from it moves by delta too, exactly. That is a
+BIAS, and a Kalman filter follows a bias instead of averaging it out. A box
+displaced by 1 cm produces on its own five times the whole rest of the error
+budget.
+
+`TagWatchdog` in the filter detects it — `demo_kalman.py` shows it catching a
+22 mm displacement to within 1 mm — but detecting is not correcting.
 
 ---
 
-## Etape 4 — Remesurer le bruit de detection SOUS L'EAU
+## Step 4 — Re-measure detection noise UNDERWATER
 
 ```
 python calibration/measure_tag_noise.py
 ```
 
-- camera sur un support **stable**
-- touche `c` = capture camera immobile, touche `d` = capture en mouvement
-- touche `t` = tableau des resultats
+Camera still, tag still. The current value (0.215 px) was measured **in air**.
+Murky water and poorer contrast will make it worse, and a filter that believes
+the tags more than it should reports an over-confident uncertainty.
 
-La valeur a retenir est celle en **mouvement** (mode `d`) : c'est le regime
-reel de l'engin. En air on avait 0.215 px. Sous l'eau ce sera **moins bon**
-(turbidite, contraste plus faible, particules).
-
-En quittant (`q`), le script imprime la ligne exacte a recopier :
+The script prints the line to copy:
 
 ```
-A RECOPIER dans kalman/kalman_filter.py,
-bloc « LES TROIS NOMBRES A MESURER » (vers la ligne 190) :
-
     SIGMA_PIXEL = 0.312
-
-Cette ligne existe deja : il n'y a qu'a changer le nombre.
 ```
-
-**Une seule ligne a changer.** C'est tout pour cette etape.
 
 ---
 
-## Etape 5 — Mesurer la dynamique reelle de l'engin
-
-> **CETTE ETAPE N'EST PAS FAITE A CE JOUR.** Elle demande l'engin reel en
-> mouvement dans l'eau, et n'a pas pu etre realisee avant le depart de la
-> personne qui a ecrit ces scripts. Les deux nombres concernes valent encore
-> leur valeur **supposee** (`SIGMA_ACCELERATION = 0.4`,
-> `DERIVE_GYRO_DEG_S = 10.0`).
->
-> **Faut-il s'en inquieter tout de suite ?** Non, tant que la centrale
-> inertielle de la D435i est branchee : dans ce cas le filtre ne lit jamais
-> ces deux reglages. C'est demontre chiffres en main par
-> `python kalman/settings_sensitivity.py` (les faire varier d'un
-> facteur 4572 ne change pas le resultat d'un millimetre). Ce sont alors
-> `BRUIT_GYRO_DEG_S` et `BRUIT_ACCEL` qui gouvernent, et ceux-la **sont
-> mesures**.
->
-> **Quand cela devient necessaire :** le jour ou le filtre tourne SANS la
-> centrale — panne, cable debranche, manip ou elle n'est pas utilisee. Ces
-> deux reglages gouvernent alors tout, et une valeur devinee degrade la
-> localisation sans que rien ne le signale.
->
-> Les scripts affichent d'eux-memes un rappel detaille tant que la mesure
-> n'est pas faite, et ce rappel s'eteint tout seul une fois les deux nombres
-> remplaces. Il n'y a rien a desactiver a la main.
+## Step 5 — Measure the vehicle's real dynamics
 
 ```
 python localization/world_frame_check.py
 ```
 
-Faire un parcours qui **ressemble a une vraie mission** : les vitesses et
-accelerations habituelles, pas une camera posee, pas des mouvements brusques
-artificiels. Une trentaine de secondes suffit (la memoire est de 900 images).
+1. Aim at a tag and press **`o`**. It becomes the world origin.
+2. Move towards the second tag — linking happens by itself when both are
+   visible together for a moment.
+3. **Keep going for about 30 seconds** after the "tag linked" message. That
+   message is a confirmation, not a signal to stop.
+4. Drive it **like a real mission**: usual speeds and accelerations, neither
+   parked nor deliberately shaken.
+5. Press **`q`**.
 
-Puis `q`. Le script imprime les deux lignes exactes a recopier :
+You do NOT need the `m` or `s` keys for this step. They belong to step 6.
+
+The script prints the two exact lines to copy:
 
 ```
-DYNAMIQUE OBSERVEE
-  rotation    mediane   12.4 deg/s   95e centile   31.0 deg/s
-  acceleration mediane   0.18 m/s2   95e centile     0.62 m/s2
+OBSERVED DYNAMICS
+  rotation      median   12.4 deg/s   95th percentile   31.0 deg/s
+  acceleration  median   0.18 m/s2    95th percentile    0.62 m/s2
 ------------------------------------------------------------------
-  A RECOPIER dans kalman/kalman_filter.py,
-  bloc « LES TROIS NOMBRES A MESURER » (vers la ligne 190) :
-
       SIGMA_ACCELERATION = 0.6
-      DERIVE_GYRO_DEG_S  = 31
-
-  Ces deux lignes existent deja : il n'y a qu'a changer les nombres.
-  Tout le depot lit ce bloc, il n'y a rien d'autre a modifier.
+      GYRO_DRIFT_DEG_S  = 31
 ```
 
-**Deux lignes a changer**, dans le meme bloc qu'a l'etape 4.
+These are the 95th percentiles — wide enough to cover what the vehicle really
+does, without latching onto an isolated spike.
 
-Ce sont les 95e centiles — assez larges pour couvrir ce que l'engin fait
-vraiment, sans se caler sur un pic isole.
+**Physical meaning**, to explain it to someone:
+- `SIGMA_ACCELERATION` = how hard the vehicle can accelerate without the
+  filter knowing. Too small → the filter lags in turns. Too large → it stops
+  smoothing anything.
+- `GYRO_DRIFT_DEG_S` = how fast the orientation can change between two frames
+  with no measurement.
 
-**Sens physique**, pour l'expliquer a Thein :
-- `SIGMA_ACCELERATION` = de combien l'engin peut accelerer sans que le filtre
-  le sache. Trop petit -> le filtre retarde sur les virages. Trop grand ->
-  il ne lisse plus rien.
-- `DERIVE_GYRO_DEG_S` = a quelle vitesse l'orientation peut changer entre
-  deux images sans mesure.
+### Is this step blocking?
+
+**Not while the IMU is connected.** Both settings sit on an `is None` branch in
+the filter: as soon as the D435i's IMU feeds it, they are never read.
+Demonstrated with numbers:
+
+```
+python kalman/settings_sensitivity.py
+```
+
+Varying `SIGMA_ACCELERATION` by a factor of 4572 changes the position RMS by
+0.0000 mm with the IMU connected — and from 17.9 to 52.8 mm without it.
+
+So this step is needed for the day the IMU fails, is unplugged, or is simply
+not used for a given run. Until then it is not a prerequisite, and the scripts
+say so themselves rather than blocking.
+
+**A warning worth repeating:** this measurement is only meaningful with the
+REAL vehicle in the water. A camera waved by hand on a desk gives about 3 g in
+median — 500 times what a UUV does. Copying that in would tell the filter the
+vehicle can accelerate at 23 g without its knowledge, and it would stop
+filtering altogether. The assumed 0.4 is closer to the truth for a UUV than
+anything measurable by hand.
 
 ---
 
-## Etape 6 — Valider que le filtre ameliore vraiment
+## Step 6 — Check the filter really improves things
 
-Toujours dans `world_frame_check.py`. La manip :
+Still in `localization/world_frame_check.py`. The procedure:
 
-1. `o` sur le tag de reference
-2. deplacer la camera d'une distance **mesuree au metre a ruban**
-3. taper la valeur reelle au clavier, `s` pour enregistrer
-4. recommencer une **quinzaine** de fois, a des distances variees
+1. Press `o` on the reference tag
+2. Check the display reads `filter : ON` (key `f`)
+3. Move the camera by a distance **measured with a tape**
+4. Type the real value on the keyboard, press `s` to record it
+5. Repeat about **fifteen** times, at varied distances
 
-Le filtre doit rester **allume** (touche `f`, indicateur `filtre : ON`) :
-chaque `s` enregistre le brut ET le filtre du meme instant, sur la meme
-ligne. Pas besoin de refaire la serie filtre coupe — comparer deux series
-obligerait a refaire exactement le meme geste deux fois, et c'est le geste
-qui dominerait l'ecart.
+Each `s` records the raw AND the filtered value for the same instant, on the
+same line. There is no need to redo the series with the filter off: comparing
+two series would require repeating exactly the same gesture twice, and the
+gesture would dominate the difference.
 
-En quittant avec `q`, le script imprime le verdict tout seul.
+Press `q` and the script prints the verdict on its own.
 
-### Les deux questions du verdict
+### The two questions in the verdict
 
-**Question 1 — le filtre reduit-il l'erreur ?**
-
-```
-  erreur RMS   brut      16.1 mm
-               filtre     8.6 mm     -> gain 1.88x
-  [OK] le filtre reduit l'erreur.
-```
-
-Seuil : gain >= 1.2. En dessous de 1.2 le script repond `[PEU CONCLUANT]` —
-sur quinze mesures, quelques pourcents ne se distinguent pas du hasard.
-Un gain < 1.0 pointe presque toujours `sigma_acceleration` (etape 5).
-
-**N'annonce aucun gain chiffre a l'avance.** L'auto-test affiche 33x, mais
-c'est une simulation ou le bruit est exactement celui que le filtre suppose
-et ou la trajectoire est a vitesse constante : les deux hypotheses du filtre
-y sont vraies par construction. Dans le bassin ce sera bien moins. Le seul
-chiffre defendable est celui que TU mesures ici.
-
-**Question 2 — le filtre dit-il la verite sur sa precision ?**
-
-C'est la question la plus importante, et elle ne se voit pas a l'ecran.
+**Question 1 — does the filter reduce the error?**
 
 ```
-  incertitude annoncee par le filtre :    7.0 mm (mediane)
-  erreur reellement constatee        :    6.5 mm (mediane)
-  rapport reel / annonce : 0.9
-  [OK] le filtre dit la verite sur sa precision.
+  RMS error   raw      16.1 mm
+               filter   8.6 mm     -> gain 1.88x
+  [OK] the filter reduces the error.
 ```
 
-| Rapport | Verdict |
+Threshold: gain >= 1.2. Below that the script answers `[INCONCLUSIVE]` — on
+fifteen measurements, a few percent cannot be told apart from chance. A gain
+below 1.0 almost always points at `SIGMA_ACCELERATION` (step 5).
+
+**Announce no expected gain in advance.** The self-tests show 33x, but that is
+a simulation in which the noise is exactly what the filter assumes and the
+trajectory has constant velocity — both of the filter's assumptions are true by
+construction there. In the pool it will be far less. The only defensible number
+is the one YOU measure here.
+
+**Question 2 — does the filter tell the truth about its precision?**
+
+This is the more important question, and it cannot be seen on screen.
+
+```
+  uncertainty reported by the filter:   7.0 mm (median)
+  error actually observed            :   6.5 mm (median)
+  actual / reported ratio: 0.9
+  [OK] the filter tells the truth about its precision.
+```
+
+| Ratio | Verdict |
 |---|---|
-| < 0.5 | prudent — il annonce plus d'erreur qu'il n'en fait, sans danger |
-| 0.5 a 2 | honnete |
-| 2 a 4 | il se croit plus precis qu'il n'est, ne pas se fier au `+/-` |
-| > 4 | **il ment** — verifier `SIGMA_PIXEL`, puis la carte des tags |
+| < 0.5 | cautious — reports more error than it makes, harmless |
+| 0.5 to 2 | honest |
+| 2 to 4 | believes itself more precise than it is; do not trust the `+/-` |
+| > 4 | **it lies** — check `SIGMA_PIXEL`, then the tag map |
 
-Pourquoi ca compte plus que le gain : un filtre qui annonce +/- 2 mm en se
-trompant de 20 est **plus dangereux** qu'un filtre qui ne lisse rien. Tout
-ce qui consomme sa sortie — une commande, une carte, un rapport — le croit
-sur parole.
-
-Reserve honnete a connaitre : l'erreur enregistree porte sur une **distance
-entre deux poses**, quand sigma porte sur **une position**. Ce ne sont pas
-tout a fait les memes grandeurs, et l'erreur du metre a ruban s'y ajoute. Ce
-rapport se lit en ordre de grandeur : il attrape un filtre qui ment d'un
-facteur 3, pas un ecart de 20 %.
-
-**Question 3 — les compteurs**
+### Watching it work while it runs
 
 ```
-  mesures rejetees : 2   reprises apres blocage : 0
+python localization/world_frame_check.py --plots
 ```
 
-Quelques rejets sont **sains** : le filtre attrape les retournements de tag.
-Des centaines veulent dire que le modele de bruit est trop optimiste. Plus
-de 3 reprises signale en general des tags mal places dans la carte.
+Six live figures, on the real measurements: the Bayesian update (prior,
+likelihood, posterior), estimate vs raw measurement with the ±1σ band, the
+uncertainty over time, the Kalman gain, each tag's quality, and the outlier
+test. Requires `matplotlib`; without it the measurement runs anyway.
+
+None of those figures says whether the position is CORRECT — there is no
+ground truth in a real run. They say whether the filter behaves the way a
+Kalman filter must. Only the tape measure of this step answers correctness.
 
 ---
 
-## Etape 6bis — La centrale inertielle (IMU)
-
-La D435i porte une centrale : un gyroscope (vitesses angulaires) et un
-accelerometre. Le filtre sait desormais s'en servir. Rien n'est obligatoire —
-sans IMU il fonctionne comme avant — mais ce qu'elle apporte est mesurable.
-
-### Ce que chaque capteur apporte, et ce qu'il n'apporte pas
-
-| | sans derive | permanent | ce qu'il ne sait pas |
-|---|---|---|---|
-| **Tags** | oui | **non** — intermittents | rien quand aucun tag n'est vu |
-| **Gyro** | non — biais integre | oui | derive sans limite si rien ne le recale |
-| **Accel** | oui pour le bas | oui | **rien du lacet** ; derive trop vite en position |
-
-Leurs defauts sont opposes, et c'est tout l'interet de les fusionner : le
-gyro propage entre deux tags, l'accelerometre tient deux axes d'orientation
-sur trois indefiniment, les tags recalent le lacet et la position — et
-servent au passage a estimer le biais du gyro.
-
-### Ce que ca change, chiffres de l'auto-test
-
-```
-sans gyro : apres 6 s sans tag, erreur de cap  125.0 deg
-avec gyro : apres 6 s sans tag, erreur de cap    4.6 deg
-
-accelerometre seul : roulis -0.01 deg, tangage +0.01 deg  (partis de +12 et -9)
-
-biais du gyro : vrai [0.4 -0.3 0.6] deg/s, estime [0.38 -0.34 0.57] (erreur 0.05)
-
-perte de tags de 1.5 s en pleine acceleration :
-   sans accel 377 mm  ->  avec accel 9 mm
-```
-
-Sans gyro, une seconde sans tag et le cap est perdu. Avec, on traverse
-plusieurs secondes.
-
-### Comment l'utiliser
-
-```python
-filtre.predire(dt, gyro=omega, accel=a)
-```
-
-- `gyro` : vitesse angulaire en **rad/s**, repere IMU
-- `accel` : acceleration en **m/s2**, repere IMU, **pesanteur comprise** —
-  telle que le capteur la rend, sans rien retrancher
-
-Les deux sont facultatifs : `filtre.predire(dt)` reste valable.
-
-### Le piege du repere — a ne pas negliger
-
-Sur la D435i, **la centrale n'est pas alignee avec la camera couleur**. Il
-existe une rotation constante entre les deux, que `pyrealsense2` donne :
-
-```python
-extr = profil.get_stream(rs.stream.gyro).get_extrinsics_to(
-           profil.get_stream(rs.stream.color))
-R = np.array(extr.rotation).reshape(3, 3)
-filtre = FiltrePose(rotation_imu_camera=R)
-```
-
-Sans cette rotation, les axes sont melanges et l'engin derive de travers —
-**sans aucun message d'erreur**. C'est le genre de faute qu'on ne voit qu'au
-bout de plusieurs jours.
-
-### Montrer que l'IMU est lue et exploitee
-
-C'est ce que Thein a demande : *extraire les donnees IMU du SDK Intel, puis
-appliquer les maths pour en tirer position et orientation.*
+## Step 7 — The IMU
 
 ```
 python kalman/imu_realsense.py
 ```
 
-Camera branchee. Le programme ouvre les flux `accel` et `gyro` du SDK, mesure
-le repos pendant 5 s, puis affiche l'orientation en direct. Quatre choses s'y
-montrent, dans l'ordre :
+Camera connected. The script opens the SDK's `accel` and `gyro` streams,
+measures the rest state for 5 s, then shows the orientation live.
 
-1. **La centrale est lue** — les mesures brutes bougent quand tu bouges.
-2. **L'echelle est juste** — au repos l'accelerometre lit 9.81 m/s2. Si ce
-   n'est pas le cas, les unites sont fausses et tout le reste aussi.
-3. **Les maths marchent** — tourne d'un quart de tour, le lacet affiche 90.
-4. **La derive est la ou on l'attend** — roulis et tangage restent stables
-   (l'accelerometre les tient), le lacet derive. C'est la demonstration
-   visible de pourquoi les tags sont necessaires.
+Four things show up, in order:
 
-**Sans camera sous la main :**
+1. **The IMU is read** — the raw values move when you move the camera.
+2. **The measurements are sound** — at rest the accelerometer reads 9.81 m/s2.
+   If not, the units are wrong and so is everything downstream.
+3. **The maths work** — turn a quarter turn, the yaw reads 90 degrees.
+4. **The drift is where it should be** — roll and pitch stay stable (the
+   accelerometer holds them), yaw drifts. That is the visible demonstration of
+   why the tags are necessary.
+
+Without a camera to hand:
 
 ```
 python kalman/imu_realsense.py --simulation
 ```
 
-Les memes maths sur une centrale simulee. La verite etant connue, l'erreur
-est chiffree — ce qu'aucune manip reelle ne permet :
+The same maths on a simulated unit. The truth being known, the error is
+quantified: 0.03 deg on a real quarter turn.
 
-```
-2. UN QUART DE TOUR AUTOUR DE LA VERTICALE
-   lu : roulis +0.00   tangage -0.00   lacet +90.03 deg   (attendu 0, 0, 90)
-   erreur d'orientation : 0.03 deg
+### Two numbers to measure, vehicle AT REST
 
-3. TRENTE SECONDES IMMOBILE, SANS AUCUN TAG
-   roulis +0.53   tangage -0.46 deg   <- tenus par l'accelerometre
-   lacet  +9.04 deg                   <- derive librement
-```
-
-### Deux nombres a mesurer, engin IMMOBILE
-
-Une minute sans bouger, puis l'ecart-type des mesures :
+One minute without moving, then the standard deviation of the measurements.
+Both are already measured and installed:
 
 ```python
-BRUIT_GYRO_DEG_S = 0.15   # ecart-type des vitesses angulaires, deg/s
-BRUIT_ACCEL      = 0.05   # ecart-type des accelerations, m/s2
+GYRO_NOISE_DEG_S = 0.106   # deg/s
+ACCEL_NOISE      = 0.015   # m/s2
 ```
 
-Ils sont dans le meme bloc que les autres, en tete de `kalman_filter.py`. Les
-valeurs actuelles sont des ordres de grandeur pour un MEMS de cette classe,
-pas des mesures.
+### The limit to state honestly
 
-### La limite a annoncer honnetement
+The accelerometer has a slowly varying bias that **nothing here estimates**.
+Double integration turns it into a quadratic error: 0.05 m/s2 becomes 2.5 cm
+after one second, but **1 m after ten**.
 
-L'accelerometre a un biais lentement variable que **rien ici n'estime**. La
-double integration le transforme en erreur quadratique : 0.05 m/s2 font 2.5 cm
-au bout d'une seconde, mais **1 m au bout de dix**.
-
-L'IMU sert donc a traverser une perte de tags de quelques secondes, **pas a
-naviguer a l'estime**. Les tags restent la seule source sans derive.
+The IMU is therefore for crossing a tag dropout of a few seconds, **not for
+dead reckoning**. The tags remain the only drift-free source.
 
 ---
 
-## Etape 7 — Surveiller que les tags ne bougent pas
+## Recap — a single pool session
 
-**Rien a faire** : c'est inclus dans le verdict de l'etape 6. Si un support a
-bouge, le bilan l'ajoute tout seul :
-
-```
-  SUPPORTS QUI ONT BOUGE
-  tag 11 : boite deplacee de 19 mm (+18, -6, +0) mm  [confirme par plusieurs voisins]
-```
-
-Il dit **quel** support a bouge, **de combien** et **dans quelle direction** —
-de quoi corriger la carte sans tout re-enregistrer. Si rien n'apparait sous ce
-titre, c'est qu'aucun tag n'est suspect.
-
-Pourquoi ca compte : l'erreur du systeme apres filtrage est de l'ordre de
-2 mm. Une boite lestee decalee de 1 cm pese a elle seule cinq fois tout le
-reste du budget d'erreur. Un tag qui bouge produit un **biais**, et un filtre
-de Kalman ne sait traiter que du bruit centre : il moyenne le bruit, mais il
-**suit** le biais.
-
-Limite a annoncer honnetement : un tag vu **seul** n'est jamais mis en
-defaut. Rien ne distingue alors « la camera a bouge » de « le tag a bouge ».
-
----
-
-## Recapitulatif — une seule session de bassin
-
-Tout se fait dans l'eau, dans cet ordre. Seules les etapes 4 et 5 demandent
-d'ouvrir un fichier ; les autres, rien du tout.
-
-| # | Sur place | A editer ensuite |
+| Step | What to do | Time |
 |---|---|---|
-| 1 | `calibrate.py --montage tube_eau` — damier, 30 vues | — |
-| 2 | `set_mounting.py tube_eau` — **une fois par machine** | — (aucun fichier) |
-| 3 | Poser les tags, `o` puis se deplacer pour la carte | — |
-| 4 | `measure_tag_noise.py` — captures mode `d` | `kalman_filter.py` : **1 ligne** |
-| 5 | `world_frame_check.py` — parcours type mission, `q` | `kalman_filter.py` : **2 lignes** |
-| 6 | `world_frame_check.py` — 15 mesures au metre, `q` | — (le verdict s'affiche) |
-| 7 | — | — (inclus dans le verdict de 6) |
+| 1 | Calibrate `tube_water` on the checkerboard | 20 min |
+| 2 | `set_mounting.py tube_water` on that machine | 1 min |
+| 3 | Place the tags, build the map | 30 min |
+| 4 | `measure_tag_noise.py` → `SIGMA_PIXEL` | 10 min |
+| 5 | `world_frame_check.py`, drive 30 s → 2 lines | 10 min |
+| 6 | `world_frame_check.py`, 15 tape measurements → verdict | 30 min |
+| 7 | `imu_realsense.py` → already done, re-check if in doubt | 5 min |
 
-**Total : 3 lignes, dans 1 seul fichier.** Et les scripts des etapes 4 et 5
-affichent la ligne exacte a recopier.
-
-L'etape 2 ne peut pas attendre : sans elle, les etapes 3 a 6 sont mesurees
-avec la focale de l'air, et le bilan de l'etape 6 ne veut plus rien dire.
-A la fin de l'etape 1, `calibrate.py` propose d'ailleurs de la faire tout
-seul — repondre « oui » suffit. Et si personne n'a rien regle sur cette
-machine, le premier script lance pose la question et retient la reponse :
-rien a se transmettre entre les deux PC.
+Everything measured lands in **one file**: `kalman/kalman_filter.py`, block
+"THE NUMBERS TO MEASURE". The scripts print the lines to copy. Nothing else in
+the repository needs touching.

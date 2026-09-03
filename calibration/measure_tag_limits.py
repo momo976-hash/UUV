@@ -1,11 +1,11 @@
 # measure_tag_limits.py — How far, and how far off-axis, a tag stays readable.
 #
-# POURQUOI CE SCRIPT
+# WHY THIS SCRIPT EXISTS
 # Le plan de pose des tags s'appuie sur deux limites qui, jusqu'ici, venaient
 # de regles empiriques lues dans la litterature AprilTag :
 #     PIXELS_MIN    = 30 px   size apparente minimale du tag dans l'image
 #     INCIDENCE_MAX = 65 deg  angle au-dela duquel le tag est trop de bias
-# Ces deux numbers decident de l'espacement des tags dans le bassin. Autant
+# Ces deux numbers decident de l'espacement des tags dans le pool. Autant
 # les mesurer sur le vrai materiel plutot que les croire sur parole.
 #
 # LA DIFFICULTE, ET COMMENT ON LA CONTOURNE
@@ -23,17 +23,17 @@
 # Le detector ne connait pas les metres : il ne voit qu'un carre de N pixels.
 # Un tag de 5 cm a 1.5 m product exactement la meme image qu'un tag de 22.3 cm
 # a 6.7 m. On peut donc mesurer la limit dans un couloir de 2 m avec un petit
-# tag imprime, puis la transposer au vrai tag du bassin.
+# tag imprime, puis la transposer au vrai tag du pool.
 #
 #     size apparente en pixels  =  focal_length x taille_tag / distance
 #
-# Avec les 22.3 cm du bassin, 30 px ne sont atteints qu'a 4.5 m : impossible
+# Avec les 22.3 cm du pool, 30 px ne sont atteints qu'a 4.5 m : impossible
 # avec une camera au bout d'un cable. Avec un tag de 5 cm, 30 px tombent a
 # 1.0 m et 20 px a 1.5 m — tout le domaine utile tient sur un bureau.
 # On passe la size du tag d'trial avec --tag ; le report, lui, reconvertit
 # toujours vers REAL_TAG_SIZE.
 #
-# MODE D'EMPLOI
+# HOW TO USE IT
 #   1. Un tag bien eclaire, pose contre un mur.
 #   2. 'd' : balayage en DISTANCE. Petit tag (--tag 0.05). Garde-le bien en
 #      face et recule LENTEMENT jusqu'a le perdre completement, puis reviens.
@@ -44,7 +44,7 @@
 #      (relance le script avec --tag 0.223 entre les deux balayages)
 #   4. 'r' : le report, avec les deux limites measured.
 #
-# Touches : d = balayage distance | i = balayage incidence
+# Keys: d = balayage distance | i = balayage incidence
 #           r = report | e = effacer | q = quitter
 import argparse
 import csv
@@ -60,7 +60,7 @@ import optics  # noqa: E402
 CAMERA_INDEX = None
 
 MONTAGE = optics.ACTIVE_MOUNTING
-# L'optics vient de optics.py : camera, tube, hublot, milieu. Le mounting
+# L'optics vient de optics.py : camera, tube, viewport, milieu. Le mounting
 # n'est ecrit dans aucun path de code : optics.py le lit dans
 # calibration/montage_local.txt, propre a CETTE machine, et le demande une
 # fois s'il n'existe pas encore. Pour le changer :
@@ -72,7 +72,7 @@ MONTAGE = optics.ACTIVE_MOUNTING
 K_CALIB, DIST_CALIB = optics.load(MONTAGE)
 RESOLUTION = optics.RESOLUTION
 
-# measurement au pied a coulisse (optics.py) : les tags du bassin s'ecartent du
+# measurement au calipers (optics.py) : les tags du pool s'ecartent du
 # nominal 223 mm, et c'est vers ce count-la qu'on conclut, pas vers 0.223.
 REAL_TAG_SIZE = optics.LARGE_TAG_SIZE
 TAG_SIZE = REAL_TAG_SIZE   # le tag d'trial devant la camera (option --tag)
@@ -82,28 +82,28 @@ TAUX_LIMITE = 0.95    # en dessous, on considere la detection non fiable
 MARGE_BORD = 20       # px : plus pres du bord, le tag risque de sortir du cadre
 PALIERS_CONFIRMATION = 2   # paliers consecutifs sous le threshold pour conclure
 
-# Taille apparente qu'il faut atteindre pour esperer encadrer la limit. Un
+# Taille apparente qu'one must atteindre pour esperer encadrer la limit. Un
 # 36h11 fait huit cellules de large et il en faut environ deux pixels chacune
 # pour decoder : la limit ne peut pas etre bien au-dessus de la quinzaine de
 # pixels. Tant que le balayage s'arrete au-dessus, il ne prouve rien.
 CIBLE_PIXELS = 15
 
-# Le bassin, pour rapporter la measurement a ce qu'on en fera vraiment. Sa
+# Le pool, pour rapporter la measurement a ce qu'on en fera vraiment. Sa
 # diagonale majore la distance camera-tag. On croit souvent que l'water arrange
-# les choses — a travers un hublot plat elle grossit l'image de 1.33. Dans ce
+# les choses — a travers un viewport plat elle grossit l'image de 1.33. Dans ce
 # mounting-ci la camera est COUCHEE dans le tube : un seul des deux axes voit
-# une lame plane, l'autre traverse un menisque qui retrecit. Et pour decoder
+# une lame plane, l'autre traverse un meniscus qui retrecit. Et pour decoder
 # un tag, c'est l'axis le moins grossi qui commande. `optics.water_focal_length`
-# renvoie donc celui-la, et le pire cas du bassin est plus severe que ne le
+# renvoie donc celui-la, et le pire cas du pool est plus severe que ne le
 # laisserait croire le facteur 1.33.
 BASSIN = (3.80, 1.67, 1.00)
 
 
 def pixels_pire_cas():
-    """Taille apparente du tag au point le plus eloigne possible du bassin.
+    """Taille apparente du tag au point le plus eloigne possible du pool.
 
     C'est la seule value qui compte pour le plan de pose : inutile de
-    connaitre la limit absolue de detection si le bassin ne l'approche
+    connaitre la limit absolue de detection si le pool ne l'approche
     jamais. Il suffit d'avoir verifie la detection jusqu'en dessous.
     """
     diagonale = float(np.linalg.norm(BASSIN))
@@ -135,7 +135,7 @@ def limite_par_paliers(samples, cle, croissant, taux_limite=TAUX_LIMITE,
        true limit, la detection ne revient jamais.
 
     `logarithmique` decoupe les paliers en proportions plutot qu'en gaps.
-    C'est ce qu'il faut pour la size apparente : entre 20 et 210 px, des
+    C'est ce qu'one must pour la size apparente : entre 20 et 210 px, des
     paliers reguliers en font un seul de 20 a 36 px, justement la ou tout se
     joue. En log, chaque palier vaut 21 % du previous, et le bas du domaine
     est resolu aussi finement que le haut.
@@ -234,28 +234,28 @@ def diagnostiquer(diagnostic, limit, output):
     return True
 
 
-def besoin_du_bassin(atteint, recul):
+def besoin_du_pool(atteint, recul):
     """Ce que le balayage doit encore couvrir — et ce qu'il couvre deja.
 
     Deux lectures d'un meme balayage. La limit ABSOLUE de detection demande
     de descendre vers CIBLE_PIXELS, ce qui exige beaucoup de recul. Mais le
     plan de pose n'en a pas besoin : il lui suffit que la detection soit
-    verifiee en dessous de ce que le bassin peut produire de plus petit.
+    verifiee en dessous de ce que le pool peut produire de plus petit.
     """
     pire, diagonale = pixels_pire_cas()
     rows = ["", "  CE QUE LE BASSIN DEMANDE VRAIMENT"]
     rows.append(f"  Sa diagonale fait {diagonale:.2f} m. A cette distance — le pire cas —")
     rows.append(f"  un tag de {100*REAL_TAG_SIZE:.1f} cm paraitra {pire:.0f} px "
-                  f"sous l'water, dans l'axis")
+                  f"underwater, dans l'axis")
     rows.append(f"  le moins grossi par le tube (focal_length {optics.water_focal_length(MONTAGE):.0f} px "
                   f"contre {max(optics.focales_eau(MONTAGE)):.0f} dans l'autre).")
-    rows.append("  C'est le plus petit que le bassin produise.")
+    rows.append("  C'est le plus petit que le pool produise.")
 
     if atteint <= pire:
         rows.append(f"\n  Tu es descendu a {atteint:.0f} px sans perdre le tag, "
                       f"donc en dessous des {pire:.0f} px")
         rows.append("  du pire cas : la size apparente ne sera JAMAIS le facteur")
-        rows.append("  limitant dans ce bassin. C'est la conclusion utile, et elle")
+        rows.append("  limitant dans ce pool. C'est la conclusion utile, et elle")
         rows.append("  est acquise — la limit absolue n'a plus d'interet pratique.")
     else:
         rows.append(f"\n  Ton balayage s'est arrete a {atteint:.0f} px, au-dessus de ces "
@@ -265,7 +265,7 @@ def besoin_du_bassin(atteint, recul):
         rows.append(f"  ce tag de {100*TAG_SIZE:.1f} cm il faudrait reculer jusqu'a "
                       f"{K_CALIB[0, 0] * TAG_SIZE / pire:.1f} m ;")
         besoin = pire * recul / K_CALIB[0, 0]
-        rows.append(f"  en restant a {recul:.1f} m, il faut un tag de "
+        rows.append(f"  en restant a {recul:.1f} m, one must un tag de "
                       f"{100*besoin:.0f} cm  (--tag {besoin:.3f}).")
 
     rows.append(f"\n  Pour la limit ABSOLUE de detection il faudrait descendre vers")
@@ -307,11 +307,11 @@ def report(rows):
                 output.append(f"  (measurement avec un tag d'trial de "
                               f"{100*TAG_SIZE:.1f} cm ; la limit est en pixels,")
                 output.append(f"   elle vaut donc aussi pour les "
-                              f"{100*REAL_TAG_SIZE:.1f} cm du bassin)")
+                              f"{100*REAL_TAG_SIZE:.1f} cm du pool)")
             portee = min(K_CALIB[0, 0], K_CALIB[1, 1]) * REAL_TAG_SIZE / limit
             output.append(f"  Pour un tag de {100*REAL_TAG_SIZE:.1f} cm, cela donne")
-            output.append(f"  une portee de {portee:.2f} m en air, "
-                          f"{optics.portee_eau(portee, MONTAGE):.2f} m sous l'water")
+            output.append(f"  une portee de {portee:.2f} m in air, "
+                          f"{optics.portee_eau(portee, MONTAGE):.2f} m underwater")
             output.append("  (pas de « x 1.33 » ici : la camera est couchee dans le "
                           "tube, et")
             output.append("   c'est l'axis le MOINS grossi qui decide de la detection)")
@@ -321,7 +321,7 @@ def report(rows):
             output.append(f"\n  Aucune limit confirmee : a {atteint:.0f} px, le plus "
                           "petit atteint, le tag")
             output.append("  est encore detecte. La limit est en dessous.")
-            output.extend(besoin_du_bassin(atteint, recul))
+            output.extend(besoin_du_pool(atteint, recul))
 
     # --- incidence maximale ------------------------------------------------
     output.append(f"\nBALAYAGE EN INCIDENCE — {len(incidence)} points"
@@ -338,7 +338,7 @@ def report(rows):
             output.append(f"  {p['centre']:>14.0f} deg {100*p['taux']:>15.0f} %  {barre}")
         taille_mediane = float(np.median([e["pixels"] for e in incidence]))
         if taille_mediane < 60:
-            output.append(f"\n  ATTENTION : le tag ne faisait que {taille_mediane:.0f} px "
+            output.append(f"\n  WARNING : le tag ne faisait que {taille_mediane:.0f} px "
                           "pendant ce balayage.")
             output.append("  A cette size c'est peut-etre la resolution qui a lache,")
             output.append("  pas l'angle. Refais-le avec le grand tag, plus pres.")
@@ -359,11 +359,11 @@ def report(rows):
 
 
 def equivalent_reel(pixels):
-    """A quelle distance le VRAI tag du bassin ferait-il cette size ?
+    """A quelle distance le VRAI tag du pool ferait-il cette size ?
 
     Le detector ne voit que des pixels : un petit tag pres et un grand tag
     loin lui sont indiscernables. C'est ce qui autorise a mesurer la limit
-    dans un couloir de 2 m et a la transposer au bassin.
+    dans un couloir de 2 m et a la transposer au pool.
     """
     return K_CALIB[0, 0] * REAL_TAG_SIZE / max(pixels, 1e-6)
 
@@ -428,7 +428,7 @@ def main():
 
     cam, L, H = ouvrir_camera()
     if cam is None:
-        print("ERREUR : aucune camera ouverte.")
+        print("ERROR: aucune camera ouverte.")
         return
 
     demi = TAG_SIZE / 2

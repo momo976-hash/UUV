@@ -1,24 +1,24 @@
 # cylindrical_wall_model.py — Ray tracing through the tube's curved wall.
 #
 # A QUOI CA SERT
-# Verifier, par le calcul, ce que la paroi du tube fait a la focal_length sous
+# Verifier, par le calcul, ce que la wall du tube fait a la focal_length sous
 # l'water. Ce n'est pas un outil du quotidien : il product la table
 # GROSSISSEMENT_AXIAL de calibration_tube.py, et sert de justification aux
 # chiffres qui y sont recopies.
 #
-#     python modele_paroi_cylindrique.py     affiche la table
+#     python modele_wall_cylindrique.py     affiche la table
 #
 # CE QU'IL ETABLIT
-# Selon l'axis du tube, la paroi cylindrique est localement PLANE : un plan
+# Selon l'axis du tube, la wall cylindrique est localement PLANE : un plan
 # contenant l'axis la coupe en deux droites paralleles. C'est donc une lame a
-# faces paralleles, qui sous l'water multiplie la focal_length par l'index, 1.33. Le
+# faces paralleles, qui underwater multiplie la focal_length par l'index, 1.33. Le
 # trace le confirme a 0.5 % pres face a la formule analytique, et montre que
 # la distance de l'objet n'y change presque rien (1.2 % a 0.30 m, 0.4 % a 1 m).
-# Selon la circonference, le menisque donne x1.038 : d'ou une anamorphose
+# Selon la circonference, le meniscus donne x1.038 : d'ou une anamorphic ratio
 # prevue de 1.277, en accord avec le 1.268 calcule autrement dans optics.py.
 #
 # CE QU'IL N'EXPLIQUE PAS
-# Les focales measured sous l'water tombent 12.7 % (fx) et 6.6 % (fy) sous ces
+# Les focales measured underwater tombent 12.7 % (fx) et 6.6 % (fy) sous ces
 # previsions. Cet gap reste ouvert.
 #
 # PIEGE CORRIGE ICI, A NE PAS REINTRODUIRE
@@ -33,7 +33,7 @@ import numpy as np, cv2
 
 R1, R2 = 0.02475, 0.02900          # rayons interieur / exterieur du tube
 N_AIR, N_AC, N_EAU = 1.0, 1.49, 1.33
-PUPILLE = 0.00315                  # decentrement measurement, vers la paroi visee
+PUPILLE = 0.00315                  # off-axis offset measurement, vers la wall visee
 FX_NUE, FY_NUE = 615.56, 615.09    # camera nue, measured aujourd'hui
 CX, CY = 320.0, 240.0
 
@@ -52,7 +52,7 @@ def _refracter(d, n, eta):
 
     La formule classique assumed la normale orientee FACE au radius incident.
     Sur un cylindre traverse de l'interieur vers l'exterieur, la normale
-    radiale pointe dans le meme sens que le radius : il faut la retourner,
+    radiale pointe dans le meme sens que le radius : one must la retourner,
     sinon cos(i) sort negatif et la deviation est calculee a l'envers.
     """
     cosi = -float(d @ n)
@@ -64,7 +64,7 @@ def _refracter(d, n, eta):
     return eta*d + (eta*cosi - np.sqrt(k))*n
 
 def tracer(dx, dy):
-    """Direction au niveau de la pupil -> radius dans l'water."""
+    """Direction au niveau de la pupil -> radius in the water."""
     d = np.array([dx, dy, 1.0]); d /= np.linalg.norm(d)
     o = np.array([0.0, 0.0, PUPILLE])
     p1 = _inter_cylindre(o, d, R1)
@@ -88,7 +88,7 @@ def _ecart(dx, dy, W):
     return v - float(v @ d)*d          # composante perpendiculaire au radius
 
 def projeter(W):
-    """Point 3D dans l'water -> pixel. Newton 2D sur (dx,dy)."""
+    """Point 3D in the water -> pixel. Newton 2D sur (dx,dy)."""
     # depart : approximation lame plane, direction x reduite de 1/1.33
     dx, dy = W[0]/W[2]*N_EAU, W[1]/W[2]*N_EAU
     for _ in range(60):
@@ -116,7 +116,7 @@ if __name__ == "__main__":
         g = (p[0] - CX) / (FX_NUE * eps)
         print(f"{Z:13.2f} {g:15.4f} {FX_NUE * g:13.1f}")
     print("-" * 44)
-    # Controle : la direction axiale doit redonner la lame a faces paralleles.
+    # Controle : la direction axiale doit redonner la plane-parallel slab.
     # C'est ce test qui a rattrape l'error de signe sur la normale.
     n, d0 = N_EAU, R1 - PUPILLE
     pires = []
@@ -128,5 +128,5 @@ if __name__ == "__main__":
     print(f"  Controle lame plane : gap max {100*max(pires):.2f} % "
           f"(doit rester sous ~1.5 %)")
     print("  Le grossissement axial vaut donc bien ~1.33, quasi independant")
-    print("  de la distance. Les focales measured sous l'water tombent pourtant")
+    print("  de la distance. Les focales measured underwater tombent pourtant")
     print("  12.7 % (fx) et 6.6 % (fy) plus bas : cet gap reste ouvert.")

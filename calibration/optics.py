@@ -76,7 +76,7 @@
 #   - it is on the other hand IMPERATIVE to calibrate in the final
 #     configuration, and for the camera not to move in its bracket
 #     afterwards. One millimetre of slip after calibration is ~1 % of error
-#     on every distance (see `sensibilite_glissement`).
+#     on every distance (see `sensibilite_slip`).
 import os
 import sys
 from pathlib import Path
@@ -108,7 +108,7 @@ CAMERA_DEPTH = 0.025
 # How far the entrance pupil sits behind the front face of the body.
 # Value adjusted by the tube_air calibration of 11/08: the fy_tube / fy_bare
 # ratio gives the real off-axis offset, which is what predicts the underwater
-# focal lengths. See `decentrement_depuis_calibration`.
+# focal lengths. See `off-axis offset_depuis_calibration`.
 PUPIL_BEHIND_FACE = -0.0029
 
 # --- the tube: Blue Robotics BR-100230-151, cast acrylic -------------------
@@ -288,8 +288,8 @@ def likely_mounting():
 
 
 _DESCRIPTIONS = {
-    "bare_air": "bare camera, in air           (bench, desk, table)",
-    "tube_air": "camera in the tube, in air    (dry run)",
+    "bare_air": "bare camera, in_air           (bench, desk, table)",
+    "tube_air": "camera in the tube, in_air    (dry run)",
     "tube_water": "camera in the tube, IN WATER  (pool)",
 }
 
@@ -440,7 +440,7 @@ def focal_length(mounting=None):
 # --- garde-fou : ce que la camera voit contredit-il le mounting declare ? ----
 # Ce test ne DECIDE rien, il alerte. L'water absorbe le rouge (~0.4 /m) et
 # presque pas le bleu (~0.02 /m) : sur un aller-back de trois metres le canal
-# rouge tombe a un tiers pendant que le bleu ne bouge pas. Une image de bassin
+# rouge tombe a un tiers pendant que le bleu ne bouge pas. Une image de pool
 # est donc franchement bleue, une image de bureau ne l'est pas.
 #
 # Pourquoi ce n'est qu'une alerte : la balance des blancs automatique de la
@@ -478,8 +478,8 @@ def check_image_matches_mounting(image, mounting=None):
         _deja_alerte = True
         return (f"l'image est tres bleue (rouge/bleu = {report:.2f}) alors que "
                 f"le mounting declare est '{_actif(mounting)}', qui est un "
-                f"mounting a l'air.\n"
-                f"    Si la camera est dans l'water, les distances seront "
+                f"mounting in air.\n"
+                f"    Si la camera est in the water, les distances seront "
                 f"trop courtes d'environ 25 %.\n"
                 f"    Pour correct : python calibration/set_mounting.py")
     if report > _SEUIL_AIR and sous_leau:
@@ -487,18 +487,18 @@ def check_image_matches_mounting(image, mounting=None):
         return (f"l'image n'a pas la teinte de l'water (rouge/bleu = "
                 f"{report:.2f}) alors que le mounting declare est "
                 f"'{_actif(mounting)}'.\n"
-                f"    Si la camera est a l'air, les distances seront trop "
+                f"    Si la camera est in air, les distances seront trop "
                 f"longues d'environ 33 %.\n"
                 f"    Pour correct : python calibration/set_mounting.py")
     return None
 
 
 def mounting_is_submerged(mounting=None):
-    """Le mounting donne assumed-t-il la camera dans l'water ?"""
+    """Le mounting donne assumed-t-il la camera in the water ?"""
     return _actif(mounting).endswith("_eau")
 
 
-# --- le decalage du point de vue derriere le hublot -------------------------
+# --- le decalage du point de vue derriere le viewport -------------------------
 # MESURE AU BASSIN, le 02/09, mounting tube_eau, calibration fx 791.34 :
 #
 #     0.50 m -> 0.4841 m   -3.18 %   (+/- 0.4 mm)
@@ -521,8 +521,8 @@ def mounting_is_submerged(mounting=None):
 # echelle. Ce n'est pas une preference, c'est un gap de deux ordres de
 # grandeur.
 #
-# CE QUE C'EST PHYSIQUEMENT. Une camera derriere un hublot courbe n'a PAS de
-# centre de projection unique : chaque radius est refracte par la paroi, et les
+# CE QUE C'EST PHYSIQUEMENT. Une camera derriere un viewport courbe n'a PAS de
+# centre de projection unique : chaque radius est refracte par la wall, et les
 # prolongements des rayons emergents ne se coupent pas tous au meme point. Le
 # model stenope, lui, exige un point unique ; la calibration en choisit donc
 # un, au mieux, et il tombe a cote. Tout se passe comme si l'oeil de la camera
@@ -530,12 +530,12 @@ def mounting_is_submerged(mounting=None):
 # distance visee, exactement ce qu'on measurement.
 #
 # 16 mm est du meme ordre que le tube lui-meme (radius interieur 24.75 mm,
-# paroi 4.25 mm), ce qui est le bon ordre de grandeur pour cet effet.
+# wall 4.25 mm), ce qui est le bon ordre de grandeur pour cet effet.
 #
 # Reference : Treibitz, Schechner, Kaplan, Negahdaripour, « Flat Refractive
-# Geometry », IEEE TPAMI 34(1):51-65, 2012 — le hublot rend le systeme
+# Geometry », IEEE TPAMI 34(1):51-65, 2012 — le viewport rend le systeme
 # non-single-viewpoint, et le stenope n'en est qu'une approximation.
-# ATTENTION : ce decalage a ete measurement avec fx = 791.34, et la focal_length installee
+# WARNING : ce decalage a ete measurement avec fx = 791.34, et la focal_length installee
 # vaut maintenant 838.45. Un decalage fixe et une focal_length ne sont pas
 # independants — c'est tout le sujet du bloc ci-dessus — donc rien ne garantit
 # que 16 mm soit encore la bonne value a cette focal_length-la.
@@ -549,9 +549,9 @@ def mounting_is_submerged(mounting=None):
 # A REMESURER : trois distances ou plus avec la focal_length actuelle, dont 0.5 m,
 # puis lire la section FORME DE L'ERREUR que check_distance.py affiche.
 WINDOW_OFFSET = {
-    "tube_eau": 0.0159,      # measurement au bassin a fx 791.34, 4 distances, 7 sigma
+    "tube_eau": 0.0159,      # measurement au pool a fx 791.34, 4 distances, 7 sigma
     "tube_air": 0.0,         # jamais measurement
-    "nue_air": 0.0,          # pas de hublot : rien a correct
+    "nue_air": 0.0,          # pas de viewport : rien a correct
 }
 
 
@@ -611,11 +611,11 @@ def rayon_exterieur(pire_cas=True):
 # --- ou se trouve la pupil dans le tube -----------------------------------
 # Convention : l'axis du tube est a 0, et le regard part vers les x positifs.
 # Une pupil plaquee au fond est donc a un x NEGATIF, derriere l'axis.
-def decentrement_pupille(jeu_arriere=None):
+def pupil_off_axis_offsetle(jeu_arriere=None):
     """Position de la pupil par report a l'axis du tube, en metres.
 
     Negatif = en retrait de l'axis (cas normal : le boitier bute au fond).
-    Positif = en avant de l'axis, vers la paroi regardee.
+    Positif = en avant de l'axis, vers la wall regardee.
     """
     jeu = BACK_CLEARANCE if jeu_arriere is None else jeu_arriere
     return float(-rayon_tube(pire_cas=False) + jeu
@@ -626,14 +626,14 @@ def jeu_arriere_optimal():
     """Le jeu que le support doit menager pour poser la pupil sur l'axis.
 
     C'est le seul chiffre que la mecanique ait a respecter : de combien
-    SURELEVER la camera au-dessus de la paroi du fond.
+    SURELEVER la camera au-dessus de la wall du fond.
     """
     return float(rayon_tube(pire_cas=False) - CAMERA_DEPTH
                  + PUPIL_BEHIND_FACE)
 
 
 def encombrement_libre(jeu_arriere=None):
-    """Marge restante entre la face avant de la camera et la paroi regardee."""
+    """Marge restante entre la face avant de la camera et la wall regardee."""
     jeu = BACK_CLEARANCE if jeu_arriere is None else jeu_arriere
     return float(2 * rayon_tube() - jeu - CAMERA_DEPTH)
 
@@ -642,8 +642,8 @@ def demi_champ_tube(recul=None):
     """Demi-angle que le tube laisse passer en mounting AXIAL, en degres.
 
     Vu de la pupil, l'ouverture lointaine du tube est un disque de radius
-    `rayon_tube` a la distance `recul`. Au-dela, la paroi bouche la vue.
-    En mounting radial, la paroi est transparente sur toute sa length : rien
+    `rayon_tube` a la distance `recul`. Au-dela, la wall bouche la vue.
+    En mounting radial, la wall est transparente sur toute sa length : rien
     ne vignette, et la fonction renvoie un champ non contraignant.
     """
     if ORIENTATION == "radiale":
@@ -670,7 +670,7 @@ def vignettage(recul=None, K=None):
             "recul_maximal": recul_maximal(K)}
 
 
-# --- trace de radius a travers la paroi cylindrique --------------------------
+# --- trace de radius a travers la wall cylindrique --------------------------
 def _refracter(direction, normale, eta):
     """Loi de Descartes sous forme vectorielle. None si reflexion totale."""
     normale = -normale if float(direction @ normale) > 0 else normale
@@ -681,10 +681,10 @@ def _refracter(direction, normale, eta):
     return eta * direction + (eta * cosinus - np.sqrt(1.0 - sinus2)) * normale
 
 
-def sortie_cylindre(angle_deg, decentrement=None, indice_exterieur=WATER_INDEX):
-    """Sous quel angle un radius ressort de la paroi, dans le plan de section.
+def sortie_cylindre(angle_deg, off_axis_offset=None, indice_exterieur=WATER_INDEX):
+    """Sous quel angle un radius ressort de la wall, dans le plan de section.
 
-    Le radius part de la pupil, decalee de `decentrement` par report a l'axis
+    Le radius part de la pupil, decalee de `off_axis_offset` par report a l'axis
     du tube, et traverse les deux surfaces cylindriques. Renvoie l'angle de
     output en degres, ou None en cas de reflexion totale.
 
@@ -692,14 +692,14 @@ def sortie_cylindre(angle_deg, decentrement=None, indice_exterieur=WATER_INDEX):
     aux deux surfaces, et ressort sans avoir devie — quel que soit l'angle et
     quel que soit le milieu exterieur.
     """
-    decentrement = (decentrement_pupille() if decentrement is None
-                    else decentrement)
-    point = np.array([decentrement, 0.0])
+    off_axis_offset = (pupil_off_axis_offsetle() if off_axis_offset is None
+                    else off_axis_offset)
+    point = np.array([off_axis_offset, 0.0])
     direction = np.array([np.cos(np.radians(angle_deg)),
                           np.sin(np.radians(angle_deg))])
-    etapes = ((rayon_tube(), AIR_INDEX / ACRYLIC_INDEX),
+    steps = ((rayon_tube(), AIR_INDEX / ACRYLIC_INDEX),
               (rayon_exterieur(), ACRYLIC_INDEX / indice_exterieur))
-    for radius, eta in etapes:
+    for radius, eta in steps:
         b = float(point @ direction)
         c = float(point @ point) - radius * radius
         discriminant = b * b - c
@@ -712,12 +712,12 @@ def sortie_cylindre(angle_deg, decentrement=None, indice_exterieur=WATER_INDEX):
     return float(np.degrees(np.arctan2(direction[1], direction[0])))
 
 
-def _angles_de_sortie(decentrement, indice_exterieur, demi_champ, points=40):
+def _angles_de_sortie(off_axis_offset, indice_exterieur, demi_champ, points=40):
     """Couples (angle vise, angle reellement sorti), en radians."""
     vises = np.radians(np.linspace(demi_champ / points, demi_champ, points))
     sortis = []
     for angle in vises:
-        output = sortie_cylindre(float(np.degrees(angle)), decentrement,
+        output = sortie_cylindre(float(np.degrees(angle)), off_axis_offset,
                                  indice_exterieur)
         sortis.append(np.nan if output is None else np.radians(output))
     sortis = np.asarray(sortis, dtype=float)
@@ -725,9 +725,9 @@ def _angles_de_sortie(decentrement, indice_exterieur, demi_champ, points=40):
     return vises[valides], sortis[valides]
 
 
-def erreur_decentrement(decentrement=None, indice_exterieur=WATER_INDEX,
+def erreur_off_axis_offset(off_axis_offset=None, indice_exterieur=WATER_INDEX,
                         K=None, demi_champ=None):
-    """Deviation BRUTE due au decentrement de la pupil, en pixels.
+    """Deviation BRUTE due au off_axis_offset de la pupil, en pixels.
 
     C'est l'gap entre la direction visee et la direction reellement suivie,
     au bord du champ. Chiffre spectaculaire mais trompeur pris seul : une
@@ -737,18 +737,18 @@ def erreur_decentrement(decentrement=None, indice_exterieur=WATER_INDEX,
     K = K_BARE_AIR if K is None else K
     if demi_champ is None:
         demi_champ = half_fields_of_view(K)[1]     # circonferentiel = vertical
-    decentrement = (decentrement_pupille() if decentrement is None
-                    else decentrement)
-    vises, sortis = _angles_de_sortie(decentrement, indice_exterieur, demi_champ)
+    off_axis_offset = (pupil_off_axis_offsetle() if off_axis_offset is None
+                    else off_axis_offset)
+    vises, sortis = _angles_de_sortie(off_axis_offset, indice_exterieur, demi_champ)
     if len(vises) == 0:
         return 0.0
     return float(K[1, 1] * np.max(np.abs(sortis - vises)))
 
 
-# --- ce que le menisque fait vraiment a l'image -----------------------------
-def grandissement_section(decentrement=None, indice_exterieur=WATER_INDEX,
+# --- ce que le meniscus fait vraiment a l'image -----------------------------
+def grandissement_section(off_axis_offset=None, indice_exterieur=WATER_INDEX,
                           K=None):
-    """Facteur par lequel le menisque multiplie la focal_length VERTICALE.
+    """Facteur par lequel le meniscus multiplie la focal_length VERTICALE.
 
     On ajuste au sens des moindres carres le seul parametre qu'une calibration
     puisse regler — la focal_length — sur le trace de radius exact, et on renvoie le
@@ -756,9 +756,9 @@ def grandissement_section(decentrement=None, indice_exterieur=WATER_INDEX,
     optiquement absent.
     """
     K = K_BARE_AIR if K is None else K
-    decentrement = (decentrement_pupille() if decentrement is None
-                    else decentrement)
-    vises, sortis = _angles_de_sortie(decentrement, indice_exterieur,
+    off_axis_offset = (pupil_off_axis_offsetle() if off_axis_offset is None
+                    else off_axis_offset)
+    vises, sortis = _angles_de_sortie(off_axis_offset, indice_exterieur,
                                       half_fields_of_view(K)[1])
     if len(vises) == 0:
         return 1.0
@@ -768,44 +768,44 @@ def grandissement_section(decentrement=None, indice_exterieur=WATER_INDEX,
                  / np.sum(np.tan(sortis) ** 2))
 
 
-def residu_section(decentrement=None, indice_exterieur=WATER_INDEX, K=None):
-    """Ce que le menisque laisse APRES que la focal_length ait absorbe ce qu'elle peut.
+def residu_section(off_axis_offset=None, indice_exterieur=WATER_INDEX, K=None):
+    """Ce que le meniscus laisse APRES que la focal_length ait absorbe ce qu'elle peut.
 
     C'est la true error du mounting : la part de la deviation qu'aucune
     calibration ne peut ranger dans un parametre. A comparer a CORNER_NOISE_PX.
     """
     K = K_BARE_AIR if K is None else K
     fy = float(K[1, 1])
-    decentrement = (decentrement_pupille() if decentrement is None
-                    else decentrement)
-    vises, sortis = _angles_de_sortie(decentrement, indice_exterieur,
+    off_axis_offset = (pupil_off_axis_offsetle() if off_axis_offset is None
+                    else off_axis_offset)
+    vises, sortis = _angles_de_sortie(off_axis_offset, indice_exterieur,
                                       half_fields_of_view(K)[1])
     if len(vises) == 0:
         return 0.0
-    ajustee = fy * grandissement_section(decentrement, indice_exterieur, K)
+    ajustee = fy * grandissement_section(off_axis_offset, indice_exterieur, K)
     return float(np.max(np.abs(fy * np.tan(vises) - ajustee * np.tan(sortis))))
 
 
-def sensibilite_glissement(indice_exterieur=WATER_INDEX, pas=0.001):
-    """Combien coute un millimetre de glissement APRES calibration, en %.
+def sensibilite_slip(indice_exterieur=WATER_INDEX, pas=0.001):
+    """Combien coute un millimetre de slip APRES calibration, en %.
 
     La focal_length verticale est ce que la calibration a fige. Si la camera bouge
     dans son support, elle ne correspond plus, et l'error passe directement
     dans les distances : 1 % de focal_length = 1 % sur toutes les portees.
     """
-    d = decentrement_pupille()
+    d = pupil_off_axis_offsetle()
     avant = grandissement_section(d - pas, indice_exterieur)
     apres = grandissement_section(d + pas, indice_exterieur)
     return float(100 * abs(apres - avant) / 2 / grandissement_section(d, indice_exterieur))
 
 
-def decentrement_depuis_calibration(K_mesure, K_reference=None,
+def off_axis_offset_from_calibration(K_mesure, K_reference=None,
                                     indice_exterieur=AIR_INDEX):
-    """Retrouve le decentrement reel a partir d'une calibration measured.
+    """Retrouve le off_axis_offset reel a partir d'une calibration measured.
 
     C'est tout l'interet de calibrer D'ABORD DANS L'AIR. En air, la lame plane
     ne key pas a fx : si fx s'ecarte de la camera nue, c'est un probleme de
-    mounting, pas d'optics. En revanche fy passe par le menisque, et le
+    mounting, pas d'optics. On the other hand fy passe par le meniscus, et le
     report fy_tube / fy_nue donne directement l'gap de la pupil a l'axis —
     sans demonter quoi que ce soit, et sans devoir croire la value supposee
     de PUPIL_BEHIND_FACE.
@@ -820,9 +820,9 @@ def decentrement_depuis_calibration(K_mesure, K_reference=None,
 
 # --- refraction : ce que devient la focal_length ----------------------------------
 def demi_champ_eau(demi_angle_air, direction="axis"):
-    """Demi-champ seen dans l'water, pour l'une ou l'autre direction de l'image.
+    """Demi-champ seen in the water, pour l'une ou l'autre direction de l'image.
 
-    `direction` vaut "axis" (le long du tube : la paroi est une lame plane, et
+    `direction` vaut "axis" (le long du tube : la wall est une lame plane, et
     Descartes donne l'angle exact) ou "section" (circonferentiel : on suit le
     radius a travers les deux surfaces courbes).
     """
@@ -834,15 +834,15 @@ def demi_champ_eau(demi_angle_air, direction="axis"):
 
 
 def focales_eau(mounting=None):
-    """Focales equivalentes sous l'water : (horizontale, verticale).
+    """Focales equivalentes underwater : (horizontale, verticale).
 
     Montage radial : la camera est couchee, sa width — donc l'axis HORIZONTAL
     de l'image — suit l'axis du tube et voit une lame plane, d'ou le facteur
-    1.33. L'axis VERTICAL est circonferentiel et ne voit que le menisque, dont
-    l'effet depend du decentrement de la pupil.
+    1.33. L'axis VERTICAL est circonferentiel et ne voit que le meniscus, dont
+    l'effet depend du off_axis_offset de la pupil.
 
     On tient compte de ce que la calibration fournie contient DEJA : partir de
-    `tube_air`, c'est partir d'un fy qui porte deja l'effet du menisque en
+    `tube_air`, c'est partir d'un fy qui porte deja l'effet du meniscus en
     air ; il ne reste qu'a le convertir en water.
 
     Montage axial : les deux directions traversent le meme bouchon plat, et
@@ -852,7 +852,7 @@ def focales_eau(mounting=None):
     K, _ = load(mounting, quiet=True)
     fx, fy = float(K[0, 0]), float(K[1, 1])
     if mounting == "tube_eau" and source(mounting) == "tube_eau":
-        return fx, fy                      # deja measurement sous l'water
+        return fx, fy                      # deja measurement underwater
     if ORIENTATION != "radiale":
         return fx * WATER_INDEX, fy * WATER_INDEX
     deja = (grandissement_section(indice_exterieur=AIR_INDEX)
@@ -861,26 +861,26 @@ def focales_eau(mounting=None):
 
 
 def water_focal_length(mounting=None):
-    """La focal_length sous l'water la plus DEFAVORABLE des deux.
+    """La focal_length underwater la plus DEFAVORABLE des deux.
 
-    Un seul count ne peut pas decrire un systeme anamorphique. Pour tout ce
+    Un seul count ne peut pas decrire un systeme anamorphic. Pour tout ce
     qui est dimensionnement — size apparente d'un tag, uncertainty de pose —
     c'est la plus petite qui contraint, et c'est donc elle qu'on renvoie.
     """
     return float(min(focales_eau(mounting)))
 
 
-def anamorphose(mounting=None):
-    """Rapport entre les deux focales sous l'water. 1.0 = pas d'anamorphose."""
+def anamorphic_ratio(mounting=None):
+    """Rapport entre les deux focales underwater. 1.0 = pas d'anamorphic_ratio."""
     fx, fy = focales_eau(mounting)
     return float(max(fx, fy) / min(fx, fy))
 
 
 def portee_eau(portee_air, mounting=None):
-    """Ce que devient, une fois immergee, une portee measured en air.
+    """Ce que devient, une fois immergee, une portee measured in air.
 
-    Le raccourci current est « x 1.33 : sous l'water on voit plus loin ». Il ne
-    vaut QUE pour un hublot plat, et ici seulement pour l'axis du tube. Un tag
+    Le raccourci current est « x 1.33 : underwater on voit plus loin ». Il ne
+    vaut QUE pour un viewport plat, et ici seulement pour l'axis du tube. Un tag
     doit rester assez grand DANS LES DEUX directions pour etre decode, donc
     c'est la focal_length la plus petite qui decide — et en mounting radial avec une
     pupil en retrait, c'est la verticale, qui peut meme retrecir.
@@ -893,12 +893,12 @@ def portee_eau(portee_air, mounting=None):
 def rayon_image(angle_eau_deg, f=None):
     """Ou tombe vraiment un radius venu de l'water, et ou le model le croit.
 
-    Vaut pour la direction ou la paroi se comporte en lame plane : l'axis du
+    Vaut pour la direction ou la wall se comporte en lame plane : l'axis du
     tube en mounting radial, les deux directions en mounting axial.
     """
     # 'tube_air' est ecrit en dur A DESSEIN, et ne suit pas ACTIVE_MOUNTING :
-    # cette fonction PART d'une focal_length en air pour lui apply la refraction.
-    # Lui donner une focal_length deja measured sous l'water compterait l'water deux fois.
+    # cette fonction PART d'une focal_length in air pour lui apply la refraction.
+    # Lui donner une focal_length deja measured underwater compterait l'water deux fois.
     f = focal_length("tube_air") if f is None else f
     angle_air = np.degrees(np.arcsin(np.clip(
         WATER_INDEX * np.sin(np.radians(angle_eau_deg)), -1.0, 1.0)))
@@ -941,7 +941,7 @@ def verifier_montage():
         if CAMERA_WIDTH > libre:
             soucis.append(
                 f"Montage axial : la camera fait {1000*CAMERA_WIDTH:.0f} mm de "
-                f"large et le tube n'offre que {1000*libre:.1f} mm. Il faut la "
+                f"large et le tube n'offre que {1000*libre:.1f} mm. One must la "
                 "coucher (ORIENTATION = \"radiale\") ou passer en serie 4 pouces.")
         v = vignettage()
         if v["rogne_diagonale"]:
@@ -968,25 +968,25 @@ def verifier_montage():
 
     soucis.append(
         f"La calibration doit etre faite CAMERA DEJA EN PLACE dans le tube, et "
-        f"la camera ne doit plus bouger ensuite : {sensibilite_glissement():.1f} % "
-        "d'error sur toutes les distances par millimetre de glissement. C'est "
+        f"la camera ne doit plus bouger ensuite : {sensibilite_slip():.1f} % "
+        "d'error sur toutes les distances par millimetre de slip. C'est "
         "le point faible du mounting, bien avant le centrage lui-meme.")
 
     soucis.append(
         f"PUPIL_BEHIND_FACE ({1000*PUPIL_BEHIND_FACE:.0f} mm) est une "
-        "estimation, pas une measurement. La calibration en air la corrige : "
-        "calibrate.py --mounting tube_air en deduit le decentrement reel.")
+        "estimation, pas une measurement. La calibration in air la corrige : "
+        "calibrate.py --mounting tube_air en deduit le off_axis_offset reel.")
 
     soucis.append(
-        f"Anamorphose sous l'water : facteur {anamorphose():.2f} entre les deux "
-        "axes de l'image. La distorsion n'a plus de symetrie de revolution, "
+        f"Anamorphose underwater : facteur {anamorphic_ratio():.2f} entre les deux "
+        "axes de l'image. La distortion n'a plus de symetrie de revolution, "
         "et le model plumb_bob d'OpenCV la decrira mal — attendre des "
-        "residus de calibration plus eleves qu'en air.")
+        "residus de calibration plus eleves qu'in air.")
 
     soucis.append(
         f"Le model « focal_length x {WATER_INDEX} » ne tient qu'a moins de "
         f"{angle_modele_fiable():.0f} deg de l'axis (a 1 px pres), et seulement "
-        "selon l'axis du tube. Au-dela il faut une calibration faite SOUS L'EAU.")
+        "selon l'axis du tube. Au-dela one must une calibration faite SOUS L'EAU.")
     return soucis
 
 
@@ -996,7 +996,7 @@ def report():
     f = focal_length("nue_air")
     fy_nue = float(K_BARE_AIR[1, 1])
     fx_eau, fy_eau = focales_eau()
-    gap = decentrement_pupille()
+    gap = pupil_off_axis_offsetle()
     servi = source(ACTIVE_MOUNTING)
     # En tete, et non en bas de page : c'est le first chiffre a check
     # apres une bascule. `servi` differe de `ACTIVE_MOUNTING` quand le mounting
@@ -1006,12 +1006,12 @@ def report():
         "=" * 74, "OPTIQUE DU MONTAGE", "=" * 74,
         f"\nMONTAGE ACTIF  {ACTIVE_MOUNTING}  (via {MOUNTING_SOURCE})",
         (f"  source des chiffres : {servi}" if servi == ACTIVE_MOUNTING else
-         f"  >>> ATTENTION : '{ACTIVE_MOUNTING}' n'est pas calibre, les chiffres "
+         f"  >>> WARNING : '{ACTIVE_MOUNTING}' n'est pas calibre, les chiffres "
          f"servis viennent de '{servi}'."),
-        (f"  decalage du hublot : +{1000*window_offset():.1f} mm ajoutes a "
+        (f"  decalage du viewport : +{1000*window_offset():.1f} mm ajoutes a "
          f"chaque distance" if window_offset() else
-         "  decalage du hublot : aucun (jamais measurement pour ce mounting)"),
-        "\nCAMERA (nue, en air)",
+         "  decalage du viewport : aucun (jamais measurement pour ce mounting)"),
+        "\nCAMERA (nue, in air)",
         f"  focal_length {f:.1f} px, champ {2*h:.1f} x {2*v:.1f} deg (diagonale {2*d:.1f})",
         f"  encombrement {1000*CAMERA_WIDTH:.0f} x {1000*CAMERA_HEIGHT:.0f} x "
         f"{1000*CAMERA_DEPTH:.0f} mm",
@@ -1019,7 +1019,7 @@ def report():
         f"  interieur {1000*TUBE_INNER_DIAMETER:.1f} +/- {1000*TUBE_INNER_DIAMETER_TOLERANCE:.1f} mm "
         f"(pire cas {1000*(TUBE_INNER_DIAMETER-TUBE_INNER_DIAMETER_TOLERANCE):.1f}), "
         f"exterieur {1000*TUBE_OUTER_DIAMETER:.1f} +/- {1000*TUBE_OUTER_DIAMETER_TOLERANCE:.1f} mm",
-        f"  paroi {1000*(TUBE_OUTER_DIAMETER-TUBE_INNER_DIAMETER)/2:.2f} mm, length "
+        f"  wall {1000*(TUBE_OUTER_DIAMETER-TUBE_INNER_DIAMETER)/2:.2f} mm, length "
         f"{1000*TUBE_LENGTH:.0f} mm, {1000*TUBE_MASS:.0f} g, "
         f"tenue {TUBE_MAX_DEPTH} m",
         f"\nMONTAGE  {ORIENTATION}",
@@ -1027,7 +1027,7 @@ def report():
     if ORIENTATION == "radiale":
         rows += [
             "  camera couchee le long du tube, objectifs alignes selon l'axis,",
-            "  regard a travers la paroi cylindrique",
+            "  regard a travers la wall cylindrique",
             f"  place occupee {1000*CAMERA_WIDTH:.0f} mm sur "
             f"{1000*TUBE_LENGTH:.0f}, reste {1000*budget_longueur():.0f} mm",
             "",
@@ -1051,28 +1051,28 @@ def report():
 
     rows += ["", "CHAMP UTILE",
                f"  {'':22} {'horizontal':>12} {'vertical':>12}",
-               f"  {'en air':22} {2*h:>10.1f} d {2*v:>10.1f} d"]
+               f"  {'in air':22} {2*h:>10.1f} d {2*v:>10.1f} d"]
     if ORIENTATION == "radiale":
         rows.append(f"  {'sous l water':22} "
                       f"{2*demi_champ_eau(h, 'axis'):>10.1f} d "
                       f"{2*demi_champ_eau(v, 'section'):>10.1f} d")
         rows.append("  (horizontal = le long du tube, lame plane ;")
-        rows.append("   vertical = circonferentiel, menisque)")
+        rows.append("   vertical = circonferentiel, meniscus)")
     else:
         rows.append(f"  {'sous l water':22} {2*demi_champ_eau(h):>10.1f} d "
                       f"{2*demi_champ_eau(v):>10.1f} d")
 
     rows += ["", "FOCALES SOUS L'EAU",
                f"  horizontale {fx_eau:7.1f} px      verticale {fy_eau:7.1f} px",
-               f"  anamorphose {anamorphose():.2f}"
+               f"  anamorphic_ratio {anamorphic_ratio():.2f}"
                + ("  <- les deux axes ne grossissent pas pareil"
-                  if anamorphose() > 1.01 else "")]
+                  if anamorphic_ratio() > 1.01 else "")]
 
     if ORIENTATION == "radiale":
         rows += [
             "", "CE QUE COUTE LE DECENTREMENT DE LA PUPILLE",
             "  Sur l'axis, tout radius frappe les deux surfaces perpendiculairement",
-            "  et ressort sans devier. Hors de l'axis le menisque agit — mais",
+            "  et ressort sans devier. Hors de l'axis le meniscus agit — mais",
             "  presque uniquement comme un CHANGEMENT DE FOCALE, que la",
             "  calibration absorbe. Seul le residu est une true error.",
             "",
@@ -1082,7 +1082,7 @@ def report():
         for millimetres in (0, 1, 2, 3, 5, 8):
             e = -millimetres / 1000        # en retrait, comme dans le tube
             rows.append(
-                f"  {millimetres:>11} mm {erreur_decentrement(e):>13.1f} px "
+                f"  {millimetres:>11} mm {erreur_off_axis_offset(e):>13.1f} px "
                 f"{fy_nue*grandissement_section(e):>11.1f} px "
                 f"{residu_section(e):>10.2f} px")
         rows += [
@@ -1092,13 +1092,13 @@ def report():
             "  -> le centrage n'a pas besoin d'etre parfait ; la calibration suffit.",
             "",
             f"  EN REVANCHE la camera ne doit plus bouger apres calibration :",
-            f"  {sensibilite_glissement():.1f} % d'error sur toutes les distances "
-            "par mm de glissement",
-            f"  ({sensibilite_glissement()*30:.0f} mm d'error a 3 m pour 1 mm de "
+            f"  {sensibilite_slip():.1f} % d'error sur toutes les distances "
+            "par mm de slip",
+            f"  ({sensibilite_slip()*30:.0f} mm d'error a 3 m pour 1 mm de "
             "jeu dans le support).",
             "",
             "  CE QUE LA CALIBRATION EN AIR VA DIRE",
-            f"    fx doit retomber sur {K_BARE_AIR[0,0]:.1f} px : en air la lame "
+            f"    fx doit retomber sur {K_BARE_AIR[0,0]:.1f} px : in air la lame "
             "plane ne devie rien,",
             "    donc tout gap la-dessus est un probleme de mounting, pas "
             "d'optics.",
@@ -1106,7 +1106,7 @@ def report():
             f"{fy_nue*grandissement_section(indice_exterieur=AIR_INDEX):.1f} px "
             f"({100*(grandissement_section(indice_exterieur=AIR_INDEX)-1):+.2f} %) "
             "si la pupil est bien ou",
-            "    on la croit. C'est ce report-la qui MESURE le decentrement reel.",
+            "    on la croit. C'est ce report-la qui MESURE le off_axis_offset reel.",
         ]
 
     rows += ["", "CE QUE COUTE LA LAME PLANE (le long du tube)",

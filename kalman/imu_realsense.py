@@ -100,7 +100,7 @@ class CentraleRealSense:
 
     Les deux capteurs n'arrivent PAS au meme rythme (l'accelerometre vers
     60-250 Hz, le gyroscope vers 200-400 Hz) et chaque image ne porte qu'un
-    seul des deux. On garde donc la derniere value connue de chacun, et on
+    seul des deux. We keep donc la derniere value connue de chacun, et on
     date les measurements avec l'horloge du capteur plutot que celle du PC : les
     intervalles servent a integrer, une gigue de quelques millisecondes se
     paierait directement en drift.
@@ -219,7 +219,7 @@ class CentraleRealSense:
 
 
 def mesurer_au_repos(imu, duration=5.0):
-    """Biais et noise des deux capteurs, engin IMMOBILE.
+    """Biais et noise des deux capteurs, vehicle IMMOBILE.
 
     Le bias du gyro est sa lecture mean alors qu'il ne tourne pas : c'est
     lui qui, integre, fait deriver l'orientation. Le noise est l'gap-type
@@ -260,8 +260,8 @@ def orientation_initiale(accel_repos):
 
     CONVENTION, ET C'EST LE POINT DELICAT. On traite le vector measurement comme
     pointant vers le HAUT. C'est la convention physique de l'accelerometre :
-    au rest il measurement la force specifique, c'est-a-dire la reaction du
-    support, dirigee vers le haut — et non la pesanteur elle-meme.
+    au rest il measurement la force specifique, that is la reaction du
+    support, dirigee vers le haut — et non la gravity elle-meme.
 
     `correct_with_gravity` fait exactement la meme hypothese. Les deux DOIVENT
     s'accorder : une version qui inversait le vector ici et pas la, ce qui
@@ -273,8 +273,8 @@ def orientation_initiale(accel_repos):
     la demonstration le dirait : juste apres l'initialisation, roll et
     pitch doivent lire zero, puisqu'on part precisement de cette pose.
 
-    On prend la rotation la plus courte qui amene le haut measurement sur la
-    verticale du world. Le yaw reste arbitraire — la pesanteur n'en dit
+    We take la rotation la plus courte qui amene le haut measurement sur la
+    verticale du world. Le yaw reste arbitraire — la gravity n'en dit
     rien — et c'est justement ce que les tags apporteront.
     """
     haut_monde = np.array([0.0, 0.0, 1.0])
@@ -297,7 +297,7 @@ def _demonstration():
     try:
         imu = CentraleRealSense(avec_couleur=True)
     except Exception as souci:
-        print(f"\nERREUR : {souci}")
+        print(f"\nERROR: {souci}")
         return 1
 
     print("\naccel and gyro streams opened through the Intel SDK (pyrealsense2).")
@@ -336,7 +336,7 @@ def _demonstration():
     if ecart_g > 0.05:
         print("  [PROBLEM] far from gravity: wrong scale or wrong units.")
     elif ecart_g > 0.01:
-        print(f"  [OK] c'est la pesanteur, a {100*ecart_g:.1f} % pres.")
+        print(f"  [OK] c'est la gravity, a {100*ecart_g:.1f} % pres.")
         print("     That gap is a scale bias of the accelerometer. It has no")
         print("     consequence here: only the DIRECTION of the vector is used")
         print("     for roll and pitch, never its norm.")
@@ -354,7 +354,7 @@ def _demonstration():
     # Ce qui doit tenir quelle que soit la pose : l'orientation initialisee
     # PREVOIT une direction pour le haut, et cette prevision doit coincider
     # avec le vector measurement. Si les deux sont opposes, le capteur rend la
-    # pesanteur la ou on attend la force specifique — initialisation et
+    # gravity la ou on attend la force specifique — initialisation et
     # correction se combattent alors, et l'orientation se stabilise a 180
     # degres de la truth sans que rien ne le signale.
     q0 = orientation_initiale(rest["haut"])

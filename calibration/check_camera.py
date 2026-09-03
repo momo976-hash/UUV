@@ -1,6 +1,6 @@
 from pathlib import Path
 import sys
-# verification_camera.py — Verifie la calibration a partir du MOUVEMENT DE LA CAMERA.
+# check_camera.py — Verifie la calibration a partir du MOUVEMENT DE LA CAMERA.
 #
 # Contrairement aux tests precedents, on se place ici dans le cas reel du projet :
 # le TAG est FIXE (colle au mur / dans la piscine) et c'est la CAMERA qui bouge
@@ -14,13 +14,13 @@ import sys
 # PROCEDURE
 #   1. Colle UN tag, laisse-le at_rest pendant tout le test.
 #   2. Place la camera a un point de depart, appuie sur 'o' -> pose de reference.
-#   3. MODE DEPLACEMENT : deplace la camera d'une distance connue (metre ruban),
+#   3. MODE DEPLACEMENT : deplace la camera d'une distance connue (tape measure),
 #      tape cette distance, appuie sur 's'.
 #      MODE ROTATION    : fais pivoter la camera d'un angle known (ex. 90 deg),
 #      tape cet angle, appuie sur 's'.
 #   4. Les deux calibrations sont comparees sur la meme observation.
 #
-# Touches : m = deplacement/rotation | o = fixer la pose de reference
+# Keys: m = deplacement/rotation | o = fixer la pose de reference
 #           0-9 et '.' = saisir la value reelle | RET. ARRIERE = effacer
 #           s = enregistrer | q = quitter
 import csv
@@ -36,13 +36,13 @@ import optics  # noqa: E402
 CAMERA_INDEX = None          # None = detection automatique
 RESOLUTION = (640, 480)      # doit etre identique a celle de la calibration
 
-TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au calipers, pas 223 mm nominal
 FACTEUR_APPROX = 0.95        # ancienne approximation (focal_length = width x facteur)
 LISSAGE = 20                 # frames moyennees pour stabiliser l'display
 
-# Calibration par damier
+# Calibration par checkerboard
 MONTAGE = optics.ACTIVE_MOUNTING
-# L'optics vient de optics.py : camera, tube, hublot, milieu. Le mounting
+# L'optics vient de optics.py : camera, tube, viewport, milieu. Le mounting
 # n'est ecrit dans aucun path de code : optics.py le lit dans
 # calibration/montage_local.txt, propre a CETTE machine, et le demande une
 # fois s'il n'existe pas encore. Pour le changer :
@@ -98,7 +98,7 @@ def angle_entre(R1, R2):
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERREUR : aucune camera ouverte.")
+    print("ERROR: aucune camera ouverte.")
     raise SystemExit
 
 # A) approximation
@@ -106,7 +106,7 @@ f = L * FACTEUR_APPROX
 K_approx = np.array([[f, 0, L / 2], [0, f, H / 2], [0, 0, 1]], dtype=np.float64)
 dist_approx = np.zeros(5)
 
-# B) calibration par damier
+# B) calibration par checkerboard
 K_calib, dist_calib = K_CALIB.copy(), DIST_CALIB.copy()
 Lc, Hc = LARGEUR_CALIB, HAUTEUR_CALIB
 try:
@@ -119,7 +119,7 @@ except Exception:
     print("Calibration integree au script used")
 print(f"  calibration : {Lc}x{Hc} (fx = {K_calib[0, 0]:.1f})   capture : {L}x{H}")
 if (L, H) != (Lc, Hc):
-    print("  >>> ATTENTION : formats differents, la calibration n'est pas valable ici.")
+    print("  >>> WARNING : formats differents, la calibration n'est pas valable ici.")
 
 h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
@@ -136,7 +136,7 @@ ref_tag = None              # tag sur lequel la reference a ete fixee
 hist_a, hist_b = deque(maxlen=LISSAGE), deque(maxlen=LISSAGE)
 saisie = ""
 
-CSV = os.path.abspath("verification_camera.csv")
+CSV = os.path.abspath("check_camera.csv")
 if not os.path.exists(CSV):
     with open(CSV, "w", newline="") as fic:
         csv.writer(fic).writerow(
@@ -208,7 +208,7 @@ while True:
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
 
     if pb is not None:
-        # pose absolue de la camera dans le frame du tag (calibration damier)
+        # pose absolue de la camera dans le frame du tag (calibration checkerboard)
         roll, pitch, yaw = cv2.RQDecomp3x3(Rb)[0]
         cv2.putText(image, f"CAMERA / tag {tag_vu} : "
                            f"x={pb[0]:+.2f} y={pb[1]:+.2f} z={pb[2]:+.2f} m",
@@ -248,7 +248,7 @@ while True:
     cv2.putText(image, "m=mode  o=reference  chiffres=saisir  s=enregistrer  q=quitter",
                 (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
-    cv2.imshow("Verification par le mouvement de la camera (q pour quitter)", image)
+    cv2.imshow("Check par le mouvement de la camera (q pour quitter)", image)
 
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):
@@ -268,7 +268,7 @@ while True:
             print(f"Reference fixee sur le tag {ref_tag} : garde CE tag visible "
                   f"pendant toute la measurement.")
             if mode == 0:
-                print("  Deplace la CAMERA d'une distance connue (metre ruban),")
+                print("  Deplace la CAMERA d'une distance connue (tape_measure),")
                 print("  puis tape cette distance et appuie sur 's'.")
             else:
                 print("  Fais pivoter la CAMERA d'un angle known (ex. 90),")

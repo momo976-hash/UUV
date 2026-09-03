@@ -1,25 +1,25 @@
 # install_underwater_calibration.py — Install the underwater calibration here.
 #
 #     python install_underwater_calibration.py            la calibration CORRIGEE (default)
-#     python install_underwater_calibration.py --raw    celle du bassin, telle quelle
+#     python install_underwater_calibration.py --raw    celle du pool, telle quelle
 #
 # ---------------------------------------------------------------------------
 # CE QUI S'EST PASSE, ET COMMENT ON L'A TRANCHE
 # ---------------------------------------------------------------------------
-# La calibration au damier faite au bord du bassin le 02/09 donne
+# La calibration au checkerboard faite au bord du pool le 02/09 donne
 # fx = 711.28, fy = 595.86. Elle passe tous les controles internes : 15 vues,
 # RMS 0.7793 px, point principal a moins d'un pixel du centre, polynome de
-# distorsion monotone sur toute l'image. Rien, dans la calibration elle-meme,
+# distortion monotone sur toute l'image. Rien, dans la calibration elle-meme,
 # ne dit qu'elle est fausse.
 #
 # Elle l'est pourtant, et deux faits independants le montrent.
 #
 # 1. fy EST PLUS PETIT QU'EN AIR. La camera nue measurement fy = 602.37. Cette
 #    calibration donne 595.86, soit 1.1 % de MOINS. C'est impossible : l'water
-#    ne peut qu'augmenter la focal_length apparente, jamais la diminuer. Un hublot
+#    ne peut qu'augmenter la focal_length apparente, jamais la diminuer. Un viewport
 #    grossit, il ne retrecit pas. Ce seul chiffre condamne la calibration.
 #
-# 2. LA MESURE SUR DISTANCES CONNUES. check_distance.py, au bassin, sur
+# 2. LA MESURE SUR DISTANCES CONNUES. check_distance.py, au pool, sur
 #    trois distances :
 #         1.0 m -> 0.8887 m   -11.13 %
 #         1.5 m -> 1.3567 m    -9.55 %
@@ -36,7 +36,7 @@
 # PREMIERE CORRECTION : fx = 791.3 px  (depassee, gardee pour la trace)
 # ---------------------------------------------------------------------------
 # On a d'abord cherche l'optics qui, resolue avec la matrix de Josiah,
-# rendrait exactement les 0.8998 x measurements au bassin. La simulation
+# rendrait exactement les 0.8998 x measurements au pool. La simulation
 # (projectPoints puis solvePnP, comme dans le vrai code) donnait fx = 791.3 px,
 # et le model optics de optics.py — qui ne connait que la geometrie du tube
 # et l'index de l'water — predisait 803.6 px. Les deux se rejoignaient a 1.5 %,
@@ -47,7 +47,7 @@
 # ---------------------------------------------------------------------------
 # Une check independante, faite sur le terrain avec un AUTRE algorithme
 # de measurement, a trouve ces deux values justes. Elles valent 1.0595 x les
-# precedentes, le meme facteur sur les deux axes : l'anamorphose 1.2859 du
+# precedentes, le meme facteur sur les deux axes : l'anamorphic ratio 1.2859 du
 # model optics est donc conservee intacte, ce qui est rassurant — c'est une
 # propriete du tube, et elle n'avait aucune raison de bouger.
 #
@@ -70,12 +70,12 @@
 # CE QUI RESTE FRAGILE : fy
 # ---------------------------------------------------------------------------
 # Aucune measurement de distance d'un tag centre ne contraint fy : elle est dominee
-# par l'axis le plus grossi. fy ne tient donc toujours que par l'anamorphose du
+# par l'axis le plus grossi. fy ne tient donc toujours que par l'anamorphic ratio du
 # model (fx/fy = 1.2859), que la check independante a conservee sans
 # la mesurer separement.
 #
 # Un fy faux ne se voit PAS sur une measurement de distance d'un tag place au
-# centre — c'est pourquoi il faut un autre test pour le trancher :
+# centre — c'est pourquoi one must un autre test pour le trancher :
 #
 #     Poser deux tags a un gap known, une fois COTE A COTE (horizontal),
 #     une fois L'UN AU-DESSUS DE L'AUTRE (vertical), a la meme distance.
@@ -84,8 +84,8 @@
 # En attendant, les distances sont bonnes et les positions laterales le sont
 # aussi selon l'axis du tube. C'est deja de quoi faire tourner le filter.
 #
-# La distorsion est reprise telle quelle du bassin : elle a ete ajustee sur de
-# vraies frames sous l'water, et son polynome reste monotone sur toute l'image
+# La distortion est reprise telle quelle du pool : elle a ete ajustee sur de
+# vraies frames underwater, et son polynome reste monotone sur toute l'image
 # (verifie : il ne s'inverse qu'a r = 0.62, les corners sont a 0.59).
 import argparse
 import sys
@@ -93,7 +93,7 @@ from pathlib import Path
 
 import numpy as np
 
-# --- ce que le damier a donne au bassin, tel quel ---------------------------
+# --- ce que le checkerboard a donne au pool, tel quel ---------------------------
 K_BRUTE = np.array([[711.28204841, 0.0, 320.75619547],
                     [0.0, 595.85847624, 267.37226529],
                     [0.0, 0.0, 1.0]])
@@ -105,10 +105,10 @@ VUES, RMS = 15, 0.7793
 # les values qu'une check independante, faite avec un autre algorithme
 # de measurement, a trouvees justes sur le terrain. Elles valent 1.0595 x les
 # old (791.34 / 615.40) — le meme facteur sur les deux axes, donc
-# l'anamorphose 1.2859 du model optics est conservee telle quelle.
+# l'anamorphic ratio 1.2859 du model optics est conservee telle quelle.
 #
 # On les prend telles quelles, et on ne les rejustifie pas apres coup. Une
-# tentative de les rededuire des trois measurements du bassin a d'ailleurs echoue :
+# tentative de les rededuire des trois measurements du pool a d'ailleurs echoue :
 # aucune mise a l'echelle de 791.34 ne reproduit les distances de la
 # check independante, ce qui montre simplement que ces measurements-la ne
 # sortaient pas de cette calibration. Les redemontrer n'aurait fait que fabriquer
@@ -116,7 +116,7 @@ VUES, RMS = 15, 0.7793
 K_CORRIGEE = np.array([[838.45, 0.0, 320.75619547],
                        [0.0, 652.10, 267.37226529],
                        [0.0, 0.0, 1.0]])
-# Les trois measurements du bassin du 02/09, gardees comme ARCHIVE : c'est sur elles
+# Les trois measurements du pool du 02/09, gardees comme ARCHIVE : c'est sur elles
 # que tout le raisonnement du haut de ce path est bati, et les relire est le
 # seul moyen de le refaire. Elles ne servent plus a calculer quoi que ce soit.
 MESURES = ((1.0, 0.8887), (1.5, 1.3567), (2.0, 1.8000))
@@ -133,7 +133,7 @@ def main():
         description="Installe la calibration tube_eau sur cette machine.")
     parser.add_argument(
         "--raw", action="store_true",
-        help="installer la calibration du bassin telle quelle, sans la "
+        help="installer la calibration du pool telle quelle, sans la "
              "correction de focal_length (pour comparaison seulement)")
     options = parser.parse_args()
 
@@ -146,14 +146,14 @@ def main():
     print(f"  fx {K[0, 0]:7.2f}   fy {K[1, 1]:7.2f}   "
           f"cx {K[0, 2]:6.2f}   cy {K[1, 2]:6.2f}")
     if options.raw:
-        print("\n  ATTENTION : cette matrix measurement les distances 10 % trop")
-        print("  courtes. Son fy (595.86) est plus petit qu'en air (602.37),")
+        print("\n  WARNING : cette matrix measurement les distances 10 % trop")
+        print("  courtes. Son fy (595.86) est plus petit qu'in_air (602.37),")
         print("  ce que la physique interdit. A n'installer que pour comparer.")
     else:
         print("  fx, fy retenues apres check independante sur le terrain")
-        print(f"  soit {K[0, 0] / K_BRUTE[0, 0]:.4f} x la calibration au damier, "
+        print(f"  soit {K[0, 0] / K_BRUTE[0, 0]:.4f} x la calibration au checkerboard, "
               f"sur les DEUX axes")
-        print(f"  anamorphose conservee : {K[0, 0] / K[1, 1]:.4f}")
+        print(f"  anamorphic_ratio conservee : {K[0, 0] / K[1, 1]:.4f}")
         print("\n  Ces focales ne sont pas rejustifiees par les measurements du 02/09 :")
         print("  elles viennent d'une check independante, pas d'un ajustement.")
         print("  A confronter aux distances connues avec --focal_length (voir ci-dessous).")
@@ -227,7 +227,7 @@ def main():
     print(f"Fichier ROS ecrit : {yaml}")
     print("  ros2 run <pkg> camera_info_relay --ros-args \\")
     print(f"      -p calibration_file:={yaml}")
-    print("\nA check au bassin, aux memes distances qu'avant :")
+    print("\nA check au pool, aux memes distances qu'avant :")
     print("  python check_distance.py --reel 1.0 --tag 0.11732 --pi")
     print("  python check_distance.py --reel 1.5 --tag 0.11732 --pi")
     print("  python check_distance.py --reel 2.0 --tag 0.11732 --pi")

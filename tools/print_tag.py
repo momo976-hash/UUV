@@ -1,8 +1,8 @@
 # print_tag.py — Generate AprilTags to print, at a known physical size.
 #
 # POURQUOI
-# Pour mesurer PIXELS_MIN il faut voir le tag devenir tout petit dans l'image.
-# Avec les 22.3 cm du bassin cela n'arrive qu'a 4.5 m, hors de portee d'une
+# Pour mesurer PIXELS_MIN one must voir le tag devenir tout petit dans l'image.
+# Avec les 22.3 cm du pool cela n'arrive qu'a 4.5 m, hors de portee d'une
 # camera au bout d'un cable. Le detector ne connait pas les metres : il ne
 # voit qu'un carre de N pixels. Un tag de 5 cm a 1.5 m lui est rigoureusement
 # identique a un tag de 22.3 cm a 6.7 m. On imprime donc un petit tag et on
@@ -12,7 +12,7 @@
 # Les imprimantes redimensionnent par default ("ajuster a la page"), ce qui
 # fausserait la size du tag — et donc toutes les distances. La page porte
 # pour cela un REGLET DE CONTROLE de 10 cm : apres impression, measurement-le a la
-# regle. S'il ne fait pas 10.0 cm, l'echelle est fausse, il faut reimprimer
+# regle. S'il ne fait pas 10.0 cm, l'echelle est fausse, one must reimprimer
 # en "size reelle" / "100 %" / "aucune mise a l'echelle".
 #
 # LA TAILLE, C'EST LE CARRE NOIR
@@ -20,7 +20,7 @@
 # comprises : c'est ce carre que le detector accroche, et c'est cette value
 # qu'attendent solvePnP et l'option --tag de measure_tag_limits.py.
 #
-# MODE D'EMPLOI
+# HOW TO USE IT
 #   python print_tag.py                  ->  un tag de 5 cm, id 0
 #   python print_tag.py --size 0.04    ->  4 cm
 #   python print_tag.py --id 7           ->  un autre motif
@@ -174,7 +174,7 @@ def main():
                                 "ex. --tous 0.03 0.05 0.08")
     parser.add_argument("--id", type=int, default=0,
                            help="identifiant du tag (default %(default)s). "
-                                "Prends-en un qui n'est pas dans le bassin.")
+                                "Prends-en un qui n'est pas dans le pool.")
     parser.add_argument("--output", type=Path, default=None,
                            help="path PDF a ecrire (default : a cote du script)")
     options = parser.parse_args()
@@ -182,7 +182,7 @@ def main():
     tailles_cm = [100 * t for t in (options.tous or [options.size])]
     for size in tailles_cm:
         if not 1.0 <= size <= 19.0:
-            print(f"ERREUR : {size/100:.3f} m est hors de ce qu'une A4 accepte "
+            print(f"ERROR: {size/100:.3f} m est hors de ce qu'une A4 accepte "
                   "(0.01 a 0.19 m).")
             return
 
@@ -194,7 +194,7 @@ def main():
 
     # C'est l'axis le MOINS grossi qui decide si un tag est decode : un carre
     # trop etroit dans un sens ne passe pas, meme large dans l'autre. Ces
-    # measurements se font en air, sur un bureau, donc avec les focales en air.
+    # measurements se font in air, sur un bureau, donc avec les focales in air.
     K_air, _ = optics.load("tube_air", quiet=True)
     focal_length = min(float(K_air[0, 0]), float(K_air[1, 1]))
     print(f"Ecrit : {output}")

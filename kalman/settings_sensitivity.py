@@ -76,8 +76,8 @@ IMAGES = 600
 ECHAUFFEMENT = 100        # frames ignorees : le filter part d'un P enorme
 
 
-def _engin(k):
-    """Acceleration d'un engin sous-marin : douce, continue, quelques 0.1 m/s2."""
+def _vehicle(k):
+    """Acceleration d'un vehicle sous-marin : douce, continue, quelques 0.1 m/s2."""
     return 0.3 * np.array([np.sin(k * DT * 0.7), np.cos(k * DT * 0.5), 0.0])
 
 
@@ -96,7 +96,7 @@ def rms_position(sigma_acceleration, with_imu, seed=7):
 
     errors = []
     for k in range(IMAGES):
-        a = _engin(k)
+        a = _vehicle(k)
         v = v + a * DT
         p = p + v * DT
         gyro = rng.normal(0, np.radians(GYRO_NOISE_DEG_S), 3) if with_imu else None

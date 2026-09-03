@@ -83,7 +83,7 @@ class CameraInfoRelay(Node):
         fx, fy = self.model.k[0], self.model.k[4]
         self.get_logger().info(
             f"mounting '{mounting}': fx={fx:.2f} fy={fy:.2f} "
-            f"(anamorphic ratio {max(fx, fy)/min(fx, fy):.2f})")
+            f"(anamorphic_ratio {max(fx, fy)/min(fx, fy):.2f})")
         if "water" not in mounting:
             self.get_logger().warn(
                 f"'{mounting}' is an IN-AIR calibration. Do not use it for a "

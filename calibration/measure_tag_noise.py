@@ -13,7 +13,7 @@
 # filter would otherwise believe the tags more than it should.
 # ===========================================================================
 #
-# POURQUOI CE SCRIPT
+# WHY THIS SCRIPT EXISTS
 # Le filter de Kalman a besoin de savoir a quel point une measurement de tag est
 # fiable. Jusqu'ici cette fiabilite etait SUPPOSEE (sigma_pixel = 0.5 px,
 # value current en vision mais jamais verifiee sur ta camera). Ce script la
@@ -33,7 +33,7 @@
 # bien comme d lateralement et comme d^2 en depth. Si oui, le model du
 # filter est valide EXPERIMENTALEMENT et plus seulement assumed.
 #
-# MODE D'EMPLOI
+# HOW TO USE IT
 #   1. Pose la camera sur un support stable (table, trepied). NE LA TIENS PAS
 #      A LA MAIN : ta main tremble bien plus que le noise qu'on veut mesurer.
 #   2. Place un tag devant, bien visible, a environ 50 cm.
@@ -42,10 +42,10 @@
 #   5. REFAIS LA MEME CHOSE AVEC 'd', camera EN MAIN, en la deplacant
 #      lentement. Camera posee, on measurement le meilleur cas absolu ; or dans
 #      la piscine elle bougera, avec du flou de bouge. C'est cette
-#      second value, plus grande, qu'il faut donner au filter.
+#      second value, plus grande, qu'one must donner au filter.
 #   6. 't' affiche le tableau recapitulatif et la check des lois.
 #
-# Touches : c = capture camera posee | d = capture camera qui bouge
+# Keys: c = capture camera posee | d = capture camera qui bouge
 #           t = tableau | e = effacer les measurements | q = quitter
 import csv
 import sys
@@ -59,7 +59,7 @@ import optics  # noqa: E402
 
 CAMERA_INDEX = None
 RESOLUTION = optics.RESOLUTION
-TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au calipers, pas 223 mm nominal
 IMAGES_PAR_CAPTURE = 300
 FREQUENCE_SUPPOSEE = 30.0
 
@@ -69,11 +69,11 @@ FREQUENCE_SUPPOSEE = 30.0
 VITESSE_MAX_CONSEILLEE = 0.15    # m/s
 
 # Le noise measurement vaut pour le milieu ou la manip est faite. Celui du depot a
-# ete releve EN AIR ; sous l'water, la turbidite et la perte de contraste le
-# degraderont, et il faut donc le remesurer une fois immerge — en basculant
+# ete releve EN AIR ; underwater, la turbidite et la perte de contraste le
+# degraderont, et one must donc le remesurer une fois immerge — en basculant
 # optics.ACTIVE_MOUNTING sur 'tube_eau'.
 MONTAGE = optics.ACTIVE_MOUNTING
-# L'optics vient de optics.py : camera, tube, hublot, milieu. Le mounting
+# L'optics vient de optics.py : camera, tube, viewport, milieu. Le mounting
 # n'est ecrit dans aucun path de code : optics.py le lit dans
 # calibration/montage_local.txt, propre a CETTE machine, et le demande une
 # fois s'il n'existe pas encore. Pour le changer :
@@ -113,7 +113,7 @@ def _poids_lissage(demi_fenetre, degre):
 def separer_bruit(values, demi_fenetre=7, degre=2):
     """Separe un mouvement LISSE d'un noise rapide.
 
-    Camera at_rest, tout est noise. Camera qui bouge, il faut d'abord
+    Camera at_rest, tout est noise. Camera qui bouge, one must d'abord
     retirer le mouvement reel : on l'ajuste localement par un polynome et
     on ne garde que ce qui ne s'y ajuste pas.
 
@@ -210,7 +210,7 @@ def tableau(rows):
     output.append("-" * 96)
 
     # --- les deux regimes se resument separement ---------------------------
-    # On prend la MEDIANE et non la mean : une seule capture ratee (geste
+    # We take la MEDIANE et non la mean : une seule capture ratee (geste
     # trop brusque, tag mal eclaire) suffirait sinon a tirer le result.
     # `or "pose"` et pas `get(..., "pose")` : les rows ecrites avant que la
     # column mode existe ont la CLE presente mais VIDE, le default ne joue pas.
@@ -285,7 +285,7 @@ def tableau(rows):
             # sur une plage trop courte, le noise domine la pente.
             output.append(f"  distances de {d.min():.2f} a {d.max():.2f} m, soit un "
                           f"report de {etendue:.1f}x seulement.")
-            output.append("  TROP ETROIT pour conclure : il faut au moins un report "
+            output.append("  TROP ETROIT pour conclure : one must au moins un report "
                           "de 3x (ex. 0.6 m a 2 m).")
             continue
         for name, cle, cle_th, attendu in (
@@ -329,7 +329,7 @@ def ouvrir_camera():
 def main():
     cam, L, H = ouvrir_camera()
     if cam is None:
-        print("ERREUR : aucune camera ouverte.")
+        print("ERROR: aucune camera ouverte.")
         return
 
     demi = TAG_SIZE / 2
@@ -363,7 +363,7 @@ def main():
         seen = None
         if ids is not None and len(ids):
             cv2.aruco.drawDetectedMarkers(image, detectes, ids)
-            # on garde le plus gros tag visible
+            # we keep le plus gros tag visible
             aires = [cv2.contourArea(c.reshape(4, 2).astype(np.float32)) for c in detectes]
             meilleur = int(np.argmax(aires))
             pts = detectes[meilleur].reshape(4, 2).astype(np.float64)

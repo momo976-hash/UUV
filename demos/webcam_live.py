@@ -14,13 +14,13 @@ CAMERA_INDEX = None
 # Resolution FIGEE : doit etre identique pour la calibration et les measurements.
 RESOLUTION = (640, 480)
 
-TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au calipers, pas 223 mm nominal
 
 
-# --- Calibration reelle de la camera (damier 5x7, 22 vues, RMS 0.169 px) ---
+# --- Calibration reelle de la camera (checkerboard 5x7, 22 vues, RMS 0.169 px) ---
 # Si le path calibration_camera.npz est a cote du script, il est utilise.
 MONTAGE = optics.ACTIVE_MOUNTING
-# L'optics vient de optics.py : camera, tube, hublot, milieu. Le mounting
+# L'optics vient de optics.py : camera, tube, viewport, milieu. Le mounting
 # n'est ecrit dans aucun path de code : optics.py le lit dans
 # calibration/montage_local.txt, propre a CETTE machine, et le demande une
 # fois s'il n'existe pas encore. Pour le changer :
@@ -70,7 +70,7 @@ def ouvrir_camera():
                     hh, ww = img.shape[:2]
                     print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
                     if (ww, hh) != RESOLUTION:
-                        print(f"  ATTENTION : resolution obtenue {ww}x{hh} au lieu de "
+                        print(f"  WARNING : resolution obtenue {ww}x{hh} au lieu de "
                               f"{RESOLUTION[0]}x{RESOLUTION[1]}. La calibration ne sera "
                               f"valable que si elle a ete faite dans ce meme format.")
                     return cap, ww, hh
@@ -80,7 +80,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERREUR : aucune camera ouverte (index 0 a 3).")
+    print("ERROR: aucune camera ouverte (index 0 a 3).")
     raise SystemExit
 
 K, dist = charger_calibration(L, H)

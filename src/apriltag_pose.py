@@ -7,10 +7,10 @@ Tâche 1 du projet UUV : mesurer et afficher EN DIRECT la position et
 l'orientation de la caméra par report à des marqueurs AprilTag.
 
 Ce script couvre les étapes 1 -> 4 de la feuille de route :
-  Etape 1 : afficher le flux caméra
-  Etape 2 : récupérer les paramètres intrinsèques (fx, fy, cx, cy)
-  Etape 3 : détecter les AprilTags (famille tag36h11) en direct
-  Etape 4 : estimer la pose (rvec, tvec) avec cv2.solvePnP + dessiner les axes 3D
+  Step 1 : afficher le flux caméra
+  Step 2 : récupérer les paramètres intrinsèques (fx, fy, cx, cy)
+  Step 3 : détecter les AprilTags (famille tag36h11) en direct
+  Step 4 : estimer la pose (rvec, tvec) avec cv2.solvePnP + dessiner les axes 3D
 
 Contrôles :
   q ou ECHAP : quitter
@@ -38,7 +38,7 @@ from scipy.spatial.transform import Rotation
 
 
 # --------------------------------------------------------------------------
-# Etape 4 : géométrie du tag et estimation de pose
+# Step 4 : géométrie du tag et estimation de pose
 # --------------------------------------------------------------------------
 def tag_object_points(tag_size_m):
     """
@@ -150,7 +150,7 @@ class RealSenseSource:
         cfg.enable_stream(rs.stream.color, width, height, rs.format.bgr8, fps)
         profile = self.pipeline.start(cfg)
 
-        # Etape 2 : intrinsèques fournis directement par la caméra
+        # Step 2 : intrinsèques fournis directement par la caméra
         intr = (
             profile.get_stream(rs.stream.color)
             .as_video_stream_profile()
@@ -237,7 +237,7 @@ def main():
     print(f"[INFO] Taille du tag : {args.tag_size*100:.1f} cm")
     print("[INFO] Appuie sur 'q' ou ECHAP pour quitter.")
 
-    # Etape 3 : détecteur AprilTag 3
+    # Step 3 : détecteur AprilTag 3
     detector = Detector(
         families=args.family,
         nthreads=4,

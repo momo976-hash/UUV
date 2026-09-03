@@ -4,8 +4,8 @@
 #
 #     python calibration_tube.py
 #
-# Il pose UNE question au demarrage — camera nue, tube a l'air, ou tube dans
-# l'water — et adapte ses verifications. Rien a installer, aucun autre path
+# Il pose UNE question au demarrage — camera nue, tube in air, ou tube dans
+# l'water — et adapte ses checks. Rien a installer, aucun autre path
 # du depot n'est lu.
 #
 # ---------------------------------------------------------------------------
@@ -17,29 +17,29 @@
 #   [n] CAMERA NUE, hors du tube. Aucune optics en travers : c'est l'ancre.
 #       Rien ne permet de la contredire, tout le reste s'y compare.
 #
-#   [a] TUBE A L'AIR. Selon l'axis du tube la paroi est une lame a faces
-#       paralleles : en air elle ne devie STRICTEMENT rien, donc fx doit
-#       retomber sur la camera nue. Selon la circonference c'est un menisque,
+#   [a] TUBE A L'AIR. Selon l'axis du tube la wall est une lame a faces
+#       paralleles : in air elle ne devie STRICTEMENT rien, donc fx doit
+#       retomber sur la camera nue. Selon la circonference c'est un meniscus,
 #       qui grossit d'environ 0.9 % : le report fy_tube/fy_nue MESURE le
 #       retrait de la pupil, qu'on ne sait pas obtenir autrement.
 #
-#       ATTENTION : le bouchon d'extremite n'est PAS dans le path optics.
-#       La camera regarde par la paroi LATERALE, donc calibrer tube ouvert ou
+#       WARNING : le bouchon d'extremite n'est PAS dans le path optics.
+#       La camera regarde par la wall LATERALE, donc calibrer tube ouvert ou
 #       ferme revient au meme.
 #
 #   [e] TUBE DANS L'EAU. La lame plane multiplie fx par l'index de l'water,
-#       1.33 ; le menisque agit differemment sur fy. Les deux axes se
-#       separent : c'est l'anamorphose.
+#       1.33 ; le meniscus agit differemment sur fy. Les deux axes se
+#       separent : c'est l'anamorphic ratio.
 #
 #       ECART NON RESOLU : les focales measured tombent 12.7 % (fx) et 6.6 %
 #       (fy) sous cette prevision. Ni la position de la camera, ni
-#       l'inclinaison du damier, ni la couverture des corners, ni la
+#       l'inclinaison du checkerboard, ni la couverture des corners, ni la
 #       resolution, ni la temperature de l'water ne le produisent. Le script
 #       le signale sans pretendre l'expliquer. Trancher se fait a la measurement,
 #       avec check_distance.py sur une distance connue.
 #
 # Une calibration water ne se juge que contre une calibration air, qui ne se
-# juge que contre la camera nue. Comparer l'water a une reference en air douteuse
+# juge que contre la camera nue. Comparer l'water a une reference in air douteuse
 # ne prouve rien — c'est exactement ce qui nous a fait tourner en rond.
 #
 # ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@
 #
 # LES 15 PRISES : 8 petites sur les bords et les corners de l'image, 7 grandes
 # au centre, TOUTES PENCHEES d'environ 30 degres sauf une. L'inclinaison
-# compte bien plus que la distance : damier a plat, focal_length et distance sont
+# compte bien plus que la distance : checkerboard a plat, focal_length et distance sont
 # interchangeables et fx sort faux d'environ 7 % avec un RMS impeccable.
 #
 # TOUCHES : c = capturer | k = calculer | z = annuler | q = quitter
@@ -76,7 +76,7 @@ import numpy as np
 # ===========================================================================
 # REFERENCES (en dur : ce path se suffit a lui-meme)
 # ===========================================================================
-# Camera nue measured en air. Sert de default tant que [n] n'a pas ete refait.
+# Camera nue measured in air. Sert de default tant que [n] n'a pas ete refait.
 FX_NUE_DEFAUT = 604.1876
 FY_NUE_DEFAUT = 602.3668
 
@@ -85,20 +85,20 @@ WATER_INDEX = 1.33
 # ===========================================================================
 # GROSSISSEMENT SOUS L'EAU, SELON L'AXE DU TUBE
 # ===========================================================================
-# Selon l'axis du tube, la paroi cylindrique est localement PLANE : dans le
+# Selon l'axis du tube, la wall cylindrique est localement PLANE : dans le
 # plan qui contient l'axis, ses deux faces se coupent en droites paralleles.
-# C'est donc une lame a faces paralleles, et sous l'water elle multiplie la
+# C'est donc une plane-parallel slab, et underwater elle multiplie la
 # focal_length par l'index, 1.33.
 #
 # La distance de l'objet n'y change presque rien : le dioptre est a ~22 mm
 # de la pupil, ce qui ne coute que 1.2 % a 0.30 m et 0.4 % a 1 m. Table
-# obtenue par trace de rayons (modele_paroi_cylindrique.py), qui redonne la
+# obtenue par trace de rayons (modele_wall_cylindrique.py), qui redonne la
 # formule analytique de la lame a 0.5 % pres.
 #
-# ATTENTION — CE QUE CE CHIFFRE NE FAIT PAS. Les focales measured sous l'water
+# WARNING — CE QUE CE CHIFFRE NE FAIT PAS. Les focales measured underwater
 # tombent 12.7 % (fx) et 6.6 % (fy) EN DESSOUS de cette prevision. Cet gap
 # n'est a ce jour PAS explique : ni la position de la camera dans le tube, ni
-# l'inclinaison du damier, ni la couverture des corners, ni la resolution, ni
+# l'inclinaison du checkerboard, ni la couverture des corners, ni la resolution, ni
 # la temperature de l'water ne le produisent. Le diagnostic le signale donc,
 # sans pretendre en connaitre la cause.
 GROSSISSEMENT_AXIAL = (
@@ -109,9 +109,9 @@ GROSSISSEMENT_AXIAL = (
 )
 
 
-MENISQUE_AIR = 1.00851      # grossissement circonferentiel, tube a l'air
-MENISQUE_EAU = 1.03745      # idem sous l'water
-ANAMORPHOSE_EAU = 1.268     # fx/fy attendu sous l'water
+MENISQUE_AIR = 1.00851      # grossissement circonferentiel, tube in air
+MENISQUE_EAU = 1.03745      # idem underwater
+ANAMORPHOSE_EAU = 1.268     # fx/fy attendu underwater
 
 
 def grossissement_axial(distance):
@@ -126,8 +126,8 @@ COINS = (6, 4)
 CAPTURES_MINI = 15
 ZONES_MINI = 8
 # Fraction du radius "centre -> corner d'image" qu'au moins une vue doit atteindre.
-# Les zones seules ne suffisent pas : un damier entre dans la case du corner sans
-# forcement approcher le corner reel, et la distorsion y reste alors extrapolee.
+# Les zones seules ne suffisent pas : un checkerboard entre dans la case du corner sans
+# forcement approcher le corner reel, et la distortion y reste alors extrapolee.
 PORTEE_MINI = 0.90
 
 CRITERES = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
@@ -170,14 +170,14 @@ def charger_reference(name):
 
 
 def grille_3d():
-    """Coordonnees 3D des corners du damier dans son propre frame (Z = 0)."""
+    """Coordonnees 3D des corners du checkerboard dans son propre frame (Z = 0)."""
     p = np.zeros((COINS[0] * COINS[1], 3), np.float32)
     p[:, :2] = np.mgrid[0:COINS[0], 0:COINS[1]].T.reshape(-1, 2)
     return p * TAILLE_CARREAU
 
 
-def trouver_damier(gris):
-    """Cherche le damier dans les deux orientations possibles."""
+def trouver_checkerboard(gris):
+    """Cherche le checkerboard dans les deux orientations possibles."""
     for c in (COINS, (COINS[1], COINS[0])):
         ok, corners = cv2.findChessboardCorners(
             gris, c, cv2.CALIB_CB_ADAPTIVE_THRESH
@@ -189,10 +189,10 @@ def trouver_damier(gris):
 
 
 def zones_touchees(corners, width, height):
-    """Quelles cases de la grille 3x3 ce damier occupe-t-il ?
+    """Quelles cases de la grille 3x3 ce checkerboard occupe-t-il ?
 
     On marque une zone des qu'UN corner y tombe. Ce qui compte pour la
-    distorsion, ce n'est pas ou est le centre du damier mais jusqu'ou vont
+    distortion, ce n'est pas ou est le centre du checkerboard mais jusqu'ou vont
     ses corners : c'est la, loin de l'axis optics, que le polynome se lit.
     """
     touchees = set()
@@ -204,14 +204,14 @@ def zones_touchees(corners, width, height):
 
 
 def portee_radiale(corners, width, height):
-    """Jusqu'ou, du centre de l'image vers son corner, ce damier va-t-il ?
+    """Jusqu'ou, du centre de l'image vers son corner, ce checkerboard va-t-il ?
 
-    Rendue en fraction du radius du corner d'image : 1.0 = un corner du damier
+    Rendue en fraction du radius du corner d'image : 1.0 = un corner du checkerboard
     atteint le corner de l'image, 0.5 = il s'arrete a mi-path.
 
     POURQUOI CE CONTROLE EN PLUS DES ZONES. La grille 3x3 est trop indulgente :
-    un damier peut entrer dans la case du corner sans jamais approcher le corner
-    reel. La distorsion s'y trouve alors EXTRAPOLEE, et le polynome part en
+    un checkerboard peut entrer dans la case du corner sans jamais approcher le corner
+    reel. La distortion s'y trouve alors EXTRAPOLEE, et le polynome part en
     vrille exactement la ou on ne l'a pas contraint — c'est ainsi qu'il
     s'inverse a l'interieur de l'image, default qu'aucun RMS ne revele et qui
     se paie en focal_length fausse.
@@ -280,7 +280,7 @@ def ouvrir_camera():
             cap.release()
             break          # cet index est gris : inutile d'essayer ses autres backends
 
-    print("\nERREUR : aucun flux COULEUR trouve.")
+    print("\nERROR: aucun flux COULEUR trouve.")
     if gris_trouves:
         print("Flux en niveaux de gris rencontres :")
         for description in gris_trouves:
@@ -317,7 +317,7 @@ def rayon_max(K):
                             (RESOLUTION[0] - 1, RESOLUTION[1] - 1)))
 
 
-def inversion_distorsion(dist):
+def inversion_distortion(dist):
     """Rayon ou le polynome cesse d'etre monotone, ou None.
 
     Au-dela de ce radius le model fait correspondre deux directions du world
@@ -331,18 +331,18 @@ def inversion_distorsion(dist):
     return float(r[creux[0]]) if len(creux) else None
 
 
-def diagnostic(mounting, K, dist, rms, vues, distance_damier=None):
+def diagnostic(mounting, K, dist, rms, vues, distance_checkerboard=None):
     """Le result tient-il debout ? Les attentes dependent du mounting.
 
-    distance_damier : distance median a laquelle le damier a ete tenu, en
+    distance_checkerboard : distance median a laquelle le checkerboard a ete tenu, en
     metres. Sous l'water elle change ce qu'on doit attendre de la focal_length (voir
     GROSSISSEMENT_AXIAL en tete) ; ailleurs elle n'entre pas en jeu.
     """
-    if distance_damier is None:
-        distance_damier = 0.75
+    if distance_checkerboard is None:
+        distance_checkerboard = 0.75
     fx, fy = float(K[0, 0]), float(K[1, 1])
     cx, cy = float(K[0, 2]), float(K[1, 2])
-    anamorphose = max(fx, fy) / min(fx, fy)
+    anamorphic_ratio = max(fx, fy) / min(fx, fy)
     soucis = []
 
     print("\n" + "=" * 68)
@@ -350,7 +350,7 @@ def diagnostic(mounting, K, dist, rms, vues, distance_damier=None):
     print("=" * 68)
     print(f"  fx = {fx:8.2f}      fy = {fy:8.2f}")
     print(f"  cx = {cx:8.2f}      cy = {cy:8.2f}")
-    print(f"  distorsion = {np.round(dist.ravel(), 5).tolist()}")
+    print(f"  distortion = {np.round(dist.ravel(), 5).tolist()}")
     print(f"  {vues} vues, RMS {rms:.4f} px")
 
     print("\n" + "-" * 68)
@@ -378,84 +378,84 @@ def diagnostic(mounting, K, dist, rms, vues, distance_damier=None):
         print(f"     reference camera nue ({origin}) : fx {fx_nue:.1f}  fy {fy_nue:.1f}")
         ecart_fx = 100 * (fx / fx_nue - 1)
         print(f"\n     fx {fx:.1f}   attendu {fx_nue:.1f}   ({ecart_fx:+.1f} %)")
-        print("     En air la lame a faces paralleles ne devie RIEN : fx doit")
+        print("     En air la plane-parallel slab ne devie RIEN : fx doit")
         print("     retomber sur la camera nue.")
         if abs(ecart_fx) > 3:
-            print("     [PROBLEME] trop d'gap pour de l'optics. Cherche du cote")
-            print("     de la mise au point, de la resolution, ou d'une paroi")
+            print("     [PROBLEM] trop d'gap pour de l'optics. Cherche du cote")
+            print("     de la mise au point, de la resolution, ou d'une wall")
             print("     rayee ou embuee.")
             soucis.append(f"fx s'ecarte de {ecart_fx:+.1f} % de la camera nue")
         ecart_fy = 100 * (fy / attendu_fy - 1)
         print(f"\n     fy {fy:.1f}   attendu {attendu_fy:.1f}   ({ecart_fy:+.1f} %)")
-        print("     Le menisque grossit d'environ 0.9 % ; l'gap measurement le")
+        print("     Le meniscus grossit d'environ 0.9 % ; l'gap measurement le")
         print("     retrait de la pupil par report a l'axis du tube.")
 
     else:   # tube_eau
         reference = charger_reference("tube_air")
         fx_air, fy_air = reference or (None, None)
         if reference is None:
-            print("     [ATTENTION] le tube A L'AIR n'a pas ete calibre.")
+            print("     [WARNING] le tube A L'AIR n'a pas ete calibre.")
             print("     Sans lui, rien ici ne peut etre verifie serieusement :")
             print("     une calibration water ne se juge que contre une air.")
             soucis.append("pas de reference tube_air pour comparer")
         else:
-            grossissement = grossissement_axial(distance_damier)
+            grossissement = grossissement_axial(distance_checkerboard)
             attendu_fx = fx_air * grossissement
             gap = 100 * (fx / attendu_fx - 1)
-            print(f"     reference tube a l'air : fx {fx_air:.1f}  fy {fy_air:.1f}")
-            print(f"     damier tenu vers {distance_damier:.2f} m (median des vues)")
+            print(f"     reference tube in air : fx {fx_air:.1f}  fy {fy_air:.1f}")
+            print(f"     checkerboard tenu vers {distance_checkerboard:.2f} m (median des vues)")
             print(f"\n     fx {fx:.1f}   attendu {attendu_fx:.1f}   ({gap:+.1f} %)")
             print(f"     Grossissement axial attendu : x{grossissement:.3f}")
-            print("     (la paroi est localement PLANE selon l'axis du tube : sous")
-            print(f"     l'water une lame a faces paralleles multiplie par {WATER_INDEX}.")
+            print("     (la wall est localement PLANE selon l'axis du tube : sous")
+            print(f"     l'water une plane-parallel slab multiplie par {WATER_INDEX}.")
             print("     La distance n'y change que quelques dixiemes de pourcent.)")
             if fx < fx_air:
-                print("     [PROBLEME] fx a BAISSE. L'water grossit : une baisse est")
+                print("     [PROBLEM] fx a BAISSE. L'water grossit : une baisse est")
                 print("     impossible si la camera regarde vraiment de l'water.")
                 soucis.append("fx a baisse alors que l'water doit l'augmenter")
             elif abs(gap) > 8:
                 print(f"     [ECART NON RESOLU] {abs(gap):.0f} % sous la prevision.")
                 print("     C'est l'gap qu'on observe depuis le start et qu'aucune")
                 print("     hypothese testee n'explique : position de la camera,")
-                print("     inclinaison du damier, couverture des corners, resolution,")
+                print("     inclinaison du checkerboard, couverture des corners, resolution,")
                 print("     temperature de l'water — toutes ecartees par le calcul.")
                 print("     La calibration peut tres bien etre juste malgre tout :")
                 print("     seule une measurement sur une distance connue le dira.")
                 print("        python check_distance.py --reel 1.000")
                 soucis.append(f"fx a {abs(gap):.0f} % de la prevision (cause inconnue)")
 
-    # -- 2. anamorphose ------------------------------------------------------
+    # -- 2. anamorphic ratio ------------------------------------------------------
     attendue = ANAMORPHOSE_EAU if mounting == "tube_eau" else 1.00
-    print(f"\n  2. ANAMORPHOSE  fx/fy = {anamorphose:.3f}   attendue {attendue:.3f}")
+    print(f"\n  2. ANAMORPHOSE  fx/fy = {anamorphic_ratio:.3f}   attendue {attendue:.3f}")
     if mounting == "tube_eau":
-        if anamorphose < 1.05:
-            print("     [PROBLEME] les deux axes grossissent pareil : la camera")
+        if anamorphic_ratio < 1.05:
+            print("     [PROBLEM] les deux axes grossissent pareil : la camera")
             print("     n'est pas couchee comme on croit, ou ne regarde pas par")
-            print("     la paroi cylindrique.")
-            soucis.append("anamorphose absente sous l'water")
+            print("     la wall cylindrique.")
+            soucis.append("anamorphic_ratio absente underwater")
         else:
             print("     Presente : la camera est bien couchee dans le tube.")
     else:
-        if anamorphose > 1.06:
-            print("     [PROBLEME] les deux axes devraient etre quasi identiques")
+        if anamorphic_ratio > 1.06:
+            print("     [PROBLEM] les deux axes devraient etre quasi identiques")
             print("     hors de l'water.")
-            soucis.append(f"anamorphose de {anamorphose:.3f} hors de l'water")
+            soucis.append(f"anamorphic_ratio de {anamorphic_ratio:.3f} hors de l'water")
         else:
-            print("     Les deux axes coincident, c'est ce qu'on attend en air.")
+            print("     Les deux axes coincident, c'est ce qu'on attend in air.")
 
     # -- 3. point principal --------------------------------------------------
     ecart_cx = cx - RESOLUTION[0] / 2
     print(f"\n  3. POINT PRINCIPAL   cx {cx:.1f} ({ecart_cx:+.1f} px du centre)")
     if abs(ecart_cx) > 40:
-        print("     [PROBLEME] loin du centre. Typique d'un ajustement mal")
+        print("     [PROBLEM] loin du centre. Typique d'un ajustement mal")
         print("     conditionne : couverture insuffisante ou vues trop a plat.")
         soucis.append(f"cx a {ecart_cx:+.0f} px du centre")
     else:
         print("     Proche du centre : bon signe d'un ajustement sain.")
 
-    # -- 4. validite de la distorsion ---------------------------------------
+    # -- 4. validite de la distortion ---------------------------------------
     rmax = rayon_max(K)
-    inversion = inversion_distorsion(dist.ravel())
+    inversion = inversion_distortion(dist.ravel())
     print(f"\n  4. DISTORSION   corner d'image a r = {rmax:.3f}")
     if inversion is None:
         print("     Polynome monotone partout : bien conditionne.")
@@ -463,18 +463,18 @@ def diagnostic(mounting, K, dist, rms, vues, distance_damier=None):
         print(f"     Inversion a r = {inversion:.3f}, HORS de l'image "
               f"(marge {100*(inversion/rmax-1):.0f} %). Correct.")
     else:
-        print(f"     [PROBLEME] inversion a r = {inversion:.3f}, DANS l'image.")
+        print(f"     [PROBLEM] inversion a r = {inversion:.3f}, DANS l'image.")
         print("     Deux directions du world y donnent le meme pixel : impossible")
         print("     pour une true lentille. Les corners n'ont pas ete assez seen.")
-        soucis.append("la distorsion s'inverse a l'interieur de l'image")
+        soucis.append("la distortion s'inverse a l'interieur de l'image")
 
     # -- 5. residu -----------------------------------------------------------
     print(f"\n  5. RMS {rms:.4f} px")
     if rms > 1.5:
-        print("     [PROBLEME] eleve : frames floues, damier qui bouge, water trouble.")
+        print("     [PROBLEM] eleve : frames floues, checkerboard qui bouge, water trouble.")
         soucis.append(f"RMS de {rms:.2f} px")
     else:
-        print("     Correct. Attention : un bon RMS ne suffit PAS a valider une")
+        print("     Correct. Warning : un bon RMS ne suffit PAS a valider une")
         print("     calibration — des vues trop a plat donnent 0.26 px avec une")
         print("     focal_length fausse de 7 %. Ce sont les points 1 a 4 qui tranchent.")
 
@@ -527,7 +527,7 @@ def main():
     if cam is None:
         return 1
     if (width, height) != RESOLUTION:
-        print(f"\nERREUR : la camera donne du {width}x{height} au lieu de "
+        print(f"\nERROR: la camera donne du {width}x{height} au lieu de "
               f"{RESOLUTION[0]}x{RESOLUTION[1]}.")
         print("Une calibration faite dans ce format ne serait pas utilisable.")
         cam.release()
@@ -548,7 +548,7 @@ def main():
     print("  7 GRANDES au centre, TOUTES PENCHEES d'environ 30 deg sauf une.")
     print("  Les cases rouges montrent ce qui manque encore.")
     print("\n  La PORTEE dit jusqu'ou, vers le corner de l'image, un corner du")
-    print("  damier est alle. Sous 90 %, la distorsion des bords est devinee.")
+    print("  checkerboard est alle. Sous 90 %, la distortion des bords est devinee.")
     print("\n  c = capturer   k = calibrer   z = annuler   q = quitter")
     print("=" * 68)
 
@@ -557,7 +557,7 @@ def main():
         if not ok:
             continue
         gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        trouve, corners, forme = trouver_damier(gris)
+        trouve, corners, forme = trouver_checkerboard(gris)
 
         dessiner_couverture(image, couvertes, width, height)
         if trouve:
@@ -624,13 +624,13 @@ def main():
                 print(f"  Encore {ZONES_MINI - len(couvertes)} zone(s).")
                 continue
             if not assez_loin:
-                # Sans corners de damier pres du bord de l'image, la distorsion y
+                # Sans corners de checkerboard pres du bord de l'image, la distortion y
                 # est extrapolee : le polynome s'inverse a l'interieur du cadre
                 # et compense en faussant la focal_length. Aucun RMS ne le montre.
                 print(f"  REFUS : portee radiale {portee:.0%}, il en faut "
                       f"{PORTEE_MINI:.0%}.")
-                print("  Un corner du damier doit approcher un COIN de l'image,")
-                print("  pas seulement entrer dans sa zone. Recule le damier")
+                print("  Un corner du checkerboard doit approcher un COIN de l'image,")
+                print("  pas seulement entrer dans sa zone. Recule le checkerboard")
                 print("  pour qu'il soit petit, et pushed-le vraiment au bord.")
                 continue
             break
@@ -645,17 +645,17 @@ def main():
     print(f"\nCalcul sur {len(points_3d)} vues...")
     rms, K, dist, _, tvecs = cv2.calibrateCamera(
         points_3d, points_2d, RESOLUTION, None, None)
-    # distance a laquelle le damier a reellement ete tenu : sous l'water
+    # distance a laquelle le checkerboard a reellement ete tenu : underwater
     # elle determine la focal_length que la calibration peut retirer.
-    distance_damier = float(np.median(
+    distance_checkerboard = float(np.median(
         [float(np.linalg.norm(t)) for t in tvecs]))
     print(f"Damier tenu entre "
           f"{min(float(np.linalg.norm(t)) for t in tvecs):.2f} et "
           f"{max(float(np.linalg.norm(t)) for t in tvecs):.2f} m "
-          f"(median {distance_damier:.2f} m)")
+          f"(median {distance_checkerboard:.2f} m)")
 
     enregistrer(mounting, K, dist, float(rms), len(points_3d))
-    diagnostic(mounting, K, dist, float(rms), len(points_3d), distance_damier)
+    diagnostic(mounting, K, dist, float(rms), len(points_3d), distance_checkerboard)
     return 0
 
 

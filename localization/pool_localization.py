@@ -15,7 +15,7 @@ FACTEUR_FOCALE = 0.95      # correction de focal_length trouvee a la validation
 # ---------------------------------------------------------------------------
 # CARTE DES TAGS : pour chaque ID, position (x, y, z) du CENTRE du tag dans le
 # frame piscine, en METRES. Remplace par tes vraies measurements (a la regle).
-# Exemple : tag 3 = centre a 15 cm a droite et 40 cm en haut du corner-origin.
+# Example : tag 3 = centre a 15 cm a droite et 40 cm en haut du corner-origin.
 # ---------------------------------------------------------------------------
 CARTE_DES_TAGS = {
     3: (0.15, 0.40, 0.0),
@@ -41,7 +41,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERREUR : aucune camera ouverte.")
+    print("ERROR: aucune camera ouverte.")
     raise SystemExit
 
 FOCALE = L * FACTEUR_FOCALE

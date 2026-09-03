@@ -6,7 +6,7 @@
 #     time qu'un tag deja known (methode de Thein), apres N observations.
 #   - La camera est localisee dans ce frame et tracee sur la tag_map 2D.
 #
-# Touches : c = effacer la trace | s = sauver la tag_map | r = reset | q = quitter
+# Keys: c = effacer la trace | s = sauver la tag_map | r = reset | q = quitter
 from collections import defaultdict, deque
 
 import cv2
@@ -17,7 +17,7 @@ CAMERA_INDEX = None
 # Resolution FIGEE : doit etre identique pour la calibration et les measurements.
 RESOLUTION = (640, 480)
 
-TAG_SIZE = 0.22389        # cote du carre noir, measurement au pied a coulisse (nominal 223 mm)
+TAG_SIZE = 0.22389        # cote du carre noir, measurement au calipers (nominal 223 mm)
 FACTEUR_FOCALE = 0.95       # correction de focal_length issue de la validation
 
 ECHANTILLONS_REQUIS = 25    # observations avant d'enregistrer un tag
@@ -147,7 +147,7 @@ def ouvrir_camera():
                     hh, ww = img.shape[:2]
                     print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
                     if (ww, hh) != RESOLUTION:
-                        print(f"  ATTENTION : resolution obtenue {ww}x{hh} au lieu de "
+                        print(f"  WARNING : resolution obtenue {ww}x{hh} au lieu de "
                               f"{RESOLUTION[0]}x{RESOLUTION[1]}. La calibration ne sera "
                               f"valable que si elle a ete faite dans ce meme format.")
                     return cap, ww, hh
@@ -157,7 +157,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERREUR : aucune camera ouverte.")
+    print("ERROR: aucune camera ouverte.")
     raise SystemExit
 
 FOCALE = L * FACTEUR_FOCALE
@@ -179,7 +179,7 @@ derniere_pos = dernier_point = None
 
 print("=" * 60)
 print("DEMO : montre les tags. Tout s'enregistre automatiquement.")
-print("Touches : c=effacer trace  s=sauver tag_map  r=reset  q=quitter")
+print("Keys: c=effacer trace  s=sauver tag_map  r=reset  q=quitter")
 print("=" * 60)
 
 while True:

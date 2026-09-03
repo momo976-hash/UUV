@@ -1,8 +1,8 @@
 # restore_air_calibration.py — Put the in-air calibration back.
 #
-# POURQUOI CE SCRIPT EXISTE
+# WHY THIS SCRIPT EXISTS EXISTE
 # Lancer `calibrate.py` SANS l'option --mounting ecrit sous le name par
-# default, `tube_air`, et ecrase donc la calibration en air. Le folder
+# default, `tube_air`, et ecrase donc la calibration in air. Le folder
 # montages/ etant dans .gitignore, git n'en garde aucune copie.
 #
 # Les values ci-dessous sont celles de la calibration du 12/08/2026 :
@@ -10,9 +10,9 @@
 # 5_Nos_chiffres de docs/fonction_calibration.xlsx et dans l'en-tete de
 # demo_distance.py — c'est de la que ce script les tire.
 #
-# Cette reference en air n'est pas un confort : c'est elle qui permet de dire
-# si une calibration sous l'water est credible. Sans elle, on ne peut plus
-# comparer fx a sa value en air, ni mesurer l'anamorphose apparue.
+# Cette reference in air n'est pas un confort : c'est elle qui permet de dire
+# si une calibration underwater est credible. Sans elle, on ne peut plus
+# comparer fx a sa value in air, ni mesurer l'anamorphic ratio apparue.
 #
 #   python calibration/restaurer_tube_air.py
 import sys
@@ -33,7 +33,7 @@ path.parent.mkdir(parents=True, exist_ok=True)
 
 if path.exists():
     # Ne jamais ecraser en silence : le path present est peut-etre la
-    # calibration sous l'water rangee par error sous ce name, et c'est le seul
+    # calibration underwater rangee par error sous ce name, et c'est le seul
     # exemplaire qui en existe. On le met de cote avant d'ecrire.
     old = np.load(path)
     K_ancien = old["K"]
@@ -48,7 +48,7 @@ if path.exists():
         numero += 1
     np.savez(backup, **{cle: old[cle] for cle in old.files})
     print(f"Mis de cote dans : {backup.name}")
-    print("  (si c'etait ta calibration sous l'water, elle est la, pas perdue)")
+    print("  (si c'etait ta calibration underwater, elle est la, pas perdue)")
 
 np.savez(path, K=K, dist=DIST)
 print(f"\nCalibration du 12/08 restauree dans : {path}")

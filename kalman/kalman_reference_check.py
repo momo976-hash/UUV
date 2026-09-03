@@ -82,7 +82,7 @@ def comparer(name, calcule):
     return ok
 
 
-def exemple_du_document():
+def example_du_document():
     """The radar example, worked through with the project's core."""
     print("=" * 74)
     print("THE DOCUMENT'S EXAMPLE — 1D radar tracking an aircraft")
@@ -153,7 +153,7 @@ def exemple_du_document():
     comparer("P(2,1)", filter.P)
 
 
-def modele_de_lengin():
+def modele_de_lvehicle():
     """The same model, carried from 1 to 3 dimensions for the vehicle."""
     print("\n" + "=" * 74)
     print("THE SAME MODEL, APPLIED TO THE VEHICLE")
@@ -164,7 +164,7 @@ def modele_de_lengin():
   state has six, [px py pz vx vy vz]. The model is the same, block by block —
   it is the same CONSTANT-VELOCITY KINEMATIC model.
 
-      document              engin
+      document              vehicle
       F = [[1, dt],         F = [[I3, dt.I3],
            [0,  1]]              [ 0,    I3 ]]
 
@@ -224,8 +224,8 @@ def modele_de_lengin():
 
 
 def main():
-    exemple_du_document()
-    modele_de_lengin()
+    example_du_document()
+    modele_de_lvehicle()
 
     print("=" * 74)
     echecs = [name for name, ok, _ in _resultats if not ok]

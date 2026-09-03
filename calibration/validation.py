@@ -1,6 +1,6 @@
 # validation.py — Minimal AprilTag pose read-out, for a quick check.
 # Affiche une distance STABILISEE (mean des dernieres measurements) et l'enregistre
-# dans validation.csv quand on appuie sur 's'. Comparer ensuite au metre ruban.
+# dans validation.csv quand on appuie sur 's'. Comparer ensuite au tape measure.
 import csv
 import os
 from collections import deque
@@ -29,7 +29,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERREUR : aucune camera ouverte.")
+    print("ERROR: aucune camera ouverte.")
     raise SystemExit
 
 K = np.array([[L, 0, L / 2], [0, L, H / 2], [0, 0, 1]], dtype=np.float64)

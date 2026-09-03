@@ -97,13 +97,13 @@ except ImportError:
 CAMERA_INDEX = None
 RESOLUTION = optics.RESOLUTION
 
-TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au calipers, pas 223 mm nominal
 MIN_LIAISON = 6      # co-visibilites avant d'utiliser un tag (liaison rapide)
-MAX_LIAISON = 60     # on garde ce count d'observations pour affiner la liaison
+MAX_LIAISON = 60     # we keep ce count d'observations pour affiner la liaison
 LISSAGE = 15
 
 MONTAGE = optics.ACTIVE_MOUNTING
-# L'optics vient de optics.py : camera, tube, hublot, milieu. Le mounting
+# L'optics vient de optics.py : camera, tube, viewport, milieu. Le mounting
 # n'est ecrit nulle part dans le code : optics.py le lit dans le path
 # montage_local.txt propre a CETTE machine, et le demande une fois s'il
 # n'existe pas encore. Pour le changer :
@@ -142,14 +142,14 @@ def angle_entre(R1, R2):
 # POURQUOI UNE SEULE CONNEXION. La D435i ne se laisse pas ouvrir deux fois :
 # si OpenCV tient le flux colour, pyrealsense2 ne peut plus atteindre le
 # module de mouvement, et l'IMU reste muette sans qu'aucune error ne le
-# dise. On prend donc TOUT par pyrealsense2 quand il est la, et on retombe
+# dise. We take donc TOUT par pyrealsense2 quand il est la, et on retombe
 # sur OpenCV sans IMU sinon — le filter fonctionne dans les deux cas, avec ou
 # sans imu.
 #
 # CADENCE DE L'IMU. Le pipeline se cale sur son flux le plus lent, ici la
 # colour a 30 Hz. On ne lit donc qu'une measurement de gyro par image. Ce n'est
 # pas une perte : le filter avance d'un pas par image, et integrer omega sur
-# les 33 ms de ce pas est exactement ce qu'il faut. La haute rate ne
+# les 33 ms de ce pas est exactement ce qu'one must. La haute rate ne
 # servirait qu'a capter des transitoires plus rapides que les frames.
 # ===========================================================================
 class SourceRealSense:
@@ -181,7 +181,7 @@ class SourceRealSense:
         self.profil = self.pipeline.start(config)
 
         # Rotation imu -> camera colour. La D435i ne les aligne pas, et
-        # passer les measurements brutes sans elle fait deriver l'engin de travers
+        # passer les measurements brutes sans elle fait deriver l'vehicle de travers
         # sans aucun message d'error.
         self.R_imu_camera = np.eye(3)
         if self.with_imu:
@@ -313,8 +313,8 @@ dernier_temps = None
 ref_p_filtre = ref_R_filtre = None
 lissage_filtre = deque(maxlen=LISSAGE)
 
-# --- measurement des vitesses reelles de l'engin --------------------------------
-# Le filter a besoin de deux chiffres qui decrivent ce que l'engin fait sans
+# --- measurement des vitesses reelles de l'vehicle --------------------------------
+# Le filter a besoin de deux chiffres qui decrivent ce que l'vehicle fait sans
 # qu'il le sache : sigma_acceleration et derive_gyro. Plutot que de les
 # supposer, on les lit ici sur le mouvement reel. La pose BRUTE sert de
 # source (pas la filtered : le filter lisse justement ce qu'on veut mesurer).
@@ -381,12 +381,12 @@ if "--plots" not in sys.argv:
 print("=" * 66)
 
 # Le rappel est affiche AVANT la session, pas seulement apres : c'est
-# maintenant que la personne a l'engin dans l'water sous la main. Le lui dire
+# maintenant que la personne a l'vehicle in the water sous la main. Le lui dire
 # une fois la manip terminee l'obligerait a tout recommencer.
 remind_missing_measurements(with_imu=cam.with_imu)
 
 # --- les figures du cours, en direct (option --graphiques) -----------------
-# Facultatif et sans consequence si matplotlib manque : au bassin, une measurement
+# Facultatif et sans consequence si matplotlib manque : au pool, une measurement
 # ne se refait pas parce qu'une bibliotheque d'display n'est pas installee.
 windows = None
 debut_session = time.time()
@@ -426,9 +426,9 @@ while True:
             ok2, rvec, tvec = cv2.solvePnP(coins_3d, pts, K, dist,
                                            flags=cv2.SOLVEPNP_IPPE_SQUARE)
             if ok2:
-                # Le hublot courbe deplace le point de vue apparent : toutes
-                # les distances sortent 16 mm trop courtes sous l'water, measurement
-                # au bassin. La direction, elle, est juste — on allonge sans
+                # Le viewport courbe deplace le point de vue apparent : toutes
+                # les distances sortent 16 mm trop courtes underwater, measurement
+                # au pool. La direction, elle, est juste — on allonge sans
                 # tourner. Vaut 0 hors mounting immerge.
                 tvec = optics.correct_window_offset(tvec, MONTAGE)
                 poses[int(tid)] = transformation(cv2.Rodrigues(rvec)[0], tvec)
@@ -464,7 +464,7 @@ while True:
         cam_p = T_monde_cam[:3, 3]
         cam_R = T_monde_cam[:3, :3]
 
-    # --- ce que l'engin fait vraiment : velocity de rotation et acceleration -
+    # --- ce que l'vehicle fait vraiment : velocity de rotation et acceleration -
     # Mesure sur la pose BRUTE, entre deux frames consecutives.
     #
     # Deux poses consecutives ne sont comparables QUE si elles viennent de LA
@@ -640,7 +640,7 @@ while True:
     cv2.putText(image, "m=mode o=reference r=zero f=filter s=save q=quit", (10, H - 14),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
-    cv2.imshow("Verification frame world (q pour quitter)", image)
+    cv2.imshow("Check frame world (q pour quitter)", image)
 
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):
@@ -718,7 +718,7 @@ print(f"\nDone. Measurements in: {CSV}")
 
 # La figure est ENREGISTREE avant d'etre fermee : sans cela, tout ce que les
 # quatre graphiques ont montre pendant la session disparait a la fermeture de
-# la window, et il faut refaire la manip pour en garder une trace.
+# la window, et one must refaire la manip pour en garder une trace.
 if windows is not None:
     windows.rafraichir(force=True)
     image_figures = os.path.abspath("graphiques_kalman_session.png")
@@ -745,7 +745,7 @@ def bilan_filtre():
     Reserve a garder en tete pour le point 2 : l'error enregistree porte sur
     une DISTANCE entre deux poses, quand sigma porte sur UNE position. Les
     deux ne sont pas la meme grandeur (facteur ~racine de 2 au pire), et
-    l'error du metre a ruban s'y ajoute. Le report ci-dessous se lit donc
+    l'error du tape measure s'y ajoute. Le report ci-dessous se lit donc
     en ordre de grandeur : il attrape un filter qui ment d'un facteur 3, pas
     un gap de 20 %.
     """
@@ -857,7 +857,7 @@ if len(vitesses_angulaires) > 100:
     print(f"  acceleration median {centile(accelerations, 50):5.2f} m/s2"
           f"   95e centile {accel_95:6.2f} m/s2")
     print("-" * 66)
-    # Le noise de model doit couvrir ce que l'engin fait REELLEMENT sans que
+    # Le noise de model doit couvrir ce que l'vehicle fait REELLEMENT sans que
     # le filter le sache. Le 95e centile evite a la fois de sous-estimer, ce
     # qui ferait retarder le filter, et de se caler sur un pic isole.
     print("  HERE ARE THE TWO NUMBERS. What to do with them:")

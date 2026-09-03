@@ -2,21 +2,21 @@
 #
 # Le meme plan que le schema, mais qu'on peut tourner, zoomer et inspecter.
 # En plus : une camera virtuelle qu'on deplace pour check, avant de mouiller
-# quoi que ce soit, quels tags entrent ENSEMBLE dans l'image sous l'water (c'est
+# quoi que ce soit, quels tags entrent ENSEMBLE dans l'image underwater (c'est
 # la condition pour que deux tags se relient dans world_frame_check.py).
 #
-# Repere du bassin :  x = length (3.80 m)   y = width (1.67 m)
+# Repere du pool :  x = length (3.80 m)   y = width (1.67 m)
 #                     z = PROFONDEUR sous la surface (0 = surface, 1.00 = fond)
 #
 # Commandes
 #   souris glisser : tourner        molette : zoom          0 : recadrer
 #   1 : vue de dessus   2 : vue de face   3 : vue isometrique
-#   n : normales    l : boucle des liaisons    e : water et parois
+#   n : normales    l : boucle des liaisons    e : water et walls
 #   c : camera virtuelle on/off
 #   fleches : deplacer la camera (x, y)     a / d : pivoter     w / x : monter / descendre
 #   p : enregistrer une image PNG     h : rappel des touches     q : quitter
 #
-# Lancement :  python pool_layout_3d.py
+# Run with:  python pool_layout_3d.py
 #              python pool_layout_3d.py --png   (pas de window, exporte 3 vues)
 import sys
 from pathlib import Path
@@ -39,13 +39,13 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 # --------------------------------------------------------------------------
-# 1. Le bassin et les tags
+# 1. Le pool et les tags
 # --------------------------------------------------------------------------
 LONGUEUR, LARGEUR, PROFONDEUR = 3.80, 1.67, 1.00
-TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au calipers, pas 223 mm nominal
 BORDURE = 0.020          # ruban noir autour du tag (methode de Josiah)
 
-# id, paroi, x, y, z (depth), normale (dirigee vers l'interieur du bassin)
+# id, wall, x, y, z (depth), normale (dirigee vers l'interieur du pool)
 TAGS = [
     (0, "Longue A", 0.50, 0.000, 0.35, (0, +1, 0)),
     (1, "Longue A", 1.45, 0.000, 0.65, (0, +1, 0)),
@@ -67,18 +67,18 @@ COULEUR_PAROI = {
 }
 
 # --------------------------------------------------------------------------
-# 2. La camera sous l'water, dans son tube
+# 2. La camera underwater, dans son tube
 # --------------------------------------------------------------------------
 # Toute l'optics vient de optics.py : matrix de calibration, refraction du
-# hublot, et le TUBE, qui peut rogner le champ avant meme que l'water s'en mele.
+# viewport, et le TUBE, qui peut rogner le champ avant meme que l'water s'en mele.
 # Le champ kept ci-dessous est donc le plus petit des deux.
 LARGEUR_PX, HAUTEUR_PX = optics.RESOLUTION
 _demi_h_air, _demi_v_air, _demi_d_air = optics.half_fields_of_view()
 
 # Le champ n'est pas reduit pareil dans les deux directions. Camera couchee
 # dans le tube, l'axis HORIZONTAL de l'image suit l'axis du tube et traverse une
-# lame a faces paralleles : il se retrecit d'un facteur 1.33. L'axis VERTICAL
-# est circonferentiel et traverse un menisque, dont l'effet ne depend que de
+# plane-parallel slab : il se retrecit d'un facteur 1.33. L'axis VERTICAL
+# est circonferentiel et traverse un meniscus, dont l'effet ne depend que de
 # l'gap entre la pupil et l'axis du tube : nul si elle est sur l'axis, et
 # ELARGISSANT si elle est en retrait, comme c'est le cas ici. Le cone tracé
 # plus bas est donc plus large en height qu'en width, ce qui surprend mais
@@ -90,7 +90,7 @@ DEMI_FOV_V = np.radians(optics.demi_champ_eau(_demi_v_air, "section"))
 # decide de la detection : un carre trop etroit dans un sens n'est pas decode,
 # meme s'il est large dans l'autre. Sous l'water et dans ce mounting, la moins
 # grossie est la VERTICALE — donc immerger ne fait pas gagner de portee, au
-# contraire du raccourci « x 1.33 » qui ne vaut que pour un hublot plat.
+# contraire du raccourci « x 1.33 » qui ne vaut que pour un viewport plat.
 WATER_FOCAL_LENGTH = optics.water_focal_length()
 
 # Vignettage : le tube est un tuyau, et la camera regarde par un bout.
@@ -112,7 +112,7 @@ PIXELS_MIN = 20
 
 
 def repere_tag(normale):
-    """Axes du tag colle a une paroi : il reste vertical, sa normale est horizontale."""
+    """Axes du tag colle a une wall : il reste vertical, sa normale est horizontale."""
     n = np.asarray(normale, dtype=float)
     n = n / np.linalg.norm(n)
     vertical = np.array([0.0, 0.0, 1.0])      # +z = vers le fond
@@ -143,7 +143,7 @@ def visibles_depuis(position, azimut):
     bas = np.array([0.0, 0.0, 1.0])
 
     trouves = []
-    for tid, paroi, x, y, z, normale in TAGS:
+    for tid, wall, x, y, z, normale in TAGS:
         v = np.array([x, y, z]) - position
         distance = np.linalg.norm(v)
         if distance < 1e-6:
@@ -184,15 +184,15 @@ state = {
     "camera": True,
 }
 camera = {
-    "position": np.array([1.00, 1.55, 0.50]),   # collee a la paroi B, mi-depth
-    "azimut": np.radians(270.0),                # regarde la paroi A, tags 0 et 1
+    "position": np.array([1.00, 1.55, 0.50]),   # collee a la wall B, mi-depth
+    "azimut": np.radians(270.0),                # regarde la wall A, tags 0 et 1
 }
 
 
 def portee_utile(position, directions):
-    """Distance au-dela de laquelle le cone sortirait du bassin.
+    """Distance au-dela de laquelle le cone sortirait du pool.
 
-    Sert uniquement au dessin : le cone s'arrete sur la paroi visee, comme
+    Sert uniquement au dessin : le cone s'arrete sur la wall visee, comme
     dans la realite, au lieu de traverser la piscine.
     """
     t = PORTEE
@@ -212,7 +212,7 @@ def dessiner(ax):
     xmin, ymin, zmin = 0.0, 0.0, 0.0
     xmax, ymax, zmax = LONGUEUR, LARGEUR, PROFONDEUR
 
-    # --- parois, fond, surface -------------------------------------------
+    # --- walls, fond, surface -------------------------------------------
     if state["water"]:
         fond = [[(xmin, ymin, zmax), (xmax, ymin, zmax),
                  (xmax, ymax, zmax), (xmin, ymax, zmax)]]
@@ -222,16 +222,16 @@ def dessiner(ax):
                     (xmax, ymax, zmin), (xmin, ymax, zmin)]]
         ax.add_collection3d(Poly3DCollection(surface, facecolor="#4fb3d9",
                                              alpha=0.12, edgecolor="#2f8fb8"))
-        parois = [
+        walls = [
             [(xmin, ymin, zmin), (xmax, ymin, zmin), (xmax, ymin, zmax), (xmin, ymin, zmax)],
             [(xmin, ymax, zmin), (xmax, ymax, zmin), (xmax, ymax, zmax), (xmin, ymax, zmax)],
             [(xmin, ymin, zmin), (xmin, ymax, zmin), (xmin, ymax, zmax), (xmin, ymin, zmax)],
             [(xmax, ymin, zmin), (xmax, ymax, zmin), (xmax, ymax, zmax), (xmax, ymin, zmax)],
         ]
-        ax.add_collection3d(Poly3DCollection(parois, facecolor="#8fa3b0",
+        ax.add_collection3d(Poly3DCollection(walls, facecolor="#8fa3b0",
                                              alpha=0.07, edgecolor="none"))
 
-    # aretes du bassin
+    # aretes du pool
     corners = np.array([[x, y, z] for z in (zmin, zmax)
                       for x, y in ((xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax))])
     aretes = [(0, 1), (1, 2), (2, 3), (3, 0),
@@ -253,7 +253,7 @@ def dessiner(ax):
         seen = {t[0]: t for t in visibles_depuis(camera["position"], camera["azimut"])}
 
     demi_tag = TAG_SIZE / 2
-    for tid, paroi, x, y, z, normale in TAGS:
+    for tid, wall, x, y, z, normale in TAGS:
         centre = np.array([x, y, z])
         n, droite, vertical = repere_tag(normale)
 
@@ -262,7 +262,7 @@ def dessiner(ax):
         actif = tid in seen
         ax.add_collection3d(Poly3DCollection(
             [carre(centre, droite, vertical, demi_tag)],
-            facecolor="#22c55e" if actif else COULEUR_PAROI[paroi],
+            facecolor="#22c55e" if actif else COULEUR_PAROI[wall],
             alpha=0.97, edgecolor="#111418", linewidth=3.2))
 
         if state["normales"]:
@@ -274,7 +274,7 @@ def dessiner(ax):
         ax.text(*label, str(tid), color="#0f172a", fontsize=9, weight="bold",
                 ha="center", va="center",
                 bbox=dict(boxstyle="circle,pad=0.18", facecolor="white",
-                          edgecolor=COULEUR_PAROI[paroi], linewidth=1.2))
+                          edgecolor=COULEUR_PAROI[wall], linewidth=1.2))
 
     # --- camera virtuelle --------------------------------------------------
     if state["camera"]:
@@ -285,7 +285,7 @@ def dessiner(ax):
         bas = np.array([0.0, 0.0, 1.0])
         rayons = [axis + sh * np.tan(DEMI_FOV_H) * droite + sv * np.tan(DEMI_FOV_V) * bas
                   for sh, sv in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
-        t = portee_utile(p, rayons)          # le cone s'arrete sur la paroi visee
+        t = portee_utile(p, rayons)          # le cone s'arrete sur la wall visee
         loin = [p + t * u for u in rayons]
         for corner in loin:
             ax.plot(*zip(p, corner), color="#0ea5e9", linewidth=0.9, alpha=0.85)
@@ -311,7 +311,7 @@ def dessiner(ax):
     if state["camera"]:
         rows = [f"camera  x={camera['position'][0]:.2f}  y={camera['position'][1]:.2f}  "
                   f"z={camera['position'][2]:.2f}  cap={np.degrees(camera['azimut']) % 360:.0f} deg",
-                  f"champ sous l'water  {np.degrees(2 * DEMI_FOV_H):.1f} x "
+                  f"champ underwater  {np.degrees(2 * DEMI_FOV_H):.1f} x "
                   f"{np.degrees(2 * DEMI_FOV_V):.1f} deg"]
         if len(seen) >= 2:
             ids = ", ".join(str(i) for i in sorted(seen))
@@ -336,16 +336,16 @@ def resume_console():
     print(f"BASSIN {LONGUEUR} x {LARGEUR} x {PROFONDEUR} m     "
           f"{LONGUEUR * LARGEUR * PROFONDEUR:.2f} m3")
     print(f"Tag {TAG_SIZE * 1000:.0f} mm + ruban noir {BORDURE * 1000:.0f} mm")
-    print(f"Champ de vision sous l'water : {np.degrees(2 * DEMI_FOV_H):.1f} deg horizontal, "
+    print(f"Champ de vision underwater : {np.degrees(2 * DEMI_FOV_H):.1f} deg horizontal, "
           f"{np.degrees(2 * DEMI_FOV_V):.1f} deg vertical")
     print("-" * 70)
-    print(" id  paroi          x      y      z     normale   -> next")
+    print(" id  wall          x      y      z     normale   -> next")
     positions = np.array([[x, y, z] for _, _, x, y, z, _ in TAGS])
-    for i, (tid, paroi, x, y, z, normale) in enumerate(TAGS):
+    for i, (tid, wall, x, y, z, normale) in enumerate(TAGS):
         next = positions[(i + 1) % len(TAGS)]
         d = np.linalg.norm(next - positions[i])
         n = "".join(f"{'+' if v > 0 else '-'}{axis}" for v, axis in zip(normale, "xyz") if v)
-        print(f" {tid:<3} {paroi:<13} {x:5.2f}  {y:5.2f}  {z:5.2f}    {n:<6}    {d:.3f} m")
+        print(f" {tid:<3} {wall:<13} {x:5.2f}  {y:5.2f}  {z:5.2f}    {n:<6}    {d:.3f} m")
     print("-" * 70)
     tour = sum(np.linalg.norm(positions[(i + 1) % len(TAGS)] - positions[i])
                for i in range(len(TAGS)))
@@ -357,7 +357,7 @@ def resume_console():
 AIDE = """
   souris glisser : tourner       molette : zoom          0 : recadrer
   1 vue de dessus   2 vue de face   3 vue isometrique
-  n normales    l boucle    e water et parois    c camera virtuelle
+  n normales    l boucle    e water et walls    c camera virtuelle
   fleches deplacer la camera    a / d pivoter    w / x monter / descendre
   p enregistrer PNG    h aide    q quitter
 """
@@ -369,7 +369,7 @@ def main():
     if EXPORT:
         fig = plt.figure(figsize=(16, 5.6))
         vues = [("Vue isometrique", 24, -58, ""), ("Vue de dessus", 89, -90, "z"),
-                ("Vue de face (paroi A)", 6, -89, "y")]
+                ("Vue de face (wall A)", 6, -89, "y")]
         for i, (titre, elev, azim, muet) in enumerate(vues, start=1):
             ax = fig.add_subplot(1, 3, i, projection="3d")
             ax.view_init(elev=elev, azim=azim)
@@ -381,7 +381,7 @@ def main():
                 ax.set_ylabel("")
                 ax.set_yticks([])
             ax.set_title(titre, fontsize=10, weight="bold")
-        fig.suptitle("Implantation des 10 AprilTags — bassin 3.80 x 1.67 x 1.00 m",
+        fig.suptitle("Implantation des 10 AprilTags — pool 3.80 x 1.67 x 1.00 m",
                      fontsize=12, weight="bold")
         fig.tight_layout()
         fig.savefig(IMAGE, dpi=160)
@@ -392,7 +392,7 @@ def main():
         if cle.startswith("keymap."):
             plt.rcParams[cle] = []
 
-    fig = plt.figure("Plan de pose des tags — bassin UUV", figsize=(12, 7.5))
+    fig = plt.figure("Plan de pose des tags — pool UUV", figsize=(12, 7.5))
     ax = fig.add_subplot(111, projection="3d")
     ax.view_init(elev=24, azim=-58)
     dessiner(ax)

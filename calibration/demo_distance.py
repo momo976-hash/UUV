@@ -10,15 +10,15 @@
 # for a report, 'q' to quit.
 # ===========================================================================
 #
-# POURQUOI CE SCRIPT
+# WHY THIS SCRIPT EXISTS
 # Dire "la camera est calibree" ne prouve rien : les chiffres d'une matrix K
 # ne se verifient pas a l'oeil. Ce script rend la calibration TESTABLE par
-# quelqu'un qui n'a qu'un metre a ruban. On pose un tag a une distance connue,
+# quelqu'un qui n'a qu'un tape measure. On pose un tag a une distance connue,
 # et l'ecran affiche cote a cote ce que TROIS modeles de camera repondent a la
 # meme image. Le panneau est en anglais : il est fait pour etre montre.
 #
 #   1. NO CALIBRATION              focal_length devinee (= width de l'image),
-#                                  centre au milieu, distorsion nulle. Ce
+#                                  centre au milieu, distortion nulle. Ce
 #                                  qu'on ecrit quand on n'a rien measurement.
 #   2. NOT CALIBRATED IN THE TUBE  la calibration de la camera nue, faite
 #                                  avant de la monter dans le tube.
@@ -29,7 +29,7 @@
 # bouge pas et ne sort jamais du tube.
 #
 # CE QUE CHAQUE LIGNE PROUVE — ET CE QU'ELLE NE PROUVE PAS
-# Une seule row est une proof : la 3e, confrontee au metre a ruban. Si elle
+# Une seule row est une proof : la 3e, confrontee au tape measure. Si elle
 # annonce la distance measured, la calibration est bonne. C'est tout le reste
 # de la demo qui demande de la prudence :
 #
@@ -38,36 +38,36 @@
 #   - la row 2 montre que reutiliser une calibration faite hors du tube
 #     donne un desaccord. Elle ne montre PAS qui a tort : sur la portee les
 #     rows 2 et 3 s'accordent, et le desaccord est surtout vertical — or le
-#     metre a ruban ne measurement pas le vertical. On constate, on ne tranche pas.
+#     tape measure ne measurement pas le vertical. On constate, on ne tranche pas.
 #
 # D'OU VIENT LE DESACCORD DE LA LIGNE 2 : ON NE SAIT PAS
 # Entre la calibration nue et celle du tube, cy passe de 242.9 a 258.5 (15.6
 # px, ~1.5 deg de visee) — c'est ce que la column "3D offset" attrape. La
 # tentation est d'y voir l'effet du tube. Le model de ce depot ne le dit pas :
-# une paroi cylindrique vue de face est symetrique autour de l'axis optics,
+# une wall cylindrique vue de face est symetrique autour de l'axis optics,
 # elle change la FOCALE (voir grandissement_section dans optics.py) et ne
 # deplace pas le point principal. Deux causes plus vraisemblables, qu'on ne
 # sait pas departager ici : la camera est legerement inclinee dans son support
 # imprime, ou une part vient de l'gap entre deux seances de calibration.
 # Indice pour la seconde : fx est passe de 604.19 a 595.79 (-1.4 %) alors
-# qu'en air, le long de l'axis, la paroi est une lame a faces paralleles et ne
+# qu'in air, le long de l'axis, la wall est une plane-parallel slab et ne
 # devrait rien changer a fx.
 #
 # CE QUI JUSTIFIE MALGRE TOUT DE CALIBRER DANS LE TUBE
 # Pas cette demo : le principe. On calibre l'objet qu'on utilise. Quelle que
 # soit la cause du decalage, la calibration faite dans le tube en tient
 # compte et celle faite dehors ne le peut pas, par construction. L'argument
-# sans ambiguite viendra sous l'water, ou la paroi devient une true lentille
+# sans ambiguite viendra underwater, ou la wall devient une true lentille
 # (focales attendues 804 / 625 px au lieu de 596 / 608) : la, l'gap se
-# compte en dizaines de pourcents et le metre a ruban le verra.
+# compte en dizaines de pourcents et le tape measure le verra.
 #
 # NE PAS ATTENDRE QUE L'ERREUR EXPLOSE DANS LES COINS
 # On pourrait croire que la row 1 s'effondre loin du centre, faute de
-# correct la distorsion. Verifie : son error de distance passe de 6.0 % au
-# centre a 3.8 % au bord — elle DIMINUE, la distorsion negligee compensant en
+# correct la distortion. Verifie : son error de distance passe de 6.0 % au
+# centre a 3.8 % au bord — elle DIMINUE, la distortion negligee compensant en
 # partie la focal_length fausse. Ne pas conclure sur une seule position du tag.
 #
-# MODE D'EMPLOI DEVANT QUELQU'UN
+# HOW TO USE IT DEVANT QUELQU'UN
 #   1. Poser le tag bien en face, a une distance measured au metre (1 a 2 m).
 #   2. python demo_distance.py --tag 0.223 --reference 1.50
 #   3. Lire la row verte contre le metre. Le reste est du commentaire.
@@ -77,7 +77,7 @@
 # Le metre part du verre de l'objectif, a ~2 cm pres. A 1.5 m cela pese 1 % :
 # ne pas conclure sur un gap plus petit que cela.
 #
-# Touches : t = changer de size de tag | + / - = ajuster la reference
+# Keys: t = changer de size de tag | + / - = ajuster la reference
 #           0 = oublier la reference     | s = capturer l'ecran | q = quitter
 import argparse
 import sys
@@ -93,8 +93,8 @@ import optics  # noqa: E402
 CAMERA_INDEX = None
 FAMILLE = cv2.aruco.DICT_APRILTAG_36h11
 
-# Les deux tags dont on dispose : celui du bassin et le petit. Mesures au
-# pied a coulisse, voir optics.py — ne pas revenir au nominal (0.223/0.115).
+# Les deux tags dont on dispose : celui du pool et le petit. Mesures au
+# calipers, voir optics.py — ne pas revenir au nominal (0.223/0.115).
 TAILLES = (optics.LARGE_TAG_SIZE, optics.SMALL_TAG_SIZE)
 
 DOSSIER_PREUVES = Path(__file__).resolve().parent / "preuves"
@@ -130,7 +130,7 @@ def modeles(mounting, width, height):
     La premiere n'est pas une calibration ratee : c'est l'absence de
     calibration, telle qu'on l'ecrit quand on n'a rien measurement — focal_length prise
     egale a la width de l'image (~60 deg de champ), centre optics assumed
-    au centre geometrique, distorsion supposee nulle.
+    au centre geometrique, distortion supposee nulle.
     """
     devine = np.array([
         [float(width), 0.0, width / 2.0],
@@ -180,7 +180,7 @@ def dessiner_panneau(toile, rows, reference, taille_tag, seen):
     """Le tableau des trois reponses, en bas de l'image.
 
     Deux colonnes de chiffres, parce que les deux disent des choses
-    differentes : la DISTANCE, que le metre a ruban peut contredire, et
+    differentes : la DISTANCE, que le tape measure peut contredire, et
     l'ECART 3D avec la calibration du tube, qui attrape le decalage lateral
     qu'aucun metre tenu de face ne fera apparaitre.
     """
@@ -307,7 +307,7 @@ def main():
                                 f"{TAILLES[0]} et {TAILLES[1]})")
     parser.add_argument("--reference", type=float, default=0.0,
                            metavar="METRES",
-                           help="distance true measured au metre a ruban ; "
+                           help="distance true measured au tape measure ; "
                                 "active l'display des errors")
     parser.add_argument("--mounting", default=optics.ACTIVE_MOUNTING,
                            choices=optics.MOUNTINGS,
@@ -319,7 +319,7 @@ def main():
     options = parser.parse_args()
 
     if optics.source(options.mounting) != options.mounting:
-        print(f"ATTENTION : le mounting '{options.mounting}' n'a jamais ete "
+        print(f"WARNING : le mounting '{options.mounting}' n'a jamais ete "
               "calibre. La 3e row affichera la camera nue, et la demo ne "
               "montrera rien.")
         print(f"  python calibrate.py --mounting {options.mounting}")
@@ -339,7 +339,7 @@ def main():
 
     cam, L, H = ouvrir_camera()
     if cam is None:
-        print("ERREUR : aucune camera detectee.")
+        print("ERROR: aucune camera detectee.")
         return
 
     cameras = modeles(options.mounting, L, H)

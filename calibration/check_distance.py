@@ -23,7 +23,7 @@
 #
 #     python check_distance.py --reel 1.000 --pi
 #
-# Le Pi tient la camera au bord du bassin et pushed les frames ; ce PC les
+# Le Pi tient la camera au bord du pool et pushed les frames ; ce PC les
 # recoit, measurement, et affiche la window. Utile quand la camera ne se laisse
 # pas ouvrir sous Windows. Le protocole est celui du script de Josiah, repris
 # tel quel : le PC est le SERVEUR (il ecoute, port 5000 par default) et le
@@ -35,20 +35,20 @@
 #     python check_distance.py --reel 1.500 --focal_length 838.45,652.10
 #
 # La matrix n'est changee qu'en memoire, le .npz n'est pas key. C'est ce
-# qu'il faut pour departager plusieurs focales candidates sur le terrain : on
+# qu'one must pour departager plusieurs focales candidates sur le terrain : on
 # les essaie l'une apres l'autre sur la meme scene, et on n'installe que celle
 # qui gagne. Avant, tester une value obligeait a reecrire le .npz — donc a
 # ecraser la calibration en service pour un trial, et a penser a la remettre.
 # Une apres-midi de measurements a deja ete faite avec une calibration d'trial
 # laissee en place par oubli.
 #
-# Avec une seule value (--focal_length 838.45) l'anamorphose de la calibration est
+# Avec une seule value (--focal_length 838.45) l'anamorphic ratio de la calibration est
 # conservee et fy suit : le report fx/fy est une propriete du TUBE, pas un
 # parametre libre, et le changer par megarde en testant fx serait une error
 # silencieuse.
 #
 # AFFICHAGE. Une window s'ouvre si l'ecran le permet, pour voir le cadrage —
-# indispensable au bord du bassin, ou l'on ne sait pas autrement si le tag est
+# indispensable au bord du pool, ou l'on ne sait pas autrement si le tag est
 # seen. En SSH sur le Raspberry Pi il n'y a pas d'display : cv2.imshow y leve
 # une exception, qu'on rattrape pour continuer en aveugle. Le result tombe
 # dans le terminal dans les deux cas. `--sans-window` force le mode aveugle.
@@ -56,10 +56,10 @@
 # ---------------------------------------------------------------------------
 # A QUOI CA SERT
 # ---------------------------------------------------------------------------
-# La calibration sous l'water donne fx = 711, alors que la physique en prevoit
-# 805 (la focal_length en air x 1.33). On a elimine par la measurement : la position de
-# la camera dans le tube, l'inclinaison du damier, la couverture des corners,
-# la resolution, et la reference en air — refaite, elle confirme l'ancienne.
+# La calibration underwater donne fx = 711, alors que la physique en prevoit
+# 805 (la focal_length in air x 1.33). On a elimine par la measurement : la position de
+# la camera dans le tube, l'inclinaison du checkerboard, la couverture des corners,
+# la resolution, et la reference in air — refaite, elle confirme l'ancienne.
 #
 # Plutot que de chercher encore une explication, on demande directement a la
 # camera de mesurer une distance connue. La distance se lit d = fx.S/s : si fx
@@ -81,7 +81,7 @@
 # uniquement de S (size de tag declaree) ou de s (la ou CE detector
 # — cv2.aruco — pose les corners, different de la bibliotheque AprilTag de
 # Josiah). Rejouer une correction de focal_length a partir de CE script reproduirait
-# l'error d'install_underwater_calibration.py qui a suivi les premieres measurements du bassin
+# l'error d'install_underwater_calibration.py qui a suivi les premieres measurements du pool
 # a la lettre et a du etre annulee.
 #
 # Josiah garde 838.45 / 652.10. Ce script sert a EPROUVER une focal_length
@@ -114,7 +114,7 @@ except ImportError:
     rs = None
 
 RESOLUTION = (640, 480)
-# Les deux tags du bassin, cote du carre NOIR, en metres. Mesures au pied a
+# Les deux tags du pool, cote du carre NOIR, en metres. Mesures au pied a
 # coulisse et non lus sur la fiche d'impression : une imprimante ne restitue
 # pas exactement l'echelle demandee.
 #
@@ -123,16 +123,16 @@ RESOLUTION = (640, 480)
 # measurement du tag = 1 % d'error a toutes les distances, sans exception. C'est
 # la raison pour laquelle ces deux numbers se mesurent, et ne s'estiment pas.
 #
-# En revanche, cela ne key PAS la calibration : elle se fait au damier,
+# On the other hand, cela ne key PAS la calibration : elle se fait au checkerboard,
 # dont c'est le pas des carreaux qui compte, pas la size des tags.
 #
 # Les deux tags s'ecartent du nominal dans des sens OPPOSES — le petit de
 # -0.15 %, le grand de +0.40 %. Ce n'est donc pas une echelle d'imprimante,
 # qui les aurait decales du meme cote : c'est propre a chaque impression.
-# Aucun des deux ne se devine, il faut les mesurer.
+# Aucun des deux ne se devine, one must les mesurer.
 #
 # Dupliques ici plutot qu'importes d'optics.py (LARGE_TAG_SIZE,
-# SMALL_TAG_SIZE) : ce script part souvent seul sur le PC du bassin, sans
+# SMALL_TAG_SIZE) : ce script part souvent seul sur le PC du pool, sans
 # le reste du depot. Les deux couples doivent rester egaux ; changer l'un
 # sans l'autre laisserait les deux chaines de measurement diverger en silence.
 KNOWN_TAG_SIZES = (0.22389, 0.11732)
@@ -174,7 +174,7 @@ class CameraOpenCV:
 class CameraReseau:
     """Images envoyees par le Raspberry Pi, sur le reseau.
 
-    Le Pi tient la camera au bord du bassin, le PC fait tourner la measurement et
+    Le Pi tient la camera au bord du pool, le PC fait tourner la measurement et
     affiche la window. C'est le protocole du script de Josiah, repris tel
     quel : le PC est le SERVEUR (il ecoute), le noeud ROS du Pi s'y connecte.
     Chaque message porte un entete de 5 octets — 1 pour le type, 4 pour la
@@ -297,10 +297,10 @@ def ouvrir_camera():
             return CameraOpenCV(cap)
         cap.release()
 
-    print("ERREUR : aucune camera colour branchee SUR CET ORDINATEUR.")
+    print("ERROR: aucune camera colour branchee SUR CET ORDINATEUR.")
     print()
     print("Si la camera est tenue par le Raspberry Pi — c'est le cas au bord")
-    print("du bassin — il manque simplement l'option --pi :")
+    print("du pool — il manque simplement l'option --pi :")
     print()
     print("    python check_distance.py --reel <distance> --tag <cote> --pi")
     print()
@@ -326,7 +326,7 @@ def charger_calibration(name):
 
 # Le mounting physique de la machine, ecrit une fois par set_mounting.py.
 # On le relit ici a la main plutot que d'importer optics.py : ce script part
-# souvent seul sur le PC du bassin, sans le reste du depot, et il doit
+# souvent seul sur le PC du pool, sans le reste du depot, et il doit
 # continuer a marcher tel quel.
 MONTAGES_CONNUS = ("nue_air", "tube_air", "tube_eau")
 
@@ -369,13 +369,13 @@ def main():
     parser.add_argument("--focal_length", metavar="FX[,FY]",
                            help="essayer CES focales-la au lieu de celles du "
                                 ".npz, sans rien reinstaller. 'FX,FY' pour les "
-                                "deux axes, 'FX' seul pour garder l'anamorphose "
+                                "deux axes, 'FX' seul pour garder l'anamorphic_ratio "
                                 "de la calibration. Ex : --focal_length 838.45,652.10")
     options = parser.parse_args()
 
     K, dist, path = charger_calibration(options.mounting)
     if K is None:
-        print(f"ERREUR : calibration '{options.mounting}' introuvable.")
+        print(f"ERROR: calibration '{options.mounting}' introuvable.")
         print("Cherchee dans montages/ a cote de ce script.")
         trouvees = sorted(
             {f.stem for folder in (ICI / "montages",
@@ -390,7 +390,7 @@ def main():
         else:
             print("\nAucune calibration n'est presente a cote de ce script.")
             print("Il manque le folder montages/ — il n'est pas versionne,")
-            print("il faut le copier depuis la machine qui a calibre.")
+            print("one must le copier depuis la machine qui a calibre.")
         return 1
     print(f"Calibration : {path}")
     print(f"  fx {float(K[0, 0]):.2f}   fy {float(K[1, 1]):.2f}")
@@ -406,29 +406,29 @@ def main():
         try:
             morceaux = [float(v) for v in options.focal_length.replace(" ", "").split(",")]
         except ValueError:
-            print(f"\nERREUR : --focal_length '{options.focal_length}' n'est pas lisible.")
+            print(f"\nERROR: --focal_length '{options.focal_length}' n'est pas lisible.")
             print("  Attendu : --focal_length 838.45,652.10   ou   --focal_length 838.45")
             return 1
         if len(morceaux) == 1:
-            # Une seule value : on garde l'anamorphose de la calibration, qui
+            # Une seule value : we keep l'anamorphic ratio de la calibration, qui
             # est une propriete du TUBE, pas un parametre libre. La changer
             # sans le vouloir en testant fx serait une error silencieuse.
-            anamorphose = float(K[1, 1]) / float(K[0, 0])
+            anamorphic_ratio = float(K[1, 1]) / float(K[0, 0])
             nouveau_fx = morceaux[0]
-            nouveau_fy = nouveau_fx * anamorphose
+            nouveau_fy = nouveau_fx * anamorphic_ratio
         elif len(morceaux) == 2:
             nouveau_fx, nouveau_fy = morceaux
         else:
-            print(f"\nERREUR : --focal_length attend une ou deux values, "
+            print(f"\nERROR: --focal_length attend une ou deux values, "
                   f"{len(morceaux)} donnees.")
             return 1
         if nouveau_fx <= 0 or nouveau_fy <= 0:
-            print("\nERREUR : une focal_length se compte en pixels et vaut > 0.")
+            print("\nERROR: une focal_length se compte en pixels et vaut > 0.")
             return 1
         K = K.copy()
         K[0, 0], K[1, 1] = nouveau_fx, nouveau_fy
         print(f"  --focal_length : on essaie fx {nouveau_fx:.2f}   fy {nouveau_fy:.2f}"
-              f"   (anamorphose {nouveau_fx / nouveau_fy:.4f})")
+              f"   (anamorphic_ratio {nouveau_fx / nouveau_fy:.4f})")
         print("             le path .npz n'est PAS modifie.")
 
     fx, fy = float(K[0, 0]), float(K[1, 1])
@@ -439,7 +439,7 @@ def main():
         try:
             camera = CameraReseau(options.pi)
         except Exception as souci:
-            print(f"\nERREUR : {souci}")
+            print(f"\nERROR: {souci}")
             return 1
     else:
         camera = ouvrir_camera()
@@ -457,10 +457,10 @@ def main():
     distances, cotes = [], []
     sans_tag = 0
     # Fenetre si l'display existe, terminal sinon. Sur un portable au bord du
-    # bassin, voir le cadrage est indispensable ; en SSH sur le Pi, cv2.imshow
+    # pool, voir le cadrage est indispensable ; en SSH sur le Pi, cv2.imshow
     # leve une exception qu'on rattrape pour continuer sans rien montrer.
     window = not options.sans_fenetre
-    titre = "Verification de distance (q pour arreter)"
+    titre = "Check de distance (q pour arreter)"
     print(f"Detection en cours... ({options.frames} measurements a accumuler)")
     print("Ne bouge ni la camera ni le tag.\n")
 
@@ -557,7 +557,7 @@ def main():
     # Piege verifie par simulation : mesurer le tube A SEC avec la calibration
     # EAU rend 0.97 a 1.02 m pour un tag reellement a 1.000 m. Le verdict tombe
     # au vert alors que le test n'a rien montre. La raison est que solvePnP
-    # combine fx, fy ET la distorsion : entre nos deux calibrations, fx monte
+    # combine fx, fy ET la distortion : entre nos deux calibrations, fx monte
     # (606 -> 711) pendant que fy descend (616 -> 596), et les effets se
     # compensent presque. Deduire une focal_length par d = fx.S/s est donc un
     # raccourci qui ne vaut que si la calibration testee est celle du milieu.
@@ -580,7 +580,7 @@ def main():
     if abs(gap) <= 3:
         print("VERDICT : la calibration donne la BONNE distance.")
         print("  fx est juste. Le desaccord avec le model optics vient donc")
-        print("  du model, pas de la calibration : on garde ces chiffres.")
+        print("  du model, pas de la calibration : we keep ces chiffres.")
     elif abs(gap) <= 8:
         print("VERDICT : gap modere, a confirmer.")
         print("  Refais la measurement a une AUTRE distance. Si l'gap en pourcent")
@@ -608,7 +608,7 @@ def main():
     # -- enregistrement : plus jamais une measurement perdue ---------------------
     # Des measurements faites et jamais notees ont deja coute deux semaines de
     # travail. Chaque lancement s'ajoute desormais a un path, avec tout ce
-    # qu'il faut pour reconstruire l'analyse plus tard : distance true,
+    # qu'one must pour reconstruire l'analyse plus tard : distance true,
     # distance measured, mounting, focal_length used.
     # fy_utilise est enregistre au meme titre que fx : deux trials peuvent
     # partager fx et differer par fy (c'est precisement ce que --focal_length rend
@@ -617,7 +617,7 @@ def main():
     #
     # cote_px est le COTE APPARENT du tag, en pixels. Il etait affiche et
     # aussitot perdu, alors que c'est le seul chiffre qui permette de comparer
-    # ce script a une AUTRE chaine de measurement (apriltag_ros, par exemple). La
+    # ce script a une AUTRE chaine de measurement (apriltag_ros, par example). La
     # distance vaut d = fx.S/s : si deux chaines annoncent la meme distance
     # true avec la meme focal_length mais divergent, l'gap est soit dans S (la
     # size declaree du tag), soit dans s (la ou chaque detector pose les
@@ -662,7 +662,7 @@ def main():
                 print(f"\n  (history complete de : {', '.join(missing)} ; "
                       f"{len(converted) - 1} rows conservees)")
             elif unknown:
-                print(f"\n  ATTENTION : {fichier_historique.name} porte des "
+                print(f"\n  WARNING : {fichier_historique.name} porte des "
                       f"colonnes unknown ({', '.join(unknown)}).")
                 print("  Il n'est PAS converted, et la new measurement ne peut "
                       "pas y etre ajoutee sans le corrompre.")
@@ -763,7 +763,7 @@ def main():
         # en millimetres a deja masque un decalage a 7 sigma parce qu'il
         # tombait sous les 20 mm arbitraires qu'on exigeait en plus : la
         # pertinence pratique est une question distincte de la realite
-        # statistique, et il faut les afficher separement.
+        # statistique, et one must les afficher separement.
         significatif = (np.isfinite(sigma_decalage)
                         and abs(decalage) > 2.0 * sigma_decalage)
         etendue = float(true_values.max() - true_values.min())
@@ -784,7 +784,7 @@ def main():
             print("  AUCUN reglage de focal_length ne peut correct cela : changer fx")
             print("  ne change que la pente, jamais cette ordonnee a l'origin.")
             print("  C'est la signature d'un deplacement APPARENT — une camera")
-            print("  derriere un hublot courbe n'a pas de centre de projection")
+            print("  derriere un viewport courbe n'a pas de centre de projection")
             print("  unique, et le model stenope place son oeil au mauvais")
             print("  endroit, du meme gap a toutes les distances.")
             ecart_pente = abs(pente - 1.0)

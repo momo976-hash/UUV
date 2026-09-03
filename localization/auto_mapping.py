@@ -6,15 +6,15 @@
 #     la position de B a partir de A, sans connaitre la position de la camera :
 #         T_monde_B = T_monde_A @ inverse(T_camera_A) @ T_camera_B
 #   - En te deplacant et en montrant des paires qui se chevauchent, la tag_map se
-#     remplit toute seule. Aucun metre ruban.
+#     remplit toute seule. Aucun tape measure.
 #
-# Touches :  's' = sauver la tag_map dans carte_enregistree.py   |   'q' = quitter
+# Keys:  's' = sauver la tag_map dans carte_enregistree.py   |   'q' = quitter
 from collections import deque
 
 import cv2
 import numpy as np
 
-TAG_SIZE = 0.22389     # cote du carre noir, measurement au pied a coulisse (nominal 223 mm)
+TAG_SIZE = 0.22389     # cote du carre noir, measurement au calipers (nominal 223 mm)
 FACTEUR_FOCALE = 0.95
 CARTE_PX = 500
 ECHELLE = 150            # pixels par metre ; reglable en direct avec '+' et '-'
@@ -97,7 +97,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERREUR : aucune camera ouverte.")
+    print("ERROR: aucune camera ouverte.")
     raise SystemExit
 
 FOCALE = L * FACTEUR_FOCALE

@@ -20,7 +20,7 @@ import sys
 try:
     import pyrealsense2 as rs
 except ImportError:
-    print("ERREUR : pyrealsense2 n'est pas installe.")
+    print("ERROR: pyrealsense2 n'est pas installe.")
     print("  python -m pip install pyrealsense2")
     sys.exit(1)
 
@@ -87,7 +87,7 @@ def main():
     for numero, name, serie in with_imu:
         print(f"  [{numero}] {name}   serie {serie}")
     if len(appareils) > 1:
-        print("\nATTENTION : plusieurs appareils sont branches. Le SDK prend le")
+        print("\nWARNING : plusieurs appareils sont branches. Le SDK prend le")
         print("first qu'il trouve, et rien ne dit lequel. Pour toute measurement")
         print("qui compte — bias du gyro, noise — DEBRANCHE les autres :")
         print("le bias est propre a un exemplaire, comme une calibration.")

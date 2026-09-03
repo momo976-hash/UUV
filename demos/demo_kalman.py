@@ -1,17 +1,17 @@
 # demo_kalman.py — The Kalman filter put to the test in OUR pool.
 #
-# On simule un UUV qui longe la paroi B en regardant la paroi A, avec la
-# true implantation des 10 tags et le vrai champ de vision sous l'water. Les
+# On simule un UUV qui longe la wall B en regardant la wall A, avec la
+# true implantation des 10 tags et le vrai champ de vision underwater. Les
 # measurements sont bruitees selon la geometrie (un tag lointain ou seen de bias
 # est moins fiable), et on injecte deux perturbations realistes :
 #
-#   - des ABERRATIONS : l'ambiguite de retournement d'un tag plan product
+#   - des ABERRATIONS : l'ambiguite de flip d'un tag plan product
 #     de time en time une pose completement fausse ;
-#   - un RIDEAU DE BULLES : pendant 3 seconds, les propulseurs masquent
+#   - un RIDEAU DE BULLES : pendant 3 seconds, les thrusters masquent
 #     completement la vue. C'est le risque signale en reunion. Le filter
 #     doit continuer a avancer sur sa seule prediction.
 #
-# Lancement :  python demos/demo_kalman.py
+# Run with:  python demos/demo_kalman.py
 #              python demos/demo_kalman.py --png   (sans window)
 import sys
 from pathlib import Path
@@ -36,24 +36,24 @@ from pool_layout_3d import TAGS, LONGUEUR, LARGEUR, visibles_depuis
 IMAGE = Path(__file__).resolve().with_name("demo_kalman.png")
 
 FREQUENCE = 30.0
-DUREE = 60.0                   # un vrai trial en bassin dure des minutes
-BULLES = (18.0, 21.0)          # rideau de bulles des propulseurs
+DUREE = 60.0                   # un vrai trial en pool dure des minutes
+BULLES = (18.0, 21.0)          # rideau de bubbles des thrusters
 PROBA_ABERRATION = 0.015
 
 # Bruit de model. Ces deux values ne se reglent pas au hasard : elles
-# decrivent ce que l'engin est capable de faire SANS que le filter le sache.
+# decrivent ce que l'vehicle est capable de faire SANS que le filter le sache.
 # Trop petites, le filter sous-pondere les measurements et retarde sur la realite.
 # Ici la trajectoire simulee tourne a 7.2 deg/s en median, 10.2 deg/s au pic.
 #
 # Ces values sont VOLONTAIREMENT independantes du bloc de kalman_filter.py :
-# elles decrivent la trajectoire SIMULEE ci-dessous, pas l'engin reel. Les
-# faire suivre les measurements du bassin rendrait la demo non reproductible, et
+# elles decrivent la trajectoire SIMULEE ci-dessous, pas l'vehicle reel. Les
+# faire suivre les measurements du pool rendrait la demo non reproductible, et
 # ferait varier son result a chaque new session de measurement.
 SIGMA_ACCELERATION = 0.4       # m/s^2
 DERIVE_GYRO = 10.0             # deg/s
 
-# Les tags sont montes sur des boites en acrylique lestees, pas scellees.
-# On simule le souffle des propulseurs qui pushed une boite de 2 cm en
+# Les tags sont montes sur des boxs en acrylique lestees, pas scellees.
+# On simule le souffle des thrusters qui pushed une box de 2 cm en
 # cours de route : le filter continue de croire la tag_map d'origin.
 BOITE_DEPLACEE = 2
 INSTANT_DEPLACEMENT = 24.0     # s
@@ -86,7 +86,7 @@ def rotation_camera(azimut, roll, pitch):
 
 
 def trajectoire(t):
-    """Va-et-vient le long de la paroi B, en regardant la paroi A."""
+    """Va-et-vient le long de la wall B, en regardant la wall A."""
     x = 1.90 + 1.40 * np.sin(2 * np.pi * t / 30.0)
     y = 1.48 + 0.12 * np.sin(2 * np.pi * t / 7.0)
     z = 0.50 + 0.05 * np.sin(2 * np.pi * t / 11.0)
@@ -135,7 +135,7 @@ def simuler(seed=7):
             q_mesure = np.concatenate([[w0 * w1 - v0 @ v1],
                                        w0 * v1 + w1 * v0 + np.cross(v0, v1)])
 
-            if rng.random() < PROBA_ABERRATION:     # retournement du tag
+            if rng.random() < PROBA_ABERRATION:     # flip du tag
                 position_mesuree = position_mesuree + rng.normal(0.0, 0.25, 3)
                 q_mesure = np.roll(q_mesure, 2)
 
@@ -197,8 +197,8 @@ def ligne_stats(intitule, values, echelle, unite, width=8, decimales=1):
 
 def resume(log):
     t = log["t"]
-    hors_bulles = (t < BULLES[0]) | (t >= BULLES[1])
-    pendant = ~hors_bulles
+    hors_bubbles = (t < BULLES[0]) | (t >= BULLES[1])
+    pendant = ~hors_bubbles
 
     print("=" * 72)
     print("SIMULATION DANS LE BASSIN 3.80 x 1.67 x 1.00 m")
@@ -211,13 +211,13 @@ def resume(log):
     print("-" * 72)
     print("A. TANT QU'AU MOINS UN TAG EST VISIBLE  (le filtrage proprement dit)")
     print(f"   {'':<30s}{'median':>8s}{'95e c.':>8s}{'RMS':>8s}{'max':>8s}")
-    raw, filtered = log["err_brute"][hors_bulles], log["err_filtree"][hors_bulles]
+    raw, filtered = log["err_brute"][hors_bubbles], log["err_filtree"][hors_bubbles]
     print(ligne_stats("position raw (un tag)", raw, 1000, "mm"))
     print(ligne_stats("position filtered", filtered, 1000, "mm"))
     print(f"   -> median {rms(raw) and np.median(raw[~np.isnan(raw)])/np.median(filtered):.1f}x "
           f"meilleure, RMS {rms(raw)/rms(filtered):.1f}x")
-    angle_brut = log["err_angle_brut"][hors_bulles]
-    angle_filtre = log["err_angle_filtre"][hors_bulles]
+    angle_brut = log["err_angle_brut"][hors_bubbles]
+    angle_filtre = log["err_angle_filtre"][hors_bubbles]
     print(ligne_stats("orientation raw", angle_brut, 1.0, "deg", decimales=2))
     print(ligne_stats("orientation filtered", angle_filtre, 1.0, "deg", decimales=2))
     print(f"   -> median {np.median(angle_brut[~np.isnan(angle_brut)])/np.median(angle_filtre):.1f}x "
@@ -231,12 +231,12 @@ def resume(log):
     print(f"   orientation perdue                 {log['err_angle_filtre'][pendant][-1]:7.1f} deg")
     print("-" * 72)
     print(f"C. ROBUSTESSE")
-    print(f"   aberrations rejetees : {log['rejets_total']} en position, "
+    print(f"   outliers rejetees : {log['rejets_total']} en position, "
           f"{log['rejets_angle']} en orientation")
     print(f"   recoveries apres verrouillage : {log['recoveries']}")
     print("-" * 72)
     print(f"D. SURVEILLANCE DES SUPPORTS")
-    print(f"   boite {BOITE_DEPLACEE} reellement poussee de "
+    print(f"   box {BOITE_DEPLACEE} reellement poussee de "
           f"{1000*np.linalg.norm(DEPLACEMENT):.0f} mm "
           f"({1000*DEPLACEMENT[0]:+.0f}, {1000*DEPLACEMENT[1]:+.0f}, "
           f"{1000*DEPLACEMENT[2]:+.0f}) a t = {INSTANT_DEPLACEMENT:.0f} s")
@@ -277,7 +277,7 @@ def tracer(log):
 
     # --- 2. error au cours du time ---------------------------------------
     ax = axes[1]
-    ax.axvspan(*BULLES, color="#cbd5e1", alpha=0.6, label="rideau de bulles")
+    ax.axvspan(*BULLES, color="#cbd5e1", alpha=0.6, label="rideau de bubbles")
     ax.plot(t, 1000 * log["err_brute"], color="#f59e0b", linewidth=0.8,
             alpha=0.8, label="error raw")
     ax.plot(t, 1000 * log["err_filtree"], color="#16a34a", linewidth=1.4,
@@ -287,7 +287,7 @@ def tracer(log):
     rejections = log["rejet"]
     if rejections.any():
         ax.plot(t[rejections], 1000 * log["err_brute"][rejections], "x",
-                color="#dc2626", markersize=6, label="aberrations rejetees")
+                color="#dc2626", markersize=6, label="outliers rejetees")
     ax.set_yscale("log")
     ax.set_xlabel("time (s)")
     ax.set_ylabel("error de position (mm)")
@@ -315,7 +315,7 @@ def tracer(log):
     jumeau.tick_params(axis="y", colors="#0369a1")
 
     fig.suptitle("Filtre de Kalman sur la pose estimee par AprilTags — "
-                 "simulation dans le bassin", fontsize=13, weight="bold")
+                 "simulation dans le pool", fontsize=13, weight="bold")
     fig.tight_layout()
     return fig
 

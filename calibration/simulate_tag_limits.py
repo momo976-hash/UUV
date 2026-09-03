@@ -1,12 +1,12 @@
 # simulate_tag_limits.py — The same limits, predicted instead of measured.
 #
-# POURQUOI CE SCRIPT
+# WHY THIS SCRIPT EXISTS
 # measure_tag_limits.py cherche PIXELS_MIN et INCIDENCE_MAX sur la true
-# camera. Encore faut-il pouvoir perdre le tag : avec les 22.3 cm du bassin
-# il faut reculer a 4.5 m pour seulement atteindre 30 px, et la camera est au
+# camera. Encore faut-il pouvoir perdre le tag : avec les 22.3 cm du pool
+# one must reculer a 4.5 m pour seulement atteindre 30 px, et la camera est au
 # bout d'un cable. Les balayages s'arretent a 58 px, tag toujours detecte.
 #
-# Ici on prend le probleme par l'autre bout : on FABRIQUE l'image d'un tag a
+# Ici we take le probleme par l'autre bout : on FABRIQUE l'image d'un tag a
 # la size et sous l'angle voulus, on y met le flou et le noise d'une true
 # camera, et on appelle exactement le meme detector cv2.aruco que le reste
 # du projet. Ce n'est pas un model du detector — c'est le detector.
@@ -21,7 +21,7 @@
 #     - detection a 100 % a 58 px,
 #     - tag encore detecte a 20 px.
 #
-# MODE D'EMPLOI
+# HOW TO USE IT
 #   python simuler_limites_tag.py             les deux limites
 #   python simuler_limites_tag.py --tag_map     la tag_map size x incidence
 #   python simuler_limites_tag.py --sensible  l'influence du flou et du noise
@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import optics  # noqa: E402
 
 MONTAGE = optics.ACTIVE_MOUNTING
-# L'optics vient de optics.py : camera, tube, hublot, milieu. Le mounting
+# L'optics vient de optics.py : camera, tube, viewport, milieu. Le mounting
 # n'est ecrit dans aucun path de code : optics.py le lit dans
 # calibration/montage_local.txt, propre a CETTE machine, et le demande une
 # fois s'il n'existe pas encore. Pour le changer :
@@ -239,7 +239,7 @@ def tag_map(detector, motif, garde):
           f"{max(modestes):.0f} px")
     raides = [(a, w) for a, w in largeurs if a > 65]
     if raides:
-        print(f"\n  Au-dela, la regle se degrade : a {raides[0][0]} deg il faut deja "
+        print(f"\n  Au-dela, la regle se degrade : a {raides[0][0]} deg one must deja "
               f"{raides[0][1]:.0f} px")
         print("  de width comprimee. La zone de garde se comprime elle aussi, et")
         print("  les cellules du bord lointain fondent plus vite que le cosinus.")
@@ -342,7 +342,7 @@ def main():
                   + ("c'est la compression qui explique la perte."
                      if comprimee <= 1.4 * pixels_min else
                      "la compression seule ne l'explique pas."))
-            print("\n  ATTENTION : cette value vaut POUR UN TAG DE 60 px. L'incidence")
+            print("\n  WARNING : cette value vaut POUR UN TAG DE 60 px. L'incidence")
             print("  maximale n'est pas une constante — elle depend de la size, "
                   "puisque")
             print("  c'est la width comprimee qui decide. '--tag_map' donne la "

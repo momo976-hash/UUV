@@ -18,14 +18,14 @@
 # Mesure les VRAIS params internes de la camera :
 #   fx, fy   focales reelles (en pixels)
 #   cx, cy   centre optics reel
-#   k1,k2,p1,p2,k3   coefficients de distorsion de l'objectif
+#   k1,k2,p1,p2,k3   coefficients de distortion de l'objectif
 #
 # Damier utilise : calib.io 5x7, carreaux de 50 mm.
-# ATTENTION : OpenCV compte les COINS INTERIEURS, pas les carreaux.
+# WARNING : OpenCV compte les COINS INTERIEURS, pas les carreaux.
 #   5x7 carreaux  ->  4x6 corners interieurs.
 #
 # Procedure :
-#   1. Lance le programme, montre le damier a la camera.
+#   1. Lance le programme, montre le checkerboard a la camera.
 #   2. Quand les corners colores apparaissent, appuie sur 'c' pour capturer.
 #   3. Capture 15 a 25 vues DIFFERENTES (angles, distances, corners de l'image).
 #   4. Appuie sur 'k' pour calculer la calibration.
@@ -35,31 +35,31 @@
 # La camera nue et la camera dans son tube ne voient pas pareil, et sous
 # l'water encore moins. On range donc chaque calibration sous le name de son
 # mounting, et optics.py va y puiser :
-#   --mounting nue_air    la camera seule, a l'air libre
-#   --mounting tube_air    dans le tube, hublot en place, a l'air  <- a faire
+#   --mounting nue_air    la camera seule, in air libre
+#   --mounting tube_air    dans le tube, viewport en place, in air  <- a faire
 #   --mounting tube_eau    dans le tube, immerge
 #
 # CALIBRER DANS L'AIR N'EST PAS UN ECHAUFFEMENT
-# La camera est couchee dans le tube et regarde par la paroi cylindrique. Les
+# La camera est couchee dans le tube et regarde par la wall cylindrique. Les
 # deux axes de l'image ne traversent donc pas la meme chose (voir optics.py) :
 #
-#   fx, l'axis HORIZONTAL, suit l'axis du tube. La paroi s'y reduit a deux plans
-#   paralleles, et en air un tel dioptre ne devie STRICTEMENT rien. fx doit
+#   fx, l'axis HORIZONTAL, suit l'axis du tube. La wall s'y reduit a deux plans
+#   paralleles, et in air un tel dioptre ne devie STRICTEMENT rien. fx doit
 #   retomber sur la camera nue. Tout gap la-dessus vient du mounting — mise
-#   au point, resolution, damier mal measurement — pas de l'optics.
+#   au point, resolution, checkerboard mal measurement — pas de l'optics.
 #
-#   fy, l'axis VERTICAL, est circonferentiel : c'est un menisque. Il ne devie
+#   fy, l'axis VERTICAL, est circonferentiel : c'est un meniscus. Il ne devie
 #   rien non plus SI la pupil est sur l'axis du tube, et de plus en plus
 #   quand elle s'en ecarte. Or la pupil de la D435i est forcement en retrait
 #   de quelques millimetres. Le report fy_tube / fy_nue MESURE donc ce
 #   retrait, sans rien demonter. C'est la seule facon de le connaitre.
 #
-# La calibration en air fait ainsi d'une pierre deux coups : elle valide le
+# La calibration in air fait ainsi d'une pierre deux coups : elle valide le
 # mounting, et elle donne le seul parametre geometrique qu'on ne sait pas
-# mesurer autrement. Sous l'water la paroi devient une true lentille dans les
+# mesurer autrement. Sous l'water la wall devient une true lentille dans les
 # deux directions, et la recalibration n'est plus optionnelle.
 #
-# Touches : c = capturer | k = calibrer | z = annuler la derniere | q = quitter
+# Keys: c = capturer | k = calibrer | z = annuler la derniere | q = quitter
 import argparse
 import sys
 from pathlib import Path
@@ -71,7 +71,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import optics  # noqa: E402
 
 _analyseur = argparse.ArgumentParser(
-    description="Calibration par damier, rangee sous le name d'un mounting.")
+    description="Calibration par checkerboard, rangee sous le name d'un mounting.")
 _analyseur.add_argument("--mounting", default=optics.ACTIVE_MOUNTING,
                         choices=optics.MOUNTINGS,
                         help="mounting calibre (default %(default)s)")
@@ -92,14 +92,14 @@ CRITERES = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
 
 def grille_3d(corners, size):
-    """Coordonnees 3D des corners du damier dans son propre frame (Z = 0)."""
+    """Coordonnees 3D des corners du checkerboard dans son propre frame (Z = 0)."""
     p = np.zeros((corners[0] * corners[1], 3), np.float32)
     p[:, :2] = np.mgrid[0:corners[0], 0:corners[1]].T.reshape(-1, 2)
     return p * size
 
 
-def trouver_damier(gris):
-    """Cherche le damier dans les deux orientations possibles."""
+def trouver_checkerboard(gris):
+    """Cherche le checkerboard dans les deux orientations possibles."""
     for c in (COINS, (COINS[1], COINS[0])):
         ok, coins_2d = cv2.findChessboardCorners(
             gris, c,
@@ -133,7 +133,7 @@ def ouvrir_camera():
                     hh, ww = img.shape[:2]
                     print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
                     if (ww, hh) != RESOLUTION:
-                        print(f"  ATTENTION : resolution obtenue {ww}x{hh} au lieu de "
+                        print(f"  WARNING : resolution obtenue {ww}x{hh} au lieu de "
                               f"{RESOLUTION[0]}x{RESOLUTION[1]}. La calibration ne sera "
                               f"valable que si elle a ete faite dans ce meme format.")
                     return cap, ww, hh
@@ -162,35 +162,35 @@ def relire_le_montage(K, erreur_rms):
         print(f"  measurement                  : fx {fx:.2f}   fy {fy:.2f}"
               f"   ({ecart_fx:+.1f} % sur fx)")
         if abs(ecart_fx) > 3:
-            print("  ATTENTION : c'est la meme camera nue, les focales devraient")
+            print("  WARNING : c'est la meme camera nue, les focales devraient")
             print("  coincider. Verifie la resolution et la size des carreaux.")
         return
 
     if MONTAGE == "tube_air":
         print(f"\n  fx = {fx:.2f}  ({ecart_fx:+.2f} % / camera nue)")
         if not radial:
-            print("    mounting axial : le hublot plat ne devie rien en air.")
+            print("    mounting axial : le viewport plat ne devie rien in air.")
         else:
-            print("    Selon l'axis du tube la paroi est une lame a faces "
+            print("    Selon l'axis du tube la wall est une lame a faces "
                   "paralleles ;")
-            print("    en air elle ne devie rien, fx doit coincider.")
+            print("    in air elle ne devie rien, fx doit coincider.")
         if abs(ecart_fx) > 2:
-            print("    ATTENTION : gap trop grand pour de l'optics. Cherche")
-            print("    ailleurs — mise au point, resolution, damier mal measurement,")
-            print("    ou paroi rayee/embuee.")
+            print("    WARNING : gap trop grand pour de l'optics. Cherche")
+            print("    ailleurs — mise au point, resolution, checkerboard mal measurement,")
+            print("    ou wall rayee/embuee.")
 
         if radial:
-            ecart_mm = 1000 * optics.decentrement_depuis_calibration(
+            ecart_mm = 1000 * optics.off_axis_offset_from_calibration(
                 K, nue, optics.AIR_INDEX)
             attendu = nue[1, 1] * optics.grandissement_section(
                 indice_exterieur=optics.AIR_INDEX)
-            assumed = 1000 * optics.decentrement_pupille()
+            assumed = 1000 * optics.pupil_off_axis_offsetle()
             print(f"\n  fy = {fy:.2f}  ({100*(fy/nue[1,1]-1):+.2f} % / camera nue)")
-            print("    Selon la circonference la paroi est un menisque : il ne")
+            print("    Selon la circonference la wall est un meniscus : il ne")
             print("    devie rien si la pupil est sur l'axis, et d'autant plus")
             print("    qu'elle s'en ecarte. Ce report MESURE cet gap.")
-            print(f"\n    decentrement measurement  : {ecart_mm:+.1f} mm")
-            print(f"    decentrement assumed : {assumed:+.1f} mm  "
+            print(f"\n    off_axis_offset measurement  : {ecart_mm:+.1f} mm")
+            print(f"    off_axis_offset assumed : {assumed:+.1f} mm  "
                   f"(fy attendu {attendu:.2f})")
             if abs(ecart_mm - assumed) > 2:
                 print(f"\n    Les deux ne collent pas. Le suspect est "
@@ -202,13 +202,13 @@ def relire_le_montage(K, erreur_rms):
                                    - optics.CAMERA_DEPTH) + ecart_mm)
                 print(f"    Valeur compatible avec la measurement : "
                       f"{-corrige:.1f} mm. La correct dans optics.py")
-                print("    rendra justes toutes les predictions sous l'water.")
+                print("    rendra justes toutes les predictions underwater.")
             else:
                 print("\n    Coherent avec la geometrie supposee : optics.py "
                       "decrit bien le mounting.")
             print(f"\n    residu apres calibration : "
                   f"{optics.residu_section(ecart_mm/1000, optics.WATER_INDEX):.2f} px "
-                  f"sous l'water")
+                  f"underwater")
             print(f"    (noise de detection measurement : "
                   f"{optics.CORNER_NOISE_PX:.3f} px)")
         return
@@ -217,14 +217,14 @@ def relire_le_montage(K, erreur_rms):
     depart = optics.source("tube_air")
     K_air, _ = optics.load("tube_air", quiet=True)
     attendu_fx = float(K_air[0, 0]) * optics.WATER_INDEX
-    print(f"\n  reference en air : {depart} (fx {K_air[0,0]:.2f}  "
+    print(f"\n  reference in air : {depart} (fx {K_air[0,0]:.2f}  "
           f"fy {K_air[1,1]:.2f})")
     if depart == "nue_air":
         print("  Le mounting tube_air n'est pas calibre : la comparaison ci-dessous")
         print("  reste indicative. Calibre-le, c'est 10 minutes et ca cadre tout.")
     print(f"\n  fx = {fx:.2f}   attendu {attendu_fx:.2f} "
           f"({100*(fx/attendu_fx-1):+.1f} %)")
-    print(f"    Lame plane sous l'water : la focal_length est multipliee par "
+    print(f"    Lame plane underwater : la focal_length est multipliee par "
           f"{optics.WATER_INDEX}.")
     if radial:
         attendu_fy = float(K_air[1, 1]) * (
@@ -233,22 +233,22 @@ def relire_le_montage(K, erreur_rms):
                if depart == "tube_air" else 1.0))
         print(f"\n  fy = {fy:.2f}   attendu {attendu_fy:.2f} "
               f"({100*(fy/attendu_fy-1):+.1f} %)")
-        print("    Menisque sous l'water : l'effet depend du decentrement.")
-        print(f"\n  anamorphose measured : {max(fx,fy)/min(fx,fy):.3f}   "
-              f"predite {optics.anamorphose():.3f}")
+        print("    Menisque underwater : l'effet depend du off_axis_offset.")
+        print(f"\n  anamorphic_ratio measured : {max(fx,fy)/min(fx,fy):.3f}   "
+              f"predite {optics.anamorphic_ratio():.3f}")
         print("    Les deux axes ne grossissent pas pareil : c'est normal et")
-        print("    c'est la signature du mounting radial. Une anamorphose de 1.00")
+        print("    c'est la signature du mounting radial. Une anamorphic_ratio de 1.00")
         print("    voudrait dire que la camera n'est pas orientee comme on croit.")
-    print(f"\n  RMS {erreur_rms:.3f} px : sous l'water le model plumb_bob")
+    print(f"\n  RMS {erreur_rms:.3f} px : underwater le model plumb_bob")
     print("  n'a pas la symetrie de revolution qu'il assumed, un residu plus")
-    print("  eleve qu'en air est attendu — pas forcement une mauvaise calibration.")
+    print("  eleve qu'in air est attendu — pas forcement une mauvaise calibration.")
 
 
 def retenir_le_montage_de_la_machine():
     """Proposer que cette machine se souvienne du mounting qu'on vient de calibrer.
 
     Qui vient de calibrer 'tube_eau' est, neuf fois sur dix, l'ordinateur du
-    bord du bassin. Le lui faire retenir tout de suite evite le scenario qui
+    bord du pool. Le lui faire retenir tout de suite evite le scenario qui
     nous a deja coute : quelqu'un lance une measurement sur ce PC des semaines plus
     tard, personne ne pense a preciser le mounting, et les distances sortent
     fausses d'un quart sans le moindre message.
@@ -310,7 +310,7 @@ def calibrer(points_3d, points_2d, taille_image):
     print("  (< 0.5 px = tres bon | 0.5-1 px = correct | > 1 px = a refaire)")
     print(f"\nfx = {K[0,0]:.2f}    fy = {K[1,1]:.2f}")
     print(f"cx = {K[0,2]:.2f}    cy = {K[1,2]:.2f}")
-    print(f"distorsion = {dist.ravel()}")
+    print(f"distortion = {dist.ravel()}")
 
     print(f"\nParametres sauves dans {path}")
     retenir_le_montage_de_la_machine()
@@ -322,7 +322,7 @@ def calibrer(points_3d, points_2d, taille_image):
     #
     # UN FICHIER PAR MONTAGE. Ecrire toujours au meme name serait un piege :
     # calibrer tube_air ecraserait le tube_eau, et le node ROS publierait
-    # tranquillement les intrinseques de l'air pendant un trial en bassin,
+    # tranquillement les intrinseques de l'air pendant un trial en pool,
     # sans que rien ne le signale.
     largeur_img, hauteur_img = taille_image
     lignes_yaml = [
@@ -369,7 +369,7 @@ def calibrer(points_3d, points_2d, taille_image):
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERREUR : aucune camera ouverte.")
+    print("ERROR: aucune camera ouverte.")
     raise SystemExit
 
 points_3d, points_2d = [], []   # correspondances world <-> image
@@ -377,7 +377,7 @@ K_final = dist_final = None
 
 print("=" * 58)
 print("CALIBRATION PAR DAMIER")
-print(f"  damier : {COINS[0]}x{COINS[1]} corners interieurs, carreaux {TAILLE_CARREAU*1000:.0f} mm")
+print(f"  checkerboard : {COINS[0]}x{COINS[1]} corners interieurs, carreaux {TAILLE_CARREAU*1000:.0f} mm")
 print(f"  objectif : au moins {CAPTURES_MINI} vues variees")
 print("  'c' = capturer | 'k' = calibrer | 'z' = annuler | 'q' = quitter")
 print("=" * 58)
@@ -387,7 +387,7 @@ while True:
     if not ok:
         continue
     gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    trouve, coins_2d, forme = trouver_damier(gris)
+    trouve, coins_2d, forme = trouver_checkerboard(gris)
 
     display = image.copy()
     if trouve:
@@ -407,7 +407,7 @@ while True:
     cv2.putText(display, "c=capturer  k=calibrer  z=annuler  q=quitter",
                 (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
-    cv2.imshow("Calibration damier (q pour quitter)", display)
+    cv2.imshow("Calibration checkerboard (q pour quitter)", display)
 
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):

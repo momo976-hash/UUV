@@ -6,7 +6,7 @@
 # Le programme ouvre chaque index, affiche l'image et estime le champ de vision
 # a partir de la resolution, pour t'aider a reconnaitre laquelle est laquelle.
 #
-# Touches : n = camera suivante | q = quitter
+# Keys: n = camera suivante | q = quitter
 import cv2
 import numpy as np
 
@@ -41,7 +41,7 @@ for index, _, name, w, h in liste:
     print(f"  index={index}  backend={name}  resolution={w}x{h}")
 print("=" * 58)
 print("Regarde chaque image et note l'index de celle que tu veux utiliser.")
-print("Touches : 'n' = suivante | 'q' = quitter")
+print("Keys: 'n' = suivante | 'q' = quitter")
 
 position = 0
 while True:

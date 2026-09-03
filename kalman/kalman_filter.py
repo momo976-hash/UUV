@@ -442,7 +442,7 @@ def quaternion_from_rotation(vector):
 # quaternion, d'autres des angles d'Euler ; les detecteurs d'AprilTag rendent
 # soit un rvec (vector de Rodrigues), soit une transformation homogene. Il
 # faut savoir naviguer entre les quatre sans se tromper de convention, sinon
-# les errors sont silencieuses et l'engin part de travers.
+# les errors sont silencieuses et l'vehicle part de travers.
 #
 # CONVENTION RETENUE POUR EULER : Z-Y-X intrinseque, dite yaw-pitch-roll
 # (yaw-pitch-roll). C'est celle de la robotique et de ROS. On tourne d'abord
@@ -530,7 +530,7 @@ def tag_angle_std(distance, incidence_deg, focal_length=WATER_FOCAL_LENGTH,
 
     Le demi-cote du tag measurement s = f·T/(2d) pixels dans l'image. Un corner
     deplace de sigma_px fait donc tourner le tag d'environ sigma_px/s.
-    Le facteur 1/sin(incidence) traduit l'ambiguite de retournement : seen
+    Le facteur 1/sin(incidence) traduit l'ambiguite de flip : seen
     parfaitement de face, un tag plan renseigne tres mal son inclinaison.
     """
     demi_cote_px = focal_length * taille_tag / (2.0 * max(distance, 1e-6))
@@ -581,11 +581,11 @@ class LinearKalman:
 
     POURQUOI CETTE CLASSE EXISTE SEPAREMENT. Elle ne connait ni tag, ni tube,
     ni imu inertielle : elle ne sait faire que ces cinq rows. Tout ce
-    qui est propre a l'engin — quel state, quel model de mouvement, quelle
+    qui est propre a l'vehicle — quel state, quel model de mouvement, quelle
     measurement, quelle confiance — vit dans les classes qui l'utilisent.
 
     Cette separation n'est pas une coquetterie : elle rend le coeur du filter
-    VERIFIABLE sur l'exemple chiffre du document lui-meme (un radar qui suit
+    VERIFIABLE sur l'example chiffre du document lui-meme (un radar qui suit
     un avion, state [portee, velocity]). C'est ce que fait kalman_reference_check.py,
     qui retrouve les values imprimees dans le document a la quatrieme
     decimale. Un desaccord la-dessus se verrait tout de suite, au lieu de se
@@ -594,7 +594,7 @@ class LinearKalman:
     FORME DE JOSEPH. Le document donne deux ecritures de la mise a jour de P :
     la simplifiee (I-KH)P, et celle de Joseph. Elles sont egales en arithmetique
     exacte — kalman_reference_check.py le verifie, l'gap vaut 2e-15 sur his example.
-    On garde Joseph, que le document recommande : elle reste symetrique et
+    We keep Joseph, que le document recommande : elle reste symetrique et
     definie positive apres des milliers d'iterations en virgule flottante, la
     simplifiee non.
     """
@@ -607,7 +607,7 @@ class LinearKalman:
         """x(n+1,n) = F x + G u   et   P(n+1,n) = F P F' + Q.
 
         G et u sont l'input connue du document (« input variable »), dont il
-        donne pour exemple les lectures d'un accelerometre embarque. C'est
+        donne pour example les lectures d'un accelerometre embarque. C'est
         exactement l'usage qu'on en fait ici.
         """
         self.x = F @ self.x
@@ -640,7 +640,7 @@ class LinearKalman:
 
 
 # ===========================================================================
-# Filtre de position : le core ci-dessus, avec F, Q et H de l'engin
+# Filtre de position : le core ci-dessus, avec F, Q et H de l'vehicle
 # ===========================================================================
 class PositionKalmanFilter:
     """Modele CINEMATIQUE a velocity constante, measurement de position seule.
@@ -718,12 +718,12 @@ class PositionKalmanFilter:
         """Fait avancer l'state de dt seconds.
 
         acceleration : celle MESUREE par l'accelerometre, exprimee dans le
-        frame MONDE et debarrassee de la pesanteur. Si elle est fournie, elle
+        frame MONDE et debarrassee de la gravity. Si elle est fournie, elle
         entre dans la prediction comme une commande connue au lieu d'etre
         traitee comme un alea.
 
         CE QUE L'ACCELEROMETRE CHANGE. Sans lui, on assumed la velocity
-        constante et on couvre l'gap par sigma_a, l'acceleration que l'engin
+        constante et on couvre l'gap par sigma_a, l'acceleration que l'vehicle
         peut avoir sans qu'on le sache. Avec lui, cette acceleration est
         MESUREE : il ne reste que le noise du capteur, bien plus petit. La
         prediction suit alors les manoeuvres au lieu de retarder dessus.
@@ -772,7 +772,7 @@ class PositionKalmanFilter:
             "K": self.core.gain(self.H, R)[0].copy(),
         }
 
-        if distance > self.threshold:      # aberration probable (flip d'un tag)
+        if distance > self.threshold:      # outlier probable (flip d'un tag)
             self.consecutive_rejections += 1
             if self.consecutive_rejections < self.max_consecutive_rejections:
                 self.rejections += 1
@@ -871,10 +871,10 @@ class OrientationFilter:
         frame de la camera. Si elle est fournie, l'orientation est reellement
         propagee au lieu d'etre supposee constante.
 
-        CE QUE LE GYRO CHANGE. Sans lui, on assumed l'engin at_rest en
+        CE QUE LE GYRO CHANGE. Sans lui, on assumed l'vehicle at_rest en
         rotation et on gonfle l'uncertainty de `drift` par seconde, soit
         10 deg/s dans nos reglages : au bout d'une seconde sans tag, on ne
-        sait plus rien. Avec lui, on SAIT de combien l'engin a tourne, et
+        sait plus rien. Avec lui, on SAIT de combien l'vehicle a tourne, et
         l'uncertainty ne croit plus que du noise du gyro — deux ordres de
         grandeur en dessous. C'est ce qui permet de traverser une perte de
         tags sans perdre le cap.
@@ -900,20 +900,20 @@ class OrientationFilter:
                          tolerance_g=0.15, gravity=9.81):
         """Recale le ROULIS et le TANGAGE sur la verticale vue par l'accelerometre.
 
-        Au rest, un accelerometre measurement la reaction a la pesanteur : sa
+        Au rest, un accelerometre measurement la reaction a la gravity : sa
         direction donne le haut. En comparant cette direction a celle que
         l'orientation current predit, on corrige les deux axes horizontaux —
         et EUX SEULS. Le yaw reste inobservable : tourner autour de la
-        verticale ne change pas la direction de la pesanteur. C'est pour cela
+        verticale ne change pas la direction de la gravity. C'est pour cela
         que l'axis de correction, got par product vectoriel, est
         automatiquement perpendiculaire a la verticale.
 
         Interet : sans aucun tag, le roll et le pitch restent bornes
         indefiniment. Seul le yaw drift, et c'est lui que les tags recalent.
 
-        L'accelerometre ne distingue pas la pesanteur d'une acceleration de
-        l'engin. On ne s'en sert donc que quand la norme measured est proche de
-        g : sinon l'engin manoeuvre et la measurement ne dit plus ou est le bas.
+        L'accelerometre ne distingue pas la gravity d'une acceleration de
+        l'vehicle. On ne s'en sert donc que quand la norme measured est proche de
+        g : sinon l'vehicle manoeuvre et la measurement ne dit plus ou est le bas.
         Retourne (used, correction_en_degres).
         """
         if not self.started:
@@ -921,7 +921,7 @@ class OrientationFilter:
         a = np.asarray(acceleration, dtype=float).ravel()
         norme = float(np.linalg.norm(a))
         if norme < 1e-6 or abs(norme / gravity - 1.0) > tolerance_g:
-            return False, 0.0        # l'engin accelere : measurement inexploitable
+            return False, 0.0        # l'vehicle accelere : measurement inexploitable
 
         measured = a / norme
         # Direction du "haut" telle que l'orientation current la prevoit,
@@ -942,7 +942,7 @@ class OrientationFilter:
         # SIGNE. `axis, angle` decrit la rotation Delta qui amene la direction
         # PREVUE sur la direction MESUREE, toutes deux dans le frame du corps.
         # L'orientation q, elle, va du corps vers le world : pour que sa
-        # prevision R'^T.ez vaille `measured`, il faut R' = R.Delta^T, donc
+        # prevision R'^T.ez vaille `measured`, one must R' = R.Delta^T, donc
         # composer a droite par l'INVERSE de Delta — d'ou le signe moins.
         # Avec le signe oppose, la correction s'eloigne de la cible et
         # l'orientation converge vers le point fixe a 180 degres.
@@ -971,7 +971,7 @@ class OrientationFilter:
                 self.rejections += 1
                 return False, gap
             # meme verrouillage que pour la position : trop de refus d'affilee
-            # signifie que c'est l'orientation gardee qui est fausse.
+            # signifie que c'est l'orientatiwe keepe qui est fausse.
             self.start(q, max(np.degrees(sigma_mesure_rad) * 2.0, 10.0))
             self.recoveries += 1
             self.consecutive_rejections = 0
@@ -1046,7 +1046,7 @@ class OrientationFilter:
 
 
 # ===========================================================================
-# Surveillance des tags : detecter une boite qui a bouge
+# Surveillance des tags : detecter une box qui a bouge
 # ===========================================================================
 class TagWatchdog:
     """Suit, tag par tag, la mean glissante de l'gap entre la position
@@ -1084,7 +1084,7 @@ class TagWatchdog:
     def observe_group(self, measurements):
         """`measurements` : [(identifiant, position, covariance)] d'une meme image.
 
-        On enregistre l'gap PAR PAIRE. Dans ce bassin on ne voit jamais
+        On enregistre l'gap PAR PAIRE. Dans ce pool on ne voit jamais
         plus de deux tags a la fois : un gap de paire dit qu'un des deux a
         bouge, sans dire lequel. C'est en recoupant plusieurs partenaires
         qu'on tranche.
@@ -1127,7 +1127,7 @@ class TagWatchdog:
         et toujours dans le meme sens. Contredire un seul voisin ne suffit
         pas : c'est peut-etre le voisin qui a bouge.
 
-        Si la boite a bouge de d, la position deduite de ce tag se decale de
+        Si la box a bouge de d, la position deduite de ce tag se decale de
         -d : on part de la position supposee du tag, restee celle d'avant.
         Le deplacement est donc l'oppose de l'gap moyen.
         """
@@ -1161,7 +1161,7 @@ class TagWatchdog:
 
         Indice plus faible qu'une conviction, mais souvent suffisant : si
         toutes les paires qui se disputent contiennent le meme tag, c'est
-        le denominateur commun qu'il faut aller regarder. Utile quand les
+        le denominateur commun qu'one must aller regarder. Utile quand les
         donnees manquent pour trancher par coherence de direction.
         """
         douteuses = self.suspicious_pairs()
@@ -1195,7 +1195,7 @@ class TagWatchdog:
         principal = self.main_suspect()
         if principal is not None:
             rows.append(f"  -> tag {principal} present dans toutes les paires en "
-                          "desaccord : c'est la boite a check en first")
+                          "desaccord : c'est la box a check en first")
         return "\n".join(rows) if rows else "  aucun tag suspect"
 
 
@@ -1234,7 +1234,7 @@ class PoseFilter:
     pas alignee avec la camera colour : il existe une rotation constante
     entre les deux, que pyrealsense2 fournit
     (get_extrinsics_to). Passer les measurements brutes sans cette rotation
-    melange les axes et fait deriver l'engin de travers, sans message
+    melange les axes et fait deriver l'vehicle de travers, sans message
     d'error. `imu_to_camera_rotation` est la pour ca.
     """
 
@@ -1256,11 +1256,11 @@ class PoseFilter:
         """Fait avancer la pose de dt seconds, avec l'IMU si elle est la.
 
         gyro  : velocity angulaire, rad/s, frame IMU.
-        accel : acceleration specifique, m/s2, frame IMU — pesanteur
+        accel : acceleration specifique, m/s2, frame IMU — gravity
                 COMPRISE, telle que le capteur la rend.
 
         L'ordre compte : on propage d'abord l'orientation avec le gyro, puis
-        on s'en sert pour retirer la pesanteur de l'accelerometre et exprimer
+        on s'en sert pour retirer la gravity de l'accelerometre et exprimer
         le reste dans le frame world. Utiliser l'ancienne orientation
         introduirait une error proportionnelle a la rotation faite pendant dt.
         """
@@ -1271,8 +1271,8 @@ class PoseFilter:
         acceleration_monde = None
         if accel is not None and self.orientation.started:
             a_camera = self.R_imu_camera @ np.asarray(accel, dtype=float).ravel()
-            # Vers le frame world, puis on retranche la pesanteur : ce qui
-            # reste est l'acceleration propre de l'engin.
+            # Vers le frame world, puis on retranche la gravity : ce qui
+            # reste est l'acceleration propre de l'vehicle.
             a_monde = quaternion_to_matrix(self.orientation.q) @ a_camera
             acceleration_monde = a_monde - np.array([0.0, 0.0, self.gravity])
         self.position.predict(dt, acceleration_monde)
@@ -1369,7 +1369,7 @@ def _auto_test():
         C = tag_position_covariance(true, [true[0] + 1.6, true[1], true[2]], 15.0)
         noise = rng.multivariate_normal(np.zeros(3), C)
         measurement = true + noise
-        if i % 97 == 96:                    # aberration type flip
+        if i % 97 == 96:                    # outlier type flip
             measurement = measurement + np.array([0.35, -0.25, 0.15])
             injected_outliers += 1
         filter.predict(dt)
@@ -1406,12 +1406,12 @@ def _auto_test():
           f"after filtering {np.mean(gaps[-100:]):.2f} deg")
     assert np.mean(gaps[-100:]) < np.degrees(sigma)
 
-    # -- detection d'une boite deplacee -------------------------------------
+    # -- detection d'une box deplacee -------------------------------------
     watchdog = TagWatchdog(threshold_mm=5.0, minimum_observations=20)
     supports = {10: np.array([1.5, 0.0, 0.35]),
                 11: np.array([2.4, 0.0, 0.65]),
                 12: np.array([0.0, 0.8, 0.50])}
-    pushed = np.array([0.018, -0.006, 0.0])       # 19 mm sur la boite 11
+    pushed = np.array([0.018, -0.006, 0.0])       # 19 mm sur la box 11
     camera = np.array([1.2, 1.4, 0.5])
     for _ in range(150):
         groupe = []
@@ -1458,7 +1458,7 @@ def _auto_test():
           f"{np.abs(identity - np.eye(4)).max():.1e}")
 
     # -- le gyroscope tient-il le cap quand les tags disparaissent ? --------
-    # 6 seconds sans aucun tag, l'engin tournant a 20 deg/s.
+    # 6 seconds sans aucun tag, l'vehicle tournant a 20 deg/s.
     dt, duration = 1 / 200, 6.0
     true_rate = np.radians([3.0, -5.0, 20.0])
     true_bias = np.radians([0.4, -0.3, 0.6])
@@ -1489,7 +1489,7 @@ def _auto_test():
                    sigma_deg=15.0)
     for _ in range(400):
         suivi.predict(1 / 100, np.zeros(3))
-        # engin at_rest et horizontal : l'accelerometre voit le haut
+        # vehicle at_rest et horizontal : l'accelerometre voit le haut
         suivi.correct_with_gravity(np.array([0.0, 0.0, 9.81])
                                + rng.normal(0, 0.05, 3))
     roll, pitch, _ = quaternion_to_euler(suivi.q)
@@ -1497,7 +1497,7 @@ def _auto_test():
           f"pitch {np.degrees(pitch):+.2f} deg  (started from +12 and -9)")
     assert abs(np.degrees(roll)) < 2.0 and abs(np.degrees(pitch)) < 2.0
 
-    # une acceleration franche ne doit PAS etre prise pour la pesanteur
+    # une acceleration franche ne doit PAS etre prise pour la gravity
     used, _ = suivi.correct_with_gravity(np.array([6.0, 0.0, 9.81]))
     assert not used, "a measurement far from g must be refused"
     print("accelerometer: 1.2 g measurement refused, as expected")
@@ -1528,7 +1528,7 @@ def _auto_test():
         suivi.start(np.zeros(3), sigma_position=0.01, sigma_vitesse=0.05)
         suivi.x[3:] = [0.25, 0.0, 0.0]
         vraie_p, vraie_v = np.zeros(3), np.array([0.25, 0.0, 0.0])
-        # l'engin accelere : c'est le cas ou l'hypothese "velocity constante"
+        # l'vehicle accelere : c'est le cas ou l'hypothese "velocity constante"
         # se trompe, et ou l'accelerometre a quelque chose a apporter.
         a = np.array([0.30, -0.15, 0.0])
         for _ in range(int(duration / dt)):
@@ -1543,11 +1543,11 @@ def _auto_test():
     assert results[True] < results[False] / 3
 
     # --- accord avec le document de reference ------------------------------
-    # L'exemple chiffre de Becker (radar 1D, kalmanfilter.net), passe par le
+    # L'example chiffre de Becker (radar 1D, kalmanfilter.net), passe par le
     # core du projet. Ce test protege les cinq equations : si quelqu'un
     # key a la prediction, au gain ou a la forme de Joseph, l'gap avec
     # les values publiees le dit immediatement. Le detail commente vit dans
-    # kalman_reference_check.py ; ici on garde juste le verrou.
+    # kalman_reference_check.py ; ici we keep juste le verrou.
     dt_doc, sigma_doc = 5.0, 0.2
     F_doc = np.array([[1.0, dt_doc], [0.0, 1.0]])
     Q_doc = sigma_doc ** 2 * np.array(
@@ -1561,7 +1561,7 @@ def _auto_test():
     ref.correct(np.array([11020.0, 202.0]), np.eye(2), np.diag([36.0, 2.25]))
     assert np.allclose(ref.x, [11009.37, 201.43], atol=5e-3)
     assert np.allclose(ref.P, [[14.57, 1.43], [1.43, 0.71]], atol=5e-3)
-    # Le Q 3D de l'engin est le Q 1D du document, bloc par bloc.
+    # Le Q 3D de l'vehicle est le Q 1D du document, bloc par bloc.
     _, G_doc = PositionKalmanFilter.model(dt_doc)
     Q3 = sigma_doc ** 2 * (G_doc @ G_doc.T)
     assert np.isclose(Q3[0, 0], Q_doc[0, 0]) and np.isclose(Q3[0, 3], Q_doc[0, 1])
@@ -1577,7 +1577,7 @@ def _auto_test():
 if __name__ == "__main__":
     _auto_test()
     # Les auto-tests ne verifient QUE les maths, et ils passent tres bien avec
-    # des reglages devines : rien dans leur reussite ne dit que l'engin a ete
+    # des reglages devines : rien dans leur reussite ne dit que l'vehicle a ete
     # measurement. On le rappelle donc juste apres, pour que « tous les tests
     # passent » ne soit pas lu comme « tout est measurement ».
     remind_missing_measurements()

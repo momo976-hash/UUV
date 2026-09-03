@@ -2,17 +2,17 @@
 # encore a une calibration deja enregistree.
 #
 # Principe : une calibration est propre a UN EXEMPLAIRE de camera, pas a un
-# model. Deux RealSense identiques peuvent avoir des cx/cy/distorsion legerement
-# differents (tolerances de fabrication). Ce script prend des photos du damier
+# model. Deux RealSense identiques peuvent avoir des cx/cy/distortion legerement
+# differents (tolerances de fabrication). Ce script prend des photos du checkerboard
 # avec la camera ACTUELLEMENT branchee, applique la calibration enregistree
 # (SANS la recalculer), et measurement l'error de reprojection :
 #   - error proche de celle de la calibration d'origin -> rien n'a bouge
 #   - error nettement plus grande (x5, x10...) -> a recalibrer
 #
 # DEPUIS LE TUBE, CE N'EST PLUS SEULEMENT UNE QUESTION DE CAMERA
-# La camera est couchee dans le tube et regarde par la paroi : sa focal_length
+# La camera est couchee dans le tube et regarde par la wall : sa focal_length
 # verticale depend de la distance entre sa pupil et l'axis du tube. Un
-# millimetre de glissement dans le support, et la calibration ne decrit plus
+# millimetre de slip dans le support, et la calibration ne decrit plus
 # le mounting — 1 % sur toutes les distances (voir optics.py). Ce script est
 # donc devenu le check a passer APRES chaque remontage, meme avec la meme
 # camera, et avant chaque mise a l'water.
@@ -20,7 +20,7 @@
 #   python verifier_calibration.py --mounting tube_air
 #   python verifier_calibration.py --mounting tube_eau
 #
-# Touches : c = capturer une vue | v = check | q = quitter
+# Keys: c = capturer une vue | v = check | q = quitter
 import argparse
 import sys
 from pathlib import Path
@@ -52,7 +52,7 @@ def grille_3d(corners, size):
     return p * size
 
 
-def trouver_damier(gris):
+def trouver_checkerboard(gris):
     for c in (COINS, (COINS[1], COINS[0])):
         ok, coins_2d = cv2.findChessboardCorners(
             gris, c,
@@ -83,7 +83,7 @@ def ouvrir_camera():
 
 
 if optics.source(MONTAGE) != MONTAGE:
-    print(f"ERREUR : le mounting '{MONTAGE}' n'a jamais ete calibre — il n'y a "
+    print(f"ERROR: le mounting '{MONTAGE}' n'a jamais ete calibre — il n'y a "
           "rien a check.")
     print(f"  python calibrate.py --mounting {MONTAGE}")
     raise SystemExit
@@ -97,28 +97,28 @@ print(f"VERIFICATION du mounting '{MONTAGE}'")
 print(f"Calibration enregistree : {Lc}x{Hc}, fx={K[0,0]:.1f}, fy={K[1,1]:.1f}, "
       f"cx={K[0,2]:.1f}, cy={K[1,2]:.1f}")
 if optics.ORIENTATION == "radiale" and MONTAGE != "nue_air":
-    print(f"Rappel : {optics.sensibilite_glissement():.1f} % d'error de distance "
-          "par mm de glissement")
+    print(f"Rappel : {optics.sensibilite_slip():.1f} % d'error de distance "
+          "par mm de slip")
     print("de la camera dans son support. C'est ce que ce check attrape.")
 print("=" * 62)
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERREUR : aucune camera ouverte.")
+    print("ERROR: aucune camera ouverte.")
     raise SystemExit
 if (L, H) != (Lc, Hc):
-    print(f"ATTENTION : capture en {L}x{H} mais calibration faite en {Lc}x{Hc}. "
+    print(f"WARNING : capture en {L}x{H} mais calibration faite en {Lc}x{Hc}. "
           f"Resultat non fiable.")
 
 points_3d, points_2d = [], []
-print("Montre le damier sous plusieurs angles. 'c'=capturer (8-10 vues) 'v'=check 'q'=quitter")
+print("Montre le checkerboard sous plusieurs angles. 'c'=capturer (8-10 vues) 'v'=check 'q'=quitter")
 
 while True:
     ok, image = cam.read()
     if not ok:
         continue
     gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    trouve, coins_2d, forme = trouver_damier(gris)
+    trouve, coins_2d, forme = trouver_checkerboard(gris)
 
     if trouve:
         cv2.drawChessboardCorners(image, forme, coins_2d, True)
@@ -131,7 +131,7 @@ while True:
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
     cv2.putText(image, "c=capturer  v=check  q=quitter", (10, H - 14),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
-    cv2.imshow("Verification calibration (q pour quitter)", image)
+    cv2.imshow("Check calibration (q pour quitter)", image)
 
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):
@@ -178,7 +178,7 @@ while True:
         if error >= 0.5 and optics.ORIENTATION == "radiale" and MONTAGE != "nue_air":
             if rms_y > 2 * rms_x:
                 print("  Le residu est surtout VERTICAL, l'axis qui traverse le")
-                print("  menisque : la camera a tres probablement glisse dans son")
+                print("  meniscus : la camera a tres probablement glisse dans son")
                 print("  support. Verifie la fixation avant de recalibrer, sinon")
                 print("  la new calibration ne tiendra pas plus longtemps.")
             elif rms_x > 2 * rms_y:
@@ -188,7 +188,7 @@ while True:
                 print("  camera elle-meme.")
             else:
                 print("  Le residu est isotrope : ce n'est pas la geometrie du tube.")
-                print("  Autre exemplaire de camera, autre resolution, ou paroi sale.")
+                print("  Autre exemplaire de camera, autre resolution, ou wall sale.")
         print("=" * 50 + "\n")
 
 cam.release()

@@ -9,7 +9,7 @@ TAG_SIZE = 0.10  # cote du tag en metres (measurement ton tag imprime et change 
 # --- Webcam ---
 cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # CAP_DSHOW : evite l'error MSMF sous Windows
 if not cam.isOpened():
-    print("ERREUR : impossible d'ouvrir la webcam.")
+    print("ERROR: impossible d'ouvrir la webcam.")
     raise SystemExit
 
 # --- Parametres approx de la camera (suffisant pour un test) ---

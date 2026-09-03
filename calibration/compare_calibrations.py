@@ -1,6 +1,6 @@
 from pathlib import Path
 import sys
-# comparaison_calibration.py — Compare l'approximation et la calibration damier.
+# comparaison_calibration.py — Compare l'approximation et la calibration checkerboard.
 #
 # DEUX grandeurs mesurables, a ne pas confondre :
 #   MODE 1  gap entre DEUX TAGS   (distance entre les centres des tags)
@@ -12,10 +12,10 @@ import sys
 #              est 0 deg : tout gap measurement est de l'error, sans rapporteur
 #
 # Les deux sont calculees avec les DEUX jeux de params en meme time :
-#   A) approximation : focal_length = width x 0.95, sans distorsion
-#   B) calibration par damier : fx, fy, cx, cy + distorsion
+#   A) approximation : focal_length = width x 0.95, sans distortion
+#   B) calibration par checkerboard : fx, fy, cx, cy + distortion
 #
-# Touches : m = changer de mode | 0-9 et '.' = saisir la measurement au ruban
+# Keys: m = changer de mode | 0-9 et '.' = saisir la measurement au ruban
 #           o = fixer la reference d'orientation (mode 4)
 #           RET. ARRIERE = effacer | s = enregistrer | q = quitter
 import csv
@@ -31,13 +31,13 @@ import optics  # noqa: E402
 CAMERA_INDEX = None          # None = detection automatique
 RESOLUTION = (640, 480)      # doit etre identique a celle de la calibration
 
-TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au calipers, pas 223 mm nominal
 FACTEUR_APPROX = 0.95        # ancienne approximation
 LISSAGE = 30                 # frames moyennees pour stabiliser l'display
 
-# Calibration par damier (5x7, 22 vues, RMS 0.169 px)
+# Calibration par checkerboard (5x7, 22 vues, RMS 0.169 px)
 MONTAGE = optics.ACTIVE_MOUNTING
-# L'optics vient de optics.py : camera, tube, hublot, milieu. Le mounting
+# L'optics vient de optics.py : camera, tube, viewport, milieu. Le mounting
 # n'est ecrit dans aucun path de code : optics.py le lit dans
 # calibration/montage_local.txt, propre a CETTE machine, et le demande une
 # fois s'il n'existe pas encore. Pour le changer :
@@ -89,7 +89,7 @@ def angle_entre(R1, R2):
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERREUR : aucune camera ouverte.")
+    print("ERROR: aucune camera ouverte.")
     raise SystemExit
 
 # A) approximation
@@ -110,7 +110,7 @@ except Exception:
     print("Calibration integree au script used")
 print(f"  calibration : {Lc}x{Hc} (fx = {K_calib[0, 0]:.1f})   capture : {L}x{H}")
 if (L, H) != (Lc, Hc):
-    print("  >>> ATTENTION : formats differents, la calibration n'est pas valable ici.")
+    print("  >>> WARNING : formats differents, la calibration n'est pas valable ici.")
 
 h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
