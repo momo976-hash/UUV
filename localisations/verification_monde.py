@@ -35,7 +35,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "calibration"))
 import optique  # noqa: E402
 
-from filtre_kalman import FiltrePose
+from filtre_kalman import (FiltrePose, rappel_mesures_manquantes,
+                           SIGMA_ACCELERATION, DERIVE_GYRO_DEG_S)
 
 try:
     import pyrealsense2 as rs
@@ -324,6 +325,11 @@ print("  2. bouge vers le 2e tag : la liaison se fait TOUTE SEULE en chemin")
 print("     (il suffit que les 2 tags soient un instant visibles ensemble)")
 print("  'm' mode | 'r' repartir a zero | 's' enregistrer | 'q' quitter")
 print("=" * 66)
+
+# Le rappel est affiche AVANT la session, pas seulement apres : c'est
+# maintenant que la personne a l'engin dans l'eau sous la main. Le lui dire
+# une fois la manip terminee l'obligerait a tout recommencer.
+rappel_mesures_manquantes(avec_imu=cam.avec_imu)
 
 while True:
     ok, image = cam.read()
@@ -763,14 +769,29 @@ if len(vitesses_angulaires) > 100:
     # Le bruit de modele doit couvrir ce que l'engin fait REELLEMENT sans que
     # le filtre le sache. Le 95e centile evite a la fois de sous-estimer, ce
     # qui ferait retarder le filtre, et de se caler sur un pic isole.
-    print("  A RECOPIER dans localisations/filtre_kalman.py,")
-    print("  bloc « LES TROIS NOMBRES A MESURER » (vers la ligne 190) :")
+    print("  VOICI LES DEUX NOMBRES CHERCHES. Marche a suivre :")
     print()
-    print(f"      SIGMA_ACCELERATION = {accel_95:.1f}")
-    print(f"      DERIVE_GYRO_DEG_S  = {rotation_95:.0f}")
+    print("   1. Ouvrir le fichier   localisations/filtre_kalman.py")
+    print("      (avec le Bloc-notes, VS Code, n'importe quel editeur de texte)")
+    print("   2. Chercher (Ctrl+F) :  SIGMA_ACCELERATION")
+    print("   3. Deux lignes existent DEJA quelque part vers le debut du")
+    print("      fichier. Elles ressemblent a ceci :")
     print()
-    print("  Ces deux lignes existent deja : il n'y a qu'a changer les nombres.")
-    print("  Tout le depot lit ce bloc, il n'y a rien d'autre a modifier.")
+    print(f"          SIGMA_ACCELERATION = {SIGMA_ACCELERATION}")
+    print(f"          DERIVE_GYRO_DEG_S = {DERIVE_GYRO_DEG_S}")
+    print()
+    print("   4. Remplacer UNIQUEMENT les nombres, pour obtenir :")
+    print()
+    print(f"          SIGMA_ACCELERATION = {accel_95:.1f}")
+    print(f"          DERIVE_GYRO_DEG_S = {rotation_95:.0f}")
+    print()
+    print("   5. Enregistrer le fichier. C'est tout — rien d'autre a modifier")
+    print("      nulle part, et le rappel au demarrage disparaitra tout seul.")
+    print()
+    print("  ENGLISH — open localisations/filtre_kalman.py in any text editor,")
+    print("  find the two lines starting with SIGMA_ACCELERATION and")
+    print("  DERIVE_GYRO_DEG_S, and change ONLY the numbers to the two values")
+    print("  shown above. Save. Nothing else to change anywhere.")
     print("=" * 66)
     print("  Valable si ce que tu viens de faire ressemble a une vraie mission.")
     print("  Une session ou la camera reste posee ne mesure rien d'utile.")

@@ -225,6 +225,19 @@ SIGMA_ACCELERATION = 0.4
 # BRUIT_GYRO_DEG_S qui gouverne, deux ordres de grandeur plus bas.
 DERIVE_GYRO_DEG_S = 10.0
 
+# Les valeurs SUPPOSEES d'origine, gardees pour savoir ce qui a ete mesure et
+# ce qui ne l'est pas encore. Des que quelqu'un remplace un reglage ci-dessus
+# par sa mesure, il cesse d'etre egal a la valeur listee ici, et le rappel de
+# `rappel_mesures_manquantes` s'eteint tout seul pour ce reglage-la.
+#
+# C'est volontairement automatique : la personne qui fera la mesure au bassin
+# ne connait pas ce code, et personne ne sera la pour lui rappeler de couper
+# un avertissement a la main.
+VALEURS_SUPPOSEES = {
+    "SIGMA_ACCELERATION": 0.4,
+    "DERIVE_GYRO_DEG_S": 10.0,
+}
+
 # Bruit du gyroscope de la D435i, en deg/s (marche aleatoire angulaire).
 # MESURE, plus suppose : centrale immobile, 5 s a 400 Hz (3963 echantillons),
 # ecart-type des vitesses angulaires — imu_realsense.py du 02/09. La valeur
@@ -241,6 +254,97 @@ BRUIT_ACCEL = 0.015
 # modele surestimait l'erreur de profondeur d'un facteur 2.3 face aux mesures
 # reelles ; avec lui l'ecart tombe a 0.85x, soit 15 %.
 COINS_PAR_TAG = 4.0
+
+
+# ===========================================================================
+# Rappel : ce qui reste a mesurer AVEC L'ENGIN, DANS L'EAU
+# ===========================================================================
+# La personne qui a ecrit ce code ne sera plus la le jour de cette mesure, et
+# celle qui la fera ne lit pas le Python. Le rappel est donc affiche par les
+# scripts eux-memes, en clair, avec le geste exact a faire — et il s'eteint
+# tout seul des que la mesure est faite, sans que personne n'ait a toucher au
+# code pour le faire taire.
+# ===========================================================================
+
+def reglages_encore_supposes():
+    """Les reglages encore egaux a leur valeur d'origine supposee."""
+    actuels = {"SIGMA_ACCELERATION": SIGMA_ACCELERATION,
+               "DERIVE_GYRO_DEG_S": DERIVE_GYRO_DEG_S}
+    return [nom for nom, suppose in VALEURS_SUPPOSEES.items()
+            if abs(actuels[nom] - suppose) < 1e-9]
+
+
+def rappel_mesures_manquantes(avec_imu=None):
+    """Affiche le rappel de la mesure a faire dans l'eau. Rend True si affiche.
+
+    avec_imu : True si la centrale de la D435i alimente le filtre dans la
+    manip en cours. Le ton du rappel en depend, et c'est important : avec la
+    centrale, ces deux reglages ne sont jamais lus (voir
+    sensibilite_reglages.py) et exiger la mesure serait un faux barrage ;
+    sans elle, ce sont eux qui gouvernent tout et l'absence de mesure est un
+    vrai probleme. On ne crie donc pas la meme chose dans les deux cas.
+    """
+    manquants = reglages_encore_supposes()
+    if not manquants:
+        return False
+
+    print()
+    print("*" * 70)
+    print("*  A LIRE — IL RESTE UNE MESURE A FAIRE, DANS L'EAU")
+    print("*  TO READ — ONE MEASUREMENT IS STILL MISSING, IN THE WATER")
+    print("*" * 70)
+    print("*")
+    print("*  FRANCAIS")
+    print("*  Deux reglages du filtre sont encore DEVINES, pas mesures :")
+    for nom in manquants:
+        print(f"*      {nom} = {VALEURS_SUPPOSEES[nom]}")
+    print("*")
+    print("*  Ils decrivent A QUELLE VITESSE L'ENGIN BOUGE VRAIMENT : combien")
+    print("*  il peut accelerer et tourner entre deux images. Cela depend de")
+    print("*  sa masse, de ses propulseurs et de l'eau — donc AUCUN calcul ne")
+    print("*  peut les donner, et aucune fiche technique non plus. Il faut")
+    print("*  faire bouger l'engin et regarder.")
+    print("*")
+    print("*  CE QU'IL FAUT FAIRE, UNE SEULE FOIS (10 minutes) :")
+    print("*    1. Engin dans l'eau, camera qui voit les tags.")
+    print("*    2. Lancer :  python localisations/verification_monde.py")
+    print("*    3. Viser un tag, appuyer sur la touche  o")
+    print("*    4. Piloter l'engin ~30 secondes COMME UNE VRAIE MISSION")
+    print("*       (vitesses habituelles ; ni immobile, ni secousses expres)")
+    print("*    5. Appuyer sur  q")
+    print("*    6. Le script affiche deux lignes toutes pretes. Les recopier")
+    print("*       dans localisations/filtre_kalman.py — les memes lignes y")
+    print("*       existent deja, il n'y a QUE les nombres a changer.")
+    print("*    7. Ce message disparaitra tout seul.")
+    print("*")
+    if avec_imu is True:
+        print("*  URGENCE : FAIBLE. La centrale inertielle est branchee, et tant")
+        print("*  qu'elle l'est le filtre n'utilise PAS ces deux reglages (le")
+        print("*  demontrer : python localisations/sensibilite_reglages.py).")
+        print("*  Mais le jour ou elle tombe en panne ou n'est pas branchee,")
+        print("*  ce sont eux qui gouvernent tout. A faire avant ce jour-la.")
+    elif avec_imu is False:
+        print("*  URGENCE : FORTE. La centrale inertielle n'alimente PAS le")
+        print("*  filtre dans cette manip. Ces deux reglages gouvernent donc")
+        print("*  tout ce que le filtre fait, et ils sont devines. Les")
+        print("*  resultats de cette session sont a prendre avec prudence.")
+    else:
+        print("*  Si la centrale inertielle est branchee, ces reglages ne sont")
+        print("*  pas utilises et rien ne presse. Sans elle, ils gouvernent")
+        print("*  tout : la mesure devient necessaire.")
+    print("*")
+    print("*  ENGLISH")
+    print("*  Two filter settings are still GUESSED, not measured. They")
+    print("*  describe how fast the vehicle really moves — its own mass,")
+    print("*  thrusters and drag — so no datasheet and no calculation can")
+    print("*  provide them. The vehicle has to move, in the water, once:")
+    print("*    run  python localisations/verification_monde.py")
+    print("*    press  o  on a tag, drive ~30 s like a real mission, press  q")
+    print("*    copy the two printed lines into localisations/filtre_kalman.py")
+    print("*  This message then disappears by itself.")
+    print("*" * 70)
+    print()
+    return True
 
 
 # ===========================================================================
@@ -1441,3 +1545,8 @@ def _auto_test():
 
 if __name__ == "__main__":
     _auto_test()
+    # Les auto-tests ne verifient QUE les maths, et ils passent tres bien avec
+    # des reglages devines : rien dans leur reussite ne dit que l'engin a ete
+    # mesure. On le rappelle donc juste apres, pour que « tous les tests
+    # passent » ne soit pas lu comme « tout est mesure ».
+    rappel_mesures_manquantes()

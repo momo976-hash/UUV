@@ -198,6 +198,29 @@ Cette ligne existe deja : il n'y a qu'a changer le nombre.
 
 ## Etape 5 — Mesurer la dynamique reelle de l'engin
 
+> **CETTE ETAPE N'EST PAS FAITE A CE JOUR.** Elle demande l'engin reel en
+> mouvement dans l'eau, et n'a pas pu etre realisee avant le depart de la
+> personne qui a ecrit ces scripts. Les deux nombres concernes valent encore
+> leur valeur **supposee** (`SIGMA_ACCELERATION = 0.4`,
+> `DERIVE_GYRO_DEG_S = 10.0`).
+>
+> **Faut-il s'en inquieter tout de suite ?** Non, tant que la centrale
+> inertielle de la D435i est branchee : dans ce cas le filtre ne lit jamais
+> ces deux reglages. C'est demontre chiffres en main par
+> `python localisations/sensibilite_reglages.py` (les faire varier d'un
+> facteur 4572 ne change pas le resultat d'un millimetre). Ce sont alors
+> `BRUIT_GYRO_DEG_S` et `BRUIT_ACCEL` qui gouvernent, et ceux-la **sont
+> mesures**.
+>
+> **Quand cela devient necessaire :** le jour ou le filtre tourne SANS la
+> centrale — panne, cable debranche, manip ou elle n'est pas utilisee. Ces
+> deux reglages gouvernent alors tout, et une valeur devinee degrade la
+> localisation sans que rien ne le signale.
+>
+> Les scripts affichent d'eux-memes un rappel detaille tant que la mesure
+> n'est pas faite, et ce rappel s'eteint tout seul une fois les deux nombres
+> remplaces. Il n'y a rien a desactiver a la main.
+
 ```
 python localisations/verification_monde.py
 ```
