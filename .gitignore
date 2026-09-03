@@ -31,6 +31,7 @@ calibration/montages/
 calibration/local_mounting.txt
 calibration/montage_local.txt
 
-# Proof screenshots captured by demo_distance.py
+# Evidence screenshots captured by demo_distance.py
+calibration/evidence/
 proofs/
 preuves/

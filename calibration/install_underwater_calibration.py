@@ -1,206 +1,236 @@
 # install_underwater_calibration.py — Install the underwater calibration here.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python calibration/install_underwater_calibration.py         the CORRECTED one (default)
+#     python calibration/install_underwater_calibration.py --raw   the pool's, as it stands
 #
-#     python install_underwater_calibration.py            la calibration CORRIGEE (default)
-#     python install_underwater_calibration.py --raw    celle du pool, telle quelle
+# Run it once on a machine that has not calibrated tube_water itself, to give
+# it the numbers in service. It writes calibration/mountings/tube_water.npz
+# and its _ros.yaml, and never overwrites an existing calibration silently:
+# a different one is moved aside first.
+# ===========================================================================
 #
 # ---------------------------------------------------------------------------
-# CE QUI S'EST PASSE, ET COMMENT ON L'A TRANCHE
+# WHAT HAPPENED, AND HOW IT WAS SETTLED
 # ---------------------------------------------------------------------------
-# La calibration au checkerboard faite au bord du pool le 02/09 donne
-# fx = 711.28, fy = 595.86. Elle passe tous les controles internes : 15 vues,
-# RMS 0.7793 px, point principal a moins d'un pixel du centre, polynome de
-# distortion monotone sur toute l'image. Rien, dans la calibration elle-meme,
-# ne dit qu'elle est fausse.
+# The checkerboard calibration made at the poolside on 02/09 gives
+# fx = 711.28, fy = 595.86. It passes every internal check: 15 views, RMS
+# 0.7793 px, principal point less than a pixel from the centre, distortion
+# polynomial monotonic across the whole image. Nothing in the calibration
+# itself says it is wrong.
 #
-# Elle l'est pourtant, et deux faits independants le montrent.
+# It is wrong all the same, and two independent facts show it.
 #
-# 1. fy EST PLUS PETIT QU'EN AIR. La camera nue measurement fy = 602.37. Cette
-#    calibration donne 595.86, soit 1.1 % de MOINS. C'est impossible : l'water
-#    ne peut qu'augmenter la focal_length apparente, jamais la diminuer. Un viewport
-#    grossit, il ne retrecit pas. Ce seul chiffre condamne la calibration.
+# 1. fy IS SMALLER THAN IN AIR. The bare camera measures fy = 602.37. This
+#    calibration gives 595.86, i.e. 1.1 % LESS. That is impossible: water can
+#    only increase the apparent focal length, never decrease it. A viewport
+#    magnifies, it does not shrink. That number alone condemns the
+#    calibration.
 #
-# 2. LA MESURE SUR DISTANCES CONNUES. check_distance.py, au pool, sur
-#    trois distances :
+# 2. THE MEASUREMENT OVER KNOWN DISTANCES. check_distance.py, at the pool,
+#    over three distances:
 #         1.0 m -> 0.8887 m   -11.13 %
 #         1.5 m -> 1.3567 m    -9.55 %
 #         2.0 m -> 1.8000 m   -10.00 %
 #
-#    L'error est un POURCENTAGE CONSTANT, pas un decalage. C'est decisif :
-#    un decalage constant ne peut pas venir de la focal_length (d = fx.S/s est une
-#    pure proportionnalite), alors qu'un pourcentage constant ne peut venir
-#    que d'elle. L'ajustement libre donne d'ailleurs un decalage de -18 mm,
-#    plus petit que la spread des measurements elles-memes : il n'est pas
-#    significatif. Le probleme est donc, et uniquement, la focal_length.
+#    The error is a CONSTANT PERCENTAGE, not an offset. That is decisive: a
+#    constant offset cannot come from the focal length (d = fx.S/s is a pure
+#    proportionality), whereas a constant percentage can come from nothing
+#    else. The free fit does give an offset of -18 mm, smaller than the spread
+#    of the measurements themselves: it is not significant. So the problem is
+#    the focal length, and only the focal length.
 #
 # ---------------------------------------------------------------------------
-# PREMIERE CORRECTION : fx = 791.3 px  (depassee, gardee pour la trace)
+# FIRST CORRECTION: fx = 791.3 px  (superseded, kept for the record)
 # ---------------------------------------------------------------------------
-# On a d'abord cherche l'optics qui, resolue avec la matrix de Josiah,
-# rendrait exactement les 0.8998 x measurements au pool. La simulation
-# (projectPoints puis solvePnP, comme dans le vrai code) donnait fx = 791.3 px,
-# et le model optics de optics.py — qui ne connait que la geometrie du tube
-# et l'index de l'water — predisait 803.6 px. Les deux se rejoignaient a 1.5 %,
-# ce qui a suffi a installer 791.34 / 615.40 pendant un time.
-#
-# ---------------------------------------------------------------------------
-# CE QUI EST INSTALLE AUJOURD'HUI : fx = 838.45, fy = 652.10
-# ---------------------------------------------------------------------------
-# Une check independante, faite sur le terrain avec un AUTRE algorithme
-# de measurement, a trouve ces deux values justes. Elles valent 1.0595 x les
-# precedentes, le meme facteur sur les deux axes : l'anamorphic ratio 1.2859 du
-# model optics est donc conservee intacte, ce qui est rassurant — c'est une
-# propriete du tube, et elle n'avait aucune raison de bouger.
-#
-# Elles sont prises TELLES QUELLES, sans etre rejustifiees apres coup. Une
-# tentative de les rededuire des measurements du 02/09 a echoue : aucune mise a
-# l'echelle de 791.34 ne reproduit les distances de cette check, ce qui
-# montre seulement que ces measurements-la ne sortaient pas de cette calibration.
-# Les redemontrer n'aurait fabrique qu'un ajustement de plus, et c'est ainsi
-# qu'on avait deja invente un decalage de 77 mm qui n'existait pas.
-#
-# Le check qui reste a faire, et qui vaut mieux que tout raisonnement :
-#
-#     python check_distance.py --reel 1.5 --tag 0.11732 --pi \
-#         --focal_length 838.45,652.10
-#
-# a plusieurs distances, dont 0.5 m. Le script ajuste alors une droite sur
-# l'history et dit lui-meme si ce qui reste est une focal_length ou un decalage.
+# We first looked for the optics that, solved with Josiah's matrix, would give
+# exactly the 0.8998 x measured at the pool. The simulation (projectPoints
+# then solvePnP, as in the real code) gave fx = 791.3 px, and the optical
+# model in optics.py — which knows nothing but the tube's geometry and water's
+# index — predicted 803.6 px. The two agreed to 1.5 %, which was enough to
+# install 791.34 / 615.40 for a while.
 #
 # ---------------------------------------------------------------------------
-# CE QUI RESTE FRAGILE : fy
+# WHAT IS INSTALLED TODAY: fx = 838.45, fy = 652.10
 # ---------------------------------------------------------------------------
-# Aucune measurement de distance d'un tag centre ne contraint fy : elle est dominee
-# par l'axis le plus grossi. fy ne tient donc toujours que par l'anamorphic ratio du
-# model (fx/fy = 1.2859), que la check independante a conservee sans
-# la mesurer separement.
+# An independent check, made in the field with a DIFFERENT measurement
+# algorithm, found these two values right. They are 1.0595 x the previous
+# ones, the same factor on both axes: so the optical model's anamorphic ratio
+# of 1.2859 is preserved intact, which is reassuring — it is a property of the
+# tube, and it had no reason to move.
 #
-# Un fy faux ne se voit PAS sur une measurement de distance d'un tag place au
-# centre — c'est pourquoi one must un autre test pour le trancher :
+# They are taken AS THEY STAND, without being re-justified after the fact. An
+# attempt to re-derive them from the 02/09 measurements failed: no scaling of
+# 791.34 reproduces that check's distances, which only shows that those
+# measurements did not come out of this calibration. Re-proving them would
+# have manufactured one more fit, and that is exactly how a 77 mm offset that
+# did not exist got invented once already.
 #
-#     Poser deux tags a un gap known, une fois COTE A COTE (horizontal),
-#     une fois L'UN AU-DESSUS DE L'AUTRE (vertical), a la meme distance.
-#     Si l'gap horizontal tombe juste et le vertical non, c'est fy.
+# The check that remains to be done, and which is worth more than any
+# reasoning:
 #
-# En attendant, les distances sont bonnes et les positions laterales le sont
-# aussi selon l'axis du tube. C'est deja de quoi faire tourner le filter.
+#     python calibration/check_distance.py --real 1.5 --tag 0.11732 --pi \
+#         --focal-length 838.45,652.10
 #
-# La distortion est reprise telle quelle du pool : elle a ete ajustee sur de
-# vraies frames underwater, et son polynome reste monotone sur toute l'image
-# (verifie : il ne s'inverse qu'a r = 0.62, les corners sont a 0.59).
+# at several distances, including 0.5 m. The script then fits a line to the
+# history and says for itself whether what is left is a focal length or an
+# offset.
+#
+# ---------------------------------------------------------------------------
+# WHAT REMAINS FRAGILE: fy
+# ---------------------------------------------------------------------------
+# No distance measurement of a centred tag constrains fy: it is dominated by
+# the more magnified axis. So fy still rests only on the model's anamorphic
+# ratio (fx/fy = 1.2859), which the independent check preserved without
+# measuring it separately.
+#
+# A wrong fy does NOT show up on a distance measurement of a tag placed at the
+# centre — which is why another test is needed to settle it:
+#
+#     Put two tags a known distance apart, once SIDE BY SIDE (horizontal) and
+#     once ONE ABOVE THE OTHER (vertical), at the same distance. If the
+#     horizontal gap comes out right and the vertical one does not, it is fy.
+#
+# In the meantime the distances are good, and so are the lateral positions
+# along the tube axis. That is already enough to run the filter.
+#
+# The distortion is taken from the pool as it stands: it was fitted on real
+# underwater frames, and its polynomial stays monotonic across the whole image
+# (checked: it only turns over at r = 0.62, and the corners are at 0.59).
 import argparse
 import sys
 from pathlib import Path
 
 import numpy as np
 
-# --- ce que le checkerboard a donne au pool, tel quel ---------------------------
-K_BRUTE = np.array([[711.28204841, 0.0, 320.75619547],
-                    [0.0, 595.85847624, 267.37226529],
-                    [0.0, 0.0, 1.0]])
+# --- what the checkerboard gave at the pool, as it stands ------------------
+K_RAW = np.array([[711.28204841, 0.0, 320.75619547],
+                  [0.0, 595.85847624, 267.37226529],
+                  [0.0, 0.0, 1.0]])
 DIST = np.array([0.25503774, 0.43545221, 0.01411297, -0.01478373, -2.02963755])
-VUES, RMS = 15, 0.7793
+VIEWS, RMS = 15, 0.7793
 
-# --- la meme, focal_length kept apres check independante ----------------
-# fx, fy ne sont PAS deduits d'un ajustement sur les measurements du 02/09 : ce sont
-# les values qu'une check independante, faite avec un autre algorithme
-# de measurement, a trouvees justes sur le terrain. Elles valent 1.0595 x les
-# old (791.34 / 615.40) — le meme facteur sur les deux axes, donc
-# l'anamorphic ratio 1.2859 du model optics est conservee telle quelle.
+# --- the same, with the focal length kept after the independent check ------
+# fx, fy are NOT derived from a fit to the 02/09 measurements: they are the
+# values an independent check, made with another measurement algorithm, found
+# right in the field. They are 1.0595 x the old ones (791.34 / 615.40) — the
+# same factor on both axes, so the optical model's anamorphic ratio of 1.2859
+# is preserved as it stands.
 #
-# On les prend telles quelles, et on ne les rejustifie pas apres coup. Une
-# tentative de les rededuire des trois measurements du pool a d'ailleurs echoue :
-# aucune mise a l'echelle de 791.34 ne reproduit les distances de la
-# check independante, ce qui montre simplement que ces measurements-la ne
-# sortaient pas de cette calibration. Les redemontrer n'aurait fait que fabriquer
-# un ajustement de plus.
-K_CORRIGEE = np.array([[838.45, 0.0, 320.75619547],
-                       [0.0, 652.10, 267.37226529],
-                       [0.0, 0.0, 1.0]])
-# Les trois measurements du pool du 02/09, gardees comme ARCHIVE : c'est sur elles
-# que tout le raisonnement du haut de ce path est bati, et les relire est le
-# seul moyen de le refaire. Elles ne servent plus a calculer quoi que ce soit.
-MESURES = ((1.0, 0.8887), (1.5, 1.3567), (2.0, 1.8000))
+# They are taken as they stand, and not re-justified after the fact. An
+# attempt to re-derive them from the three pool measurements did fail: no
+# scaling of 791.34 reproduces the independent check's distances, which simply
+# shows that those measurements did not come out of this calibration.
+# Re-proving them would only have manufactured one more fit.
+K_CORRECTED = np.array([[838.45, 0.0, 320.75619547],
+                        [0.0, 652.10, 267.37226529],
+                        [0.0, 0.0, 1.0]])
+# The three pool measurements of 02/09, kept as an ARCHIVE: the whole argument
+# at the top of this file is built on them, and re-reading them is the only
+# way to redo it. They are no longer used to compute anything.
+MEASUREMENTS = ((1.0, 0.8887), (1.5, 1.3567), (2.0, 1.8000))
 
-ICI = Path(__file__).resolve().parent
-# Le folder montages/ est cherche la ou il est deja, pour ne pas en creer un
-# second a cote du first selon l'endroit d'ou le script est lance.
-DOSSIER = next((d for d in (ICI / "montages", ICI.parent / "montages")
-                if d.is_dir()), ICI / "montages")
+HERE = Path(__file__).resolve().parent
+# The mountings folder is looked for where it already is, so as not to create
+# a second one beside the first depending on where the script is run from.
+# "montages" is the pre-handover name, still accepted.
+FOLDER = next((d for d in (HERE / "mountings", HERE.parent / "mountings",
+                           HERE / "montages", HERE.parent / "montages")
+               if d.is_dir()), HERE / "mountings")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Installe la calibration tube_eau sur cette machine.")
+        description="Installs the tube_water calibration on this machine.")
     parser.add_argument(
         "--raw", action="store_true",
-        help="installer la calibration du pool telle quelle, sans la "
-             "correction de focal_length (pour comparaison seulement)")
+        help="install the pool's calibration as it stands, without the "
+             "focal-length correction (for comparison only)")
     options = parser.parse_args()
 
-    K = K_BRUTE if options.raw else K_CORRIGEE
-    name = "BRUTE (non corrigee)" if options.raw else "CORRIGEE"
+    K = K_RAW if options.raw else K_CORRECTED
+    name = "RAW (uncorrected)" if options.raw else "CORRECTED"
 
     print("=" * 70)
-    print(f"CALIBRATION tube_eau — version {name}")
+    print(f"CALIBRATION tube_water — {name} version")
     print("=" * 70)
     print(f"  fx {K[0, 0]:7.2f}   fy {K[1, 1]:7.2f}   "
           f"cx {K[0, 2]:6.2f}   cy {K[1, 2]:6.2f}")
     if options.raw:
-        print("\n  WARNING : cette matrix measurement les distances 10 % trop")
-        print("  courtes. Son fy (595.86) est plus petit qu'in_air (602.37),")
-        print("  ce que la physique interdit. A n'installer que pour comparer.")
+        print("\n  WARNING: this matrix measures distances 10 % too short.")
+        print("  Its fy (595.86) is smaller than in air (602.37), which")
+        print("  physics forbids. Install it only to compare.")
     else:
-        print("  fx, fy retenues apres check independante sur le terrain")
-        print(f"  soit {K[0, 0] / K_BRUTE[0, 0]:.4f} x la calibration au checkerboard, "
-              f"sur les DEUX axes")
-        print(f"  anamorphic_ratio conservee : {K[0, 0] / K[1, 1]:.4f}")
-        print("\n  Ces focales ne sont pas rejustifiees par les measurements du 02/09 :")
-        print("  elles viennent d'une check independante, pas d'un ajustement.")
-        print("  A confronter aux distances connues avec --focal_length (voir ci-dessous).")
+        print("  fx, fy kept after an independent check in the field")
+        print(f"  i.e. {K[0, 0] / K_RAW[0, 0]:.4f} x the checkerboard "
+              f"calibration, on BOTH axes")
+        print(f"  anamorphic ratio preserved: {K[0, 0] / K[1, 1]:.4f}")
+        print("\n  These focal lengths are not re-justified by the 02/09")
+        print("  measurements: they come from an independent check, not from")
+        print("  a fit. Put them against known distances with --focal-length")
+        print("  (see below).")
 
-    path = DOSSIER / "tube_eau.npz"
-    deja_a_jour = False
+    path = FOLDER / "tube_water.npz"
+    # A machine set up before the handover holds tube_eau.npz. It is the same
+    # mounting, so it is renamed rather than left behind to be read back by
+    # optics.py's legacy fallback alongside a new file.
+    for legacy, current in ((FOLDER / "tube_eau.npz", path),
+                            (FOLDER / "tube_eau_ros.yaml",
+                             FOLDER / "tube_water_ros.yaml")):
+        if legacy.exists() and not current.exists():
+            legacy.rename(current)
+            print(f"\n  (renamed: {legacy.name} -> {current.name})")
+        elif legacy.exists():
+            # The current name already holds the same calibration, so the old
+            # file is a stale duplicate. Leaving it would let a ROS node still
+            # pointed at the old path go on publishing whatever it holds.
+            legacy.unlink()
+            print(f"\n  (removed the superseded {legacy.name})")
+
+    already_current = False
     if path.exists():
-        # Ne jamais ecraser en silence : le path present est peut-etre une
-        # calibration plus recente, faite sur cette machine.
+        # Never overwrite silently: the file present may be a more recent
+        # calibration, made on this machine.
         old = np.load(path)
         if np.allclose(old["K"], K, atol=1e-3):
-            # Le .npz est deja bon, mais ca ne veut PAS dire que le YAML l'est
-            # aussi : avant ce correctif, un lancement previous pouvait
-            # s'arreter ici (return 0) sans jamais ecrire le YAML. On continue
-            # donc jusqu'a la end — le reecrire est sans risque.
-            print(f"\n.npz deja a jour dans : {path}")
-            deja_a_jour = True
+            # The .npz is already right, but that does NOT mean the YAML is
+            # too: before this fix, an earlier run could stop here (return 0)
+            # without ever writing the YAML. So we carry on to the end —
+            # rewriting it is harmless.
+            print(f"\n.npz already current in: {path}")
+            already_current = True
         else:
-            print(f"\nUn path tube_eau.npz existe deja :")
+            print("\nA tube_water.npz file already exists:")
         print(f"  {path}")
         print(f"  fx {old['K'][0, 0]:.2f}   fy {old['K'][1, 1]:.2f}")
-        if not deja_a_jour:
-            # Mettre de cote seulement si on s'apprete a la remplacer par une
-            # AUTRE matrix : sauvegarder une copie identique d'elle-meme
-            # n'a aucun sens et ne fait qu'accumuler des paths.
-            backup = path.with_name("tube_eau_remplace.npz")
-            numero = 2
+        if not already_current:
+            # Move it aside only when it is about to be replaced by a
+            # DIFFERENT matrix: saving an identical copy of itself makes no
+            # sense and only piles up files.
+            backup = path.with_name("tube_water_replaced.npz")
+            number = 2
             while backup.exists():
-                backup = path.with_name(f"tube_eau_remplace_{numero}.npz")
-                numero += 1
-            np.savez(backup, **{cle: old[cle] for cle in old.files})
-            print(f"  mis de cote dans : {backup.name}")
+                backup = path.with_name(f"tube_water_replaced_{number}.npz")
+                number += 1
+            np.savez(backup, **{key: old[key] for key in old.files})
+            print(f"  moved aside to: {backup.name}")
 
-    DOSSIER.mkdir(parents=True, exist_ok=True)
-    if deja_a_jour:
-        print("  (npz inchange)")
+    FOLDER.mkdir(parents=True, exist_ok=True)
+    if already_current:
+        print("  (npz unchanged)")
     else:
-        np.savez(path, K=K, dist=DIST, rms=RMS, vues=VUES,
+        np.savez(path, K=K, dist=DIST, rms=RMS, views=VIEWS,
                  width=640, height=480)
-        print(f"\nInstallee dans : {path}")
+        print(f"\nInstalled in: {path}")
 
-    # Le path ROS doit suivre, sinon le noeud continue de publier les
-    # old intrinseques dans /camera_info et tout ce qui ecoute ce topic
-    # measurement faux — sans qu'aucun des deux cotes ne s'en apercoive.
-    yaml = DOSSIER / "tube_eau_ros.yaml"
+    # The ROS file has to follow, otherwise the node goes on publishing the
+    # old intrinsics in /camera_info and everything listening to that topic
+    # measures wrongly — with neither side noticing.
+    yaml = FOLDER / "tube_water_ros.yaml"
     rows = [
-        f"# mounting : tube_eau  ({name.lower()}, ecrit par install_underwater_calibration.py)",
+        f"# mounting: tube_water  ({name.lower()}, written by "
+        f"install_underwater_calibration.py)",
         "image_width: 640",
         "image_height: 480",
         "camera_name: realsense_color",
@@ -224,21 +254,21 @@ def main():
             f"{v:.8f}" for v in np.hstack([K, np.zeros((3, 1))]).flatten()) + "]",
     ]
     yaml.write_text("\n".join(rows) + "\n", encoding="utf-8")
-    print(f"Fichier ROS ecrit : {yaml}")
+    print(f"ROS file written: {yaml}")
     print("  ros2 run <pkg> camera_info_relay --ros-args \\")
     print(f"      -p calibration_file:={yaml}")
-    print("\nA check au pool, aux memes distances qu'avant :")
-    print("  python check_distance.py --reel 1.0 --tag 0.11732 --pi")
-    print("  python check_distance.py --reel 1.5 --tag 0.11732 --pi")
-    print("  python check_distance.py --reel 2.0 --tag 0.11732 --pi")
-    print("\nMesurer aussi a 0.5 m : c'est la que se separent une error de")
-    print("focal_length (meme pourcentage partout) et un decalage fixe (pourcentage")
-    print("qui grandit quand on se rapproche). Trois distances ou plus, et le")
-    print("script ajuste une droite et tranche tout seul.")
-    print("\nPour essayer d'AUTRES focales sans rien reinstaller :")
-    print("  python check_distance.py --reel 1.5 --tag 0.11732 --pi \\")
-    print("      --focal_length 838.45,652.10")
-    print("Le .npz n'est pas key : on n'installe que la focal_length qui gagne.")
+    print("\nTo check at the pool, at the same distances as before:")
+    print("  python calibration/check_distance.py --real 1.0 --tag 0.11732 --pi")
+    print("  python calibration/check_distance.py --real 1.5 --tag 0.11732 --pi")
+    print("  python calibration/check_distance.py --real 2.0 --tag 0.11732 --pi")
+    print("\nMeasure at 0.5 m too: that is where a focal-length error (the same")
+    print("percentage everywhere) separates from a fixed offset (a percentage")
+    print("that grows as you get closer). Three distances or more, and the")
+    print("script fits a line and settles it on its own.")
+    print("\nTo try OTHER focal lengths without reinstalling anything:")
+    print("  python calibration/check_distance.py --real 1.5 --tag 0.11732 --pi \\")
+    print("      --focal-length 838.45,652.10")
+    print("The .npz is not touched: only the winning focal length gets installed.")
     return 0
 
 

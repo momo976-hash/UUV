@@ -42,15 +42,15 @@ LISSAGE = 20                 # frames moyennees pour stabiliser l'display
 
 # Calibration par checkerboard
 MONTAGE = optics.ACTIVE_MOUNTING
-# L'optics vient de optics.py : camera, tube, viewport, milieu. Le mounting
-# n'est ecrit dans aucun path de code : optics.py le lit dans
-# calibration/montage_local.txt, propre a CETTE machine, et le demande une
-# fois s'il n'existe pas encore. Pour le changer :
+# The optics come from optics.py: camera, tube, viewport, medium. The mounting
+# is written in no code file: optics.py reads it from
+# calibration/local_mounting.txt, which belongs to THIS machine, and asks for
+# it once if it does not exist yet. To change it:
 #     python calibration/set_mounting.py
-# Pour une seule commande, sans rien deregler :
-#     UUV_MONTAGE=nue_air python ce_script.py
-# Tant qu'il n'est pas calibre, optics.py retombe sur la camera nue en le
-# disant.
+# For a single command, without disturbing anything:
+#     UUV_MOUNTING=bare_air python <this script>
+# Until it has been calibrated, optics.py falls back to the bare camera and
+# says so.
 K_CALIB, DIST_CALIB = optics.load(MONTAGE)
 LARGEUR_CALIB, HAUTEUR_CALIB = 640, 480
 
