@@ -98,9 +98,25 @@ Getting it wrong crashes nothing: distances are simply wrong by tens of percent,
 silently. The scripts warn when the image contradicts the declared mounting, but
 they cannot catch everything.
 
-The three mountings are `bare_air`, `tube_air` and `tube_water`. The French
-names used before the handover (`nue_air`, `tube_eau`) are still accepted
-everywhere, so a machine already set up keeps working untouched.
+The three mountings are `bare_air`, `tube_air` and `tube_water`.
+
+### Coming from the pre-handover version
+
+Everything was renamed into English — files, folders, options and mounting
+names. Nothing has to be redone on a machine that was already set up: the old
+spellings are still accepted everywhere they are read.
+
+| Old | New | What happens to yours |
+|---|---|---|
+| `nue_air`, `tube_eau` | `bare_air`, `tube_water` | translated on the way in; `--mounting tube_eau` still works |
+| `calibration/montages/` | `calibration/mountings/` | both are searched |
+| `montage_local.txt` | `local_mounting.txt` | both are read |
+| `tube_eau.npz` | `tube_water.npz` | renamed by `install_underwater_calibration.py`, otherwise read as-is |
+| `--reel`, `--focale`, `--sans-fenetre`, `--tous`, `--flou` | `--real`, `--focal-length`, `--no-window`, `--all`, `--blur` | the French spellings stay as aliases |
+| `verifier_distance_historique.csv`, `bruit_tag.csv`, `limites_tag.csv` | `check_distance_history.csv`, `tag_noise.csv`, `tag_limits.csv` | converted in place; **no past measurement is lost** |
+
+The CSV conversions rename the column headings too, so the old measurements
+keep counting towards the line fits that need three or more points.
 
 ---
 
@@ -122,5 +138,10 @@ not a distant inspiration: `kalman/kalman_reference_check.py` runs his worked
 example through the class that actually runs on the vehicle and recovers his 9
 published values.
 
-Every script opens with a **HOW TO USE IT** block, then explains **why** it
-exists and what it cannot prove. That is what to read before changing anything.
+Every script opens with a **HOW TO USE IT** block — the command to type, what
+to do in front of the camera, and the keys — then explains **why** it exists
+and what it cannot prove. That is what to read before changing anything, and
+it is why there is no separate manual to keep in step with the code.
+
+Everything is in English: file names, folder names, comments, options and
+what the scripts print.
