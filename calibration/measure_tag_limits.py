@@ -1,51 +1,56 @@
 # measure_tag_limits.py — How far, and how far off-axis, a tag stays readable.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#   1. A well-lit tag, taped flat against a wall.
+#   2. 'd': DISTANCE sweep. Use a small tag (--tag 0.05). Keep it squarely
+#      facing you and back away SLOWLY until you lose it completely, then come
+#      back. Do two or three round trips. 'd' again to stop.
+#   3. 'i': INCIDENCE sweep. This time the LARGE tag, at about 1 m, so that
+#      the apparent size is never the limiting factor. Turn it progressively
+#      until you lose the tag. Same again, 'i' to stop.
+#      (restart the script with --tag 0.223 between the two sweeps)
+#   4. 'r': the report, with both measured limits.
+#
+#   MOVE IN STEPS: hold still 3 s, one step, hold still 3 s. Walking
+#   continuously smears the frames and makes the detection fail for a reason
+#   that has nothing to do with what is being measured.
+#
+#   KEYS: d = distance sweep | i = incidence sweep
+#         r = report | e = erase | q = quit
+# ===========================================================================
 #
 # WHY THIS SCRIPT EXISTS
-# Le plan de pose des tags s'appuie sur deux limites qui, jusqu'ici, venaient
-# de regles empiriques lues dans la litterature AprilTag :
-#     PIXELS_MIN    = 30 px   size apparente minimale du tag dans l'image
-#     INCIDENCE_MAX = 65 deg  angle au-dela duquel le tag est trop de bias
-# Ces deux numbers decident de l'espacement des tags dans le pool. Autant
-# les mesurer sur le vrai materiel plutot que les croire sur parole.
+# The tag layout plan rests on two limits which, until now, came from rules of
+# thumb read in the AprilTag literature:
+#     MIN_PIXELS    = 30 px   minimum apparent size of the tag in the image
+#     MAX_INCIDENCE = 65 deg  angle beyond which the tag is too oblique
+# Those two numbers decide the tag spacing in the pool. Better to measure them
+# on the real hardware than to take them on trust.
 #
-# LA DIFFICULTE, ET COMMENT ON LA CONTOURNE
-# Quand la detection echoue, on n'a plus de pose : on ne sait donc pas a
-# quelle distance ni sous quel angle elle a echoue. On s'en sort avec une
-# FENETRE GLISSANTE : sur les 30 dernieres frames (une seconde), on compte
-# la proportion d'frames ou le tag a ete seen, et on lui associe la distance
-# mean des frames reussies. En une seconde la camera bouge a peine, donc
-# cette distance vaut aussi pour les frames ratees.
+# THE DIFFICULTY, AND HOW IT IS GOT AROUND
+# When the detection fails there is no pose any more: so there is no knowing
+# at what distance or under what angle it failed. The way out is a SLIDING
+# WINDOW: over the last 30 frames (one second), the proportion of frames in
+# which the tag was seen is counted, and the mean distance of the successful
+# frames is attached to it. In one second the camera barely moves, so that
+# distance holds for the failed frames too.
 #
-# On obtient ainsi un TAUX DE DETECTION en fonction de la size apparente,
-# puis en fonction de l'angle. La limit est l'endroit ou ce taux decroche.
+# That gives a DETECTION RATE as a function of apparent size, then as a
+# function of angle. The limit is where that rate falls away.
 #
-# LE TAG D'ESSAI PEUT ETRE PLUS PETIT QUE LE VRAI
-# Le detector ne connait pas les metres : il ne voit qu'un carre de N pixels.
-# Un tag de 5 cm a 1.5 m product exactement la meme image qu'un tag de 22.3 cm
-# a 6.7 m. On peut donc mesurer la limit dans un couloir de 2 m avec un petit
-# tag imprime, puis la transposer au vrai tag du pool.
+# THE TEST TAG MAY BE SMALLER THAN THE REAL ONE
+# The detector knows nothing about metres: it only ever sees a square of N
+# pixels. A 5 cm tag at 1.5 m produces exactly the same image as a 22.3 cm tag
+# at 6.7 m. So the limit can be measured in a 2 m corridor with a small
+# printed tag, then transposed to the real pool tag.
 #
-#     size apparente en pixels  =  focal_length x taille_tag / distance
+#     apparent size in pixels  =  focal length x tag size / distance
 #
-# Avec les 22.3 cm du pool, 30 px ne sont atteints qu'a 4.5 m : impossible
-# avec une camera au bout d'un cable. Avec un tag de 5 cm, 30 px tombent a
-# 1.0 m et 20 px a 1.5 m — tout le domaine utile tient sur un bureau.
-# On passe la size du tag d'trial avec --tag ; le report, lui, reconvertit
-# toujours vers REAL_TAG_SIZE.
-#
-# HOW TO USE IT
-#   1. Un tag bien eclaire, pose contre un mur.
-#   2. 'd' : balayage en DISTANCE. Petit tag (--tag 0.05). Garde-le bien en
-#      face et recule LENTEMENT jusqu'a le perdre completement, puis reviens.
-#      Fais deux ou trois allers-retours. 'd' a new pour arreter.
-#   3. 'i' : balayage en INCIDENCE. Cette fois le GRAND tag, a environ 1 m,
-#      pour que la size apparente ne soit jamais le facteur limitant.
-#      Tourne progressivement jusqu'a perdre le tag. Idem, 'i' pour arreter.
-#      (relance le script avec --tag 0.223 entre les deux balayages)
-#   4. 'r' : le report, avec les deux limites measured.
-#
-# Keys: d = balayage distance | i = balayage incidence
-#           r = report | e = effacer | q = quitter
+# With the pool's 22.3 cm, 30 px are only reached at 4.5 m: impossible with a
+# camera on the end of a cable. With a 5 cm tag, 30 px falls at 1.0 m and
+# 20 px at 1.5 m — the whole useful range fits on a desk. The test tag's size
+# is passed with --tag; the report always converts back to REAL_TAG_SIZE.
 import argparse
 import csv
 import sys
@@ -54,531 +59,569 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optics  # noqa: E402
 
 CAMERA_INDEX = None
 
-MONTAGE = optics.ACTIVE_MOUNTING
-# L'optics vient de optics.py : camera, tube, viewport, milieu. Le mounting
-# n'est ecrit dans aucun path de code : optics.py le lit dans
-# calibration/montage_local.txt, propre a CETTE machine, et le demande une
-# fois s'il n'existe pas encore. Pour le changer :
+MOUNTING = optics.ACTIVE_MOUNTING
+# The optics come from optics.py: camera, tube, viewport, medium. The mounting
+# is written in no code file: optics.py reads it from
+# calibration/local_mounting.txt, which belongs to THIS machine, and asks for
+# it once if it does not exist yet. To change it:
 #     python calibration/set_mounting.py
-# Pour une seule commande, sans rien deregler :
-#     UUV_MONTAGE=nue_air python ce_script.py
-# Tant qu'il n'est pas calibre, optics.py retombe sur la camera nue en le
-# disant.
-K_CALIB, DIST_CALIB = optics.load(MONTAGE)
+# For a single command, without disturbing anything:
+#     UUV_MOUNTING=bare_air python calibration/measure_tag_limits.py
+# Until it has been calibrated, optics.py falls back to the bare camera and
+# says so.
+K_CALIB, DIST_CALIB = optics.load(MOUNTING)
 RESOLUTION = optics.RESOLUTION
 
-# measurement au calipers (optics.py) : les tags du pool s'ecartent du
-# nominal 223 mm, et c'est vers ce count-la qu'on conclut, pas vers 0.223.
+# Caliper-measured (optics.py): the pool tags depart from the nominal 223 mm,
+# and it is that number the conclusions are drawn towards, not 0.223.
 REAL_TAG_SIZE = optics.LARGE_TAG_SIZE
-TAG_SIZE = REAL_TAG_SIZE   # le tag d'trial devant la camera (option --tag)
+TAG_SIZE = REAL_TAG_SIZE   # the test tag in front of the camera (--tag)
 
-FENETRE = 30          # frames sur lesquelles on estime le taux de detection
-TAUX_LIMITE = 0.95    # en dessous, on considere la detection non fiable
-MARGE_BORD = 20       # px : plus pres du bord, le tag risque de sortir du cadre
-PALIERS_CONFIRMATION = 2   # paliers consecutifs sous le threshold pour conclure
+WINDOW_FRAMES = 30    # frames the detection rate is estimated over
+RATE_LIMIT = 0.95     # below this, the detection is considered unreliable
+EDGE_MARGIN = 20      # px: closer to the edge, the tag risks leaving the frame
+CONFIRMATION_STEPS = 2   # consecutive steps under the threshold to conclude
 
-# Taille apparente qu'one must atteindre pour esperer encadrer la limit. Un
-# 36h11 fait huit cellules de large et il en faut environ deux pixels chacune
-# pour decoder : la limit ne peut pas etre bien au-dessus de la quinzaine de
-# pixels. Tant que le balayage s'arrete au-dessus, il ne prouve rien.
-CIBLE_PIXELS = 15
+# Apparent size that has to be reached to have any hope of bracketing the
+# limit. A 36h11 is eight cells wide and each needs about two pixels to
+# decode: the limit cannot be much above fifteen pixels or so. As long as the
+# sweep stops above that, it proves nothing.
+TARGET_PIXELS = 15
 
-# Le pool, pour rapporter la measurement a ce qu'on en fera vraiment. Sa
-# diagonale majore la distance camera-tag. On croit souvent que l'water arrange
-# les choses — a travers un viewport plat elle grossit l'image de 1.33. Dans ce
-# mounting-ci la camera est COUCHEE dans le tube : un seul des deux axes voit
-# une lame plane, l'autre traverse un meniscus qui retrecit. Et pour decoder
-# un tag, c'est l'axis le moins grossi qui commande. `optics.water_focal_length`
-# renvoie donc celui-la, et le pire cas du pool est plus severe que ne le
-# laisserait croire le facteur 1.33.
-BASSIN = (3.80, 1.67, 1.00)
+# The pool, to relate the measurement to what will really be done with it. Its
+# diagonal bounds the camera-to-tag distance. It is often believed that water
+# helps — through a flat viewport it magnifies the image by 1.33. In THIS
+# mounting the camera LIES ON ITS SIDE in the tube: only one of the two axes
+# sees a plane slab, the other goes through a meniscus that shrinks. And to
+# decode a tag, it is the less magnified axis that governs.
+# `optics.water_focal_length` returns that one, and the pool's worst case is
+# harsher than the 1.33 factor would suggest.
+POOL = (3.80, 1.67, 1.00)
 
 
-def pixels_pire_cas():
-    """Taille apparente du tag au point le plus eloigne possible du pool.
+def worst_case_pixels():
+    """Apparent tag size at the furthest possible point of the pool.
 
-    C'est la seule value qui compte pour le plan de pose : inutile de
-    connaitre la limit absolue de detection si le pool ne l'approche
-    jamais. Il suffit d'avoir verifie la detection jusqu'en dessous.
+    It is the only value that matters for the layout plan: there is no need to
+    know the absolute detection limit if the pool never approaches it. It is
+    enough to have checked the detection below that point.
     """
-    diagonale = float(np.linalg.norm(BASSIN))
-    return optics.water_focal_length(MONTAGE) * REAL_TAG_SIZE / diagonale, diagonale
+    diagonal = float(np.linalg.norm(POOL))
+    return (optics.water_focal_length(MOUNTING) * REAL_TAG_SIZE / diagonal,
+            diagonal)
 
 
-CSV = Path(__file__).resolve().with_name("limites_tag.csv")
-COLONNES = ["balayage", "taux", "pixels", "incidence_deg", "distance_m", "bord_px"]
+CSV = Path(__file__).resolve().with_name("tag_limits.csv")
+LEGACY_CSV = Path(__file__).resolve().with_name("limites_tag.csv")
+COLUMNS = ["sweep", "rate", "pixels", "incidence_deg", "distance_m", "edge_px"]
+# Pre-handover column and sweep names, translated when an old file is read
+# back so that earlier sweeps are not thrown away.
+LEGACY_COLUMNS = {"balayage": "sweep", "taux": "rate", "bord_px": "edge_px"}
+LEGACY_SWEEPS = {"mahalanobis": "distance"}   # a bad rename, see git history
 
 
-def limite_par_paliers(samples, cle, croissant, taux_limite=TAUX_LIMITE,
-                       nb_paliers=12, logarithmique=False):
-    """Cherche la value de `cle` ou le taux de detection decroche.
+def step_limit(samples, key, increasing, rate_limit=RATE_LIMIT,
+               n_steps=12, logarithmic=False):
+    """Looks for the value of `key` at which the detection rate falls away.
 
-    `croissant` dit dans quel sens la difficulte augmente : l'incidence rend
-    la detection plus dure quand elle MONTE, la size apparente quand elle
-    DESCEND. On parcourt donc du plus facile vers le plus difficile.
+    `increasing` says which way the difficulty grows: incidence makes the
+    detection harder as it GOES UP, apparent size as it GOES DOWN. So the
+    sweep is walked from the easiest towards the hardest.
 
-    Deux precautions, apprises a nos depens sur un balayage ou le taux
-    sautait de 70 a 100 % sans report avec la size du tag :
+    Two precautions, learned the hard way on a sweep where the rate jumped
+    from 70 to 100 % with no relation to the tag's size:
 
-    1. On measurement d'abord un TAUX DE REFERENCE sur les paliers les plus
-       faciles. S'il n'est pas proche de 100 %, c'est qu'une cause etrangere
-       fait rater des frames — tag hors cadre, image filee — et le balayage
-       ne measurement plus ce qu'on croit. Les taux sont alors rapportes a cette
-       reference, et l'appelant est prevenu.
-    2. On ne conclut qu'apres PALIERS_CONFIRMATION paliers consecutifs sous
-       le threshold. Un creux isole est du noise, pas une limit : au-dela de la
-       true limit, la detection ne revient jamais.
+    1. A REFERENCE RATE is measured first over the easiest steps. If it is not
+       close to 100 %, some outside cause is making frames fail — tag out of
+       frame, smeared image — and the sweep is no longer measuring what it is
+       believed to. The rates are then reported relative to that reference,
+       and the caller is warned.
+    2. A conclusion is only drawn after CONFIRMATION_STEPS consecutive steps
+       below the threshold. An isolated dip is noise, not a limit: beyond the
+       true limit, the detection never comes back.
 
-    `logarithmique` decoupe les paliers en proportions plutot qu'en gaps.
-    C'est ce qu'one must pour la size apparente : entre 20 et 210 px, des
-    paliers reguliers en font un seul de 20 a 36 px, justement la ou tout se
-    joue. En log, chaque palier vaut 21 % du previous, et le bas du domaine
-    est resolu aussi finement que le haut.
+    `logarithmic` cuts the steps in proportions rather than in gaps. That is
+    what is needed for the apparent size: between 20 and 210 px, regular steps
+    make one single step out of 20 to 36 px, exactly where everything happens.
+    In log, each step is 21 % of the previous one, and the bottom of the range
+    is resolved as finely as the top.
     """
-    diagnostic = {"reference": None, "confirmee": False}
-    if len(samples) < nb_paliers:
-        return None, [], diagnostic
-    values = np.array([e[cle] for e in samples])
-    taux = np.array([e["taux"] for e in samples])
+    diagnosis = {"reference": None, "confirmed": False}
+    if len(samples) < n_steps:
+        return None, [], diagnosis
+    values = np.array([e[key] for e in samples])
+    rates = np.array([e["rate"] for e in samples])
 
-    if logarithmique and values.min() > 0:
-        bords = np.geomspace(values.min(), values.max(), nb_paliers + 1)
-        milieu = lambda a, b: float(np.sqrt(a * b))  # noqa: E731
+    if logarithmic and values.min() > 0:
+        edges = np.geomspace(values.min(), values.max(), n_steps + 1)
+        middle = lambda a, b: float(np.sqrt(a * b))  # noqa: E731
     else:
-        bords = np.linspace(values.min(), values.max(), nb_paliers + 1)
-        milieu = lambda a, b: float((a + b) / 2)  # noqa: E731
-    paliers = []
-    for k in range(nb_paliers):
-        dans = (values >= bords[k]) & (values <= bords[k + 1])
-        if dans.sum() >= 5:
-            paliers.append({"centre": milieu(bords[k], bords[k + 1]),
-                            "taux": float(taux[dans].mean()),
-                            "n": int(dans.sum())})
-    if len(paliers) < 4:
-        return None, sorted(paliers, key=lambda p: p["centre"]), diagnostic
+        edges = np.linspace(values.min(), values.max(), n_steps + 1)
+        middle = lambda a, b: float((a + b) / 2)  # noqa: E731
+    steps = []
+    for k in range(n_steps):
+        inside = (values >= edges[k]) & (values <= edges[k + 1])
+        if inside.sum() >= 5:
+            steps.append({"centre": middle(edges[k], edges[k + 1]),
+                          "rate": float(rates[inside].mean()),
+                          "n": int(inside.sum())})
+    if len(steps) < 4:
+        return None, sorted(steps, key=lambda p: p["centre"]), diagnosis
 
-    # du plus facile vers le plus difficile
-    ordonnes = sorted(paliers, key=lambda p: p["centre"], reverse=not croissant)
+    # from the easiest towards the hardest
+    ordered = sorted(steps, key=lambda p: p["centre"], reverse=not increasing)
 
-    reference = float(np.median([p["taux"] for p in ordonnes[:3]]))
-    diagnostic["reference"] = reference
+    reference = float(np.median([p["rate"] for p in ordered[:3]]))
+    diagnosis["reference"] = reference
     if reference < 0.85:
-        return None, sorted(paliers, key=lambda p: p["centre"]), diagnostic
+        return None, sorted(steps, key=lambda p: p["centre"]), diagnosis
 
-    # rapporte au regime facile : ce qui rate partout n'est pas du a la size
-    for palier in ordonnes:
-        palier["taux_relatif"] = min(palier["taux"] / reference, 1.0)
+    # relative to the easy regime: what fails everywhere is not down to size
+    for step in ordered:
+        step["relative_rate"] = min(step["rate"] / reference, 1.0)
 
     limit = None
-    for k, palier in enumerate(ordonnes):
-        if palier["taux_relatif"] >= taux_limite:
+    for k, step in enumerate(ordered):
+        if step["relative_rate"] >= rate_limit:
             continue
-        suite = ordonnes[k:k + PALIERS_CONFIRMATION]
-        if (len(suite) == PALIERS_CONFIRMATION
-                and all(p["taux_relatif"] < taux_limite for p in suite)):
-            limit, diagnostic["confirmee"] = palier["centre"], True
+        run = ordered[k:k + CONFIRMATION_STEPS]
+        if (len(run) == CONFIRMATION_STEPS
+                and all(p["relative_rate"] < rate_limit for p in run)):
+            limit, diagnosis["confirmed"] = step["centre"], True
             break
-    return limit, sorted(paliers, key=lambda p: p["centre"]), diagnostic
+    return limit, sorted(steps, key=lambda p: p["centre"]), diagnosis
 
 
-def lire_balayage(rows, name):
-    """Les windows d'un balayage, celles au cadrage douteux mises de cote.
+def read_sweep(rows, name):
+    """The windows of one sweep, the doubtfully framed ones set aside.
 
-    Une window ou le tag a frole le bord de l'image ne measurement rien
-    d'exploitable : les frames ratees le sont parce que le tag est sorti du
-    champ, pas parce qu'il etait trop petit ou trop de bias.
+    A window in which the tag brushed the edge of the image measures nothing
+    usable: the failed frames failed because the tag left the field, not
+    because it was too small or too oblique.
     """
-    gardees, ecartees = [], 0
+    kept, discarded = [], 0
     for row in rows:
-        if row["balayage"] != name:
+        if row["sweep"] != name:
             continue
-        # les anciens enregistrements n'ont pas la column : on les garde
-        bord = float(row.get("bord_px") or MARGE_BORD)
-        if bord < MARGE_BORD:
-            ecartees += 1
+        # older recordings do not have the column: those are kept
+        edge = float(row.get("edge_px") or EDGE_MARGIN)
+        if edge < EDGE_MARGIN:
+            discarded += 1
             continue
-        gardees.append({"taux": float(row["taux"]),
-                        "pixels": float(row["pixels"]),
-                        "incidence_deg": float(row["incidence_deg"])})
-    return gardees, ecartees
+        kept.append({"rate": float(row["rate"]),
+                     "pixels": float(row["pixels"]),
+                     "incidence_deg": float(row["incidence_deg"])})
+    return kept, discarded
 
 
-def diagnostiquer(diagnostic, limit, output):
-    """Dit si le balayage a measurement ce qu'on croit. Vrai s'il est exploitable."""
-    reference = diagnostic["reference"]
+def diagnose(diagnosis, limit, out):
+    """Says whether the sweep measured what is believed. True if usable."""
+    reference = diagnosis["reference"]
     if reference is None:
-        output.append("\n  Trop peu de paliers pour conclure. Balaye plus large.")
+        out.append("\n  Too few steps to conclude. Sweep more widely.")
         return False
     if reference < 0.98:
-        output.append(f"\n  BALAYAGE CONTAMINE — meme dans le regime le plus facile,")
-        output.append(f"  {100*(1-reference):.0f} % des frames ratent la detection. "
-                      "Ce n'est donc pas")
-        output.append("  la difficulte balayee qui les fait echouer, mais autre chose :")
-        output.append("   - le tag sort du champ (garde-le bien au centre) ;")
-        output.append("   - l'image est filee (avance par PALIERS : at_rest 2 a 3 s,")
-        output.append("     puis un pas, puis at_rest a new — ne marche pas en continu) ;")
-        output.append("   - le tag gondole ou reflechit la lumiere.")
+        out.append("\n  CONTAMINATED SWEEP — even in the easiest regime,")
+        out.append(f"  {100*(1-reference):.0f} % of frames fail to detect. So "
+                   "it is not the")
+        out.append("  difficulty being swept that makes them fail, but "
+                   "something else:")
+        out.append("   - the tag leaves the field (keep it well centred);")
+        out.append("   - the image is smeared (move IN STEPS: hold still 2 to")
+        out.append("     3 s, then one step, then hold still again — do not")
+        out.append("     walk continuously);")
+        out.append("   - the tag is buckled or reflecting the light.")
         if reference < 0.85:
-            output.append("\n  Trop contamine pour en tirer quoi que ce soit. A refaire.")
+            out.append("\n  Too contaminated to draw anything from. Redo it.")
             return False
-        output.append(f"\n  Les taux ci-dessous sont rapportes a ce regime facile "
-                      f"({100*reference:.0f} %),")
-        output.append("  mais le result reste a confirmer par un balayage propre.")
+        out.append(f"\n  The rates below are relative to that easy regime "
+                   f"({100*reference:.0f} %),")
+        out.append("  but the result still needs a clean sweep to confirm it.")
     if limit is None:
         return False
     return True
 
 
-def besoin_du_pool(atteint, recul):
-    """Ce que le balayage doit encore couvrir — et ce qu'il couvre deja.
+def what_the_pool_needs(reached, standoff):
+    """What the sweep still has to cover — and what it covers already.
 
-    Deux lectures d'un meme balayage. La limit ABSOLUE de detection demande
-    de descendre vers CIBLE_PIXELS, ce qui exige beaucoup de recul. Mais le
-    plan de pose n'en a pas besoin : il lui suffit que la detection soit
-    verifiee en dessous de ce que le pool peut produire de plus petit.
+    Two readings of one and the same sweep. The ABSOLUTE detection limit
+    requires going down towards TARGET_PIXELS, which takes a lot of room. But
+    the layout plan does not need it: it is enough that the detection has been
+    checked below the smallest size the pool can produce.
     """
-    pire, diagonale = pixels_pire_cas()
-    rows = ["", "  CE QUE LE BASSIN DEMANDE VRAIMENT"]
-    rows.append(f"  Sa diagonale fait {diagonale:.2f} m. A cette distance — le pire cas —")
-    rows.append(f"  un tag de {100*REAL_TAG_SIZE:.1f} cm paraitra {pire:.0f} px "
-                  f"underwater, dans l'axis")
-    rows.append(f"  le moins grossi par le tube (focal_length {optics.water_focal_length(MONTAGE):.0f} px "
-                  f"contre {max(optics.water_focal_lengths(MONTAGE)):.0f} dans l'autre).")
-    rows.append("  C'est le plus petit que le pool produise.")
+    worst, diagonal = worst_case_pixels()
+    rows = ["", "  WHAT THE POOL REALLY ASKS FOR"]
+    rows.append(f"  Its diagonal is {diagonal:.2f} m. At that distance — the "
+                f"worst case —")
+    rows.append(f"  a {100*REAL_TAG_SIZE:.1f} cm tag will look {worst:.0f} px "
+                f"underwater, along the")
+    rows.append(f"  axis least magnified by the tube (focal length "
+                f"{optics.water_focal_length(MOUNTING):.0f} px against "
+                f"{max(optics.water_focal_lengths(MOUNTING)):.0f} on the other).")
+    rows.append("  That is the smallest the pool can produce.")
 
-    if atteint <= pire:
-        rows.append(f"\n  Tu es descendu a {atteint:.0f} px sans perdre le tag, "
-                      f"donc en dessous des {pire:.0f} px")
-        rows.append("  du pire cas : la size apparente ne sera JAMAIS le facteur")
-        rows.append("  limitant dans ce pool. C'est la conclusion utile, et elle")
-        rows.append("  est acquise — la limit absolue n'a plus d'interet pratique.")
+    if reached <= worst:
+        rows.append(f"\n  You went down to {reached:.0f} px without losing the "
+                    f"tag, so below the")
+        rows.append(f"  {worst:.0f} px of the worst case: apparent size will "
+                    f"NEVER be the")
+        rows.append("  limiting factor in this pool. That is the useful")
+        rows.append("  conclusion, and it is settled — the absolute limit no")
+        rows.append("  longer has any practical interest.")
     else:
-        rows.append(f"\n  Ton balayage s'est arrete a {atteint:.0f} px, au-dessus de ces "
-                      f"{pire:.0f} px.")
-        rows.append(f"  Il reste la tranche {pire:.0f}-{atteint:.0f} px a couvrir "
-                      "pour conclure. Avec")
-        rows.append(f"  ce tag de {100*TAG_SIZE:.1f} cm il faudrait reculer jusqu'a "
-                      f"{K_CALIB[0, 0] * TAG_SIZE / pire:.1f} m ;")
-        besoin = pire * recul / K_CALIB[0, 0]
-        rows.append(f"  en restant a {recul:.1f} m, one must un tag de "
-                      f"{100*besoin:.0f} cm  (--tag {besoin:.3f}).")
+        rows.append(f"\n  Your sweep stopped at {reached:.0f} px, above those "
+                    f"{worst:.0f} px.")
+        rows.append(f"  The {worst:.0f}-{reached:.0f} px band is left to cover "
+                    f"before concluding.")
+        rows.append(f"  With this {100*TAG_SIZE:.1f} cm tag you would have to "
+                    f"back off to "
+                    f"{K_CALIB[0, 0] * TAG_SIZE / worst:.1f} m;")
+        needed = worst * standoff / K_CALIB[0, 0]
+        rows.append(f"  staying at {standoff:.1f} m, a "
+                    f"{100*needed:.0f} cm tag is needed  (--tag {needed:.3f}).")
 
-    rows.append(f"\n  Pour la limit ABSOLUE de detection il faudrait descendre vers")
-    rows.append(f"  {CIBLE_PIXELS:.0f} px — un 36h11 fait huit cellules de large et il "
-                  "en faut deux")
-    rows.append("  pixels chacune pour decoder. Utile pour le report, pas pour poser")
-    rows.append(f"  les tags. Il faudrait un tag de "
-                  f"{100 * CIBLE_PIXELS * recul / K_CALIB[0, 0]:.0f} cm a {recul:.1f} m.")
+    rows.append("\n  For the ABSOLUTE detection limit you would have to go down")
+    rows.append(f"  towards {TARGET_PIXELS:.0f} px — a 36h11 is eight cells "
+                "wide and each needs")
+    rows.append("  two pixels to decode. Useful for the report, not for placing")
+    rows.append(f"  the tags. It would take a "
+                f"{100 * TARGET_PIXELS * standoff / K_CALIB[0, 0]:.0f} cm tag "
+                f"at {standoff:.1f} m.")
     return rows
 
 
 def report(rows):
     if not rows:
-        return "Aucun balayage. 'd' pour la distance, 'i' pour l'incidence."
-    output = ["", "=" * 78, "LIMITES DE DETECTION MESUREES", "=" * 78]
+        return "No sweep. 'd' for distance, 'i' for incidence."
+    out = ["", "=" * 78, "MEASURED DETECTION LIMITS", "=" * 78]
 
-    distance, hors_cadre_d = lire_balayage(rows, "mahalanobis")
-    incidence, hors_cadre_i = lire_balayage(rows, "incidence")
+    distance, off_frame_d = read_sweep(rows, "distance")
+    incidence, off_frame_i = read_sweep(rows, "incidence")
 
-    # --- size apparente minimale ----------------------------------------
-    output.append(f"\nBALAYAGE EN DISTANCE — {len(distance)} points"
-                  + (f", {hors_cadre_d} ecartes (tag au bord de l'image)"
-                     if hors_cadre_d else ""))
+    # --- minimum apparent size ---------------------------------------------
+    out.append(f"\nDISTANCE SWEEP — {len(distance)} points"
+               + (f", {off_frame_d} discarded (tag at the edge of the image)"
+                  if off_frame_d else ""))
     if len(distance) < 12:
-        output.append("  Trop peu de points. Refais un aller-back complet ('d').")
+        out.append("  Too few points. Do a full round trip again ('d').")
     else:
-        limit, paliers, diagnostic = limite_par_paliers(distance, "pixels",
-                                                         croissant=False,
-                                                         logarithmique=True)
-        output.append(f"  {'size apparente':>18} {'taux de detection':>18}")
-        for p in reversed(paliers):
-            barre = "#" * int(round(20 * p["taux"]))
-            output.append(f"  {p['centre']:>15.0f} px {100*p['taux']:>15.0f} %  {barre}")
+        limit, steps, diagnosis = step_limit(distance, "pixels",
+                                             increasing=False,
+                                             logarithmic=True)
+        out.append(f"  {'apparent size':>18} {'detection rate':>18}")
+        for p in reversed(steps):
+            bar = "#" * int(round(20 * p["rate"]))
+            out.append(f"  {p['centre']:>15.0f} px {100*p['rate']:>15.0f} %  {bar}")
 
-        if diagnostiquer(diagnostic, limit, output):
-            output.append(f"\n  PIXELS_MIN measurement = {limit:.0f} px "
-                          f"(la value supposee etait 30 px)")
+        if diagnose(diagnosis, limit, out):
+            out.append(f"\n  MIN_PIXELS measured = {limit:.0f} px "
+                       f"(the assumed value was 30 px)")
             if abs(TAG_SIZE - REAL_TAG_SIZE) > 1e-6:
-                output.append(f"  (measurement avec un tag d'trial de "
-                              f"{100*TAG_SIZE:.1f} cm ; la limit est en pixels,")
-                output.append(f"   elle vaut donc aussi pour les "
-                              f"{100*REAL_TAG_SIZE:.1f} cm du pool)")
-            portee = min(K_CALIB[0, 0], K_CALIB[1, 1]) * REAL_TAG_SIZE / limit
-            output.append(f"  Pour un tag de {100*REAL_TAG_SIZE:.1f} cm, cela donne")
-            output.append(f"  une portee de {portee:.2f} m in air, "
-                          f"{optics.water_range(portee, MONTAGE):.2f} m underwater")
-            output.append("  (pas de « x 1.33 » ici : la camera est couchee dans le "
-                          "tube, et")
-            output.append("   c'est l'axis le MOINS grossi qui decide de la detection)")
-        elif limit is None and paliers:
-            atteint = min(p["centre"] for p in paliers)
-            recul = K_CALIB[0, 0] * TAG_SIZE / atteint
-            output.append(f"\n  Aucune limit confirmee : a {atteint:.0f} px, le plus "
-                          "petit atteint, le tag")
-            output.append("  est encore detecte. La limit est en dessous.")
-            output.extend(besoin_du_pool(atteint, recul))
+                out.append(f"  (measured with a {100*TAG_SIZE:.1f} cm test tag; "
+                           f"the limit is in pixels,")
+                out.append(f"   so it holds for the pool's "
+                           f"{100*REAL_TAG_SIZE:.1f} cm too)")
+            reach = min(K_CALIB[0, 0], K_CALIB[1, 1]) * REAL_TAG_SIZE / limit
+            out.append(f"  For a {100*REAL_TAG_SIZE:.1f} cm tag, that gives")
+            out.append(f"  a range of {reach:.2f} m in air, "
+                       f"{optics.water_range(reach, MOUNTING):.2f} m underwater")
+            out.append("  (no \"x 1.33\" here: the camera lies in the tube, and")
+            out.append("   it is the LESS magnified axis that decides detection)")
+        elif limit is None and steps:
+            reached = min(p["centre"] for p in steps)
+            standoff = K_CALIB[0, 0] * TAG_SIZE / reached
+            out.append(f"\n  No confirmed limit: at {reached:.0f} px, the "
+                       "smallest reached, the tag")
+            out.append("  is still detected. The limit is below that.")
+            out.extend(what_the_pool_needs(reached, standoff))
 
-    # --- incidence maximale ------------------------------------------------
-    output.append(f"\nBALAYAGE EN INCIDENCE — {len(incidence)} points"
-                  + (f", {hors_cadre_i} ecartes (tag au bord de l'image)"
-                     if hors_cadre_i else ""))
+    # --- maximum incidence -------------------------------------------------
+    out.append(f"\nINCIDENCE SWEEP — {len(incidence)} points"
+               + (f", {off_frame_i} discarded (tag at the edge of the image)"
+                  if off_frame_i else ""))
     if len(incidence) < 12:
-        output.append("  Trop peu de points. Refais un balayage complet ('i').")
+        out.append("  Too few points. Do a full sweep again ('i').")
     else:
-        limit, paliers, diagnostic = limite_par_paliers(incidence, "incidence_deg",
-                                                         croissant=True)
-        output.append(f"  {'incidence':>18} {'taux de detection':>18}")
-        for p in paliers:
-            barre = "#" * int(round(20 * p["taux"]))
-            output.append(f"  {p['centre']:>14.0f} deg {100*p['taux']:>15.0f} %  {barre}")
-        taille_mediane = float(np.median([e["pixels"] for e in incidence]))
-        if taille_mediane < 60:
-            output.append(f"\n  WARNING : le tag ne faisait que {taille_mediane:.0f} px "
-                          "pendant ce balayage.")
-            output.append("  A cette size c'est peut-etre la resolution qui a lache,")
-            output.append("  pas l'angle. Refais-le avec le grand tag, plus pres.")
+        limit, steps, diagnosis = step_limit(incidence, "incidence_deg",
+                                             increasing=True)
+        out.append(f"  {'incidence':>18} {'detection rate':>18}")
+        for p in steps:
+            bar = "#" * int(round(20 * p["rate"]))
+            out.append(f"  {p['centre']:>14.0f} deg {100*p['rate']:>15.0f} %  {bar}")
+        median_size = float(np.median([e["pixels"] for e in incidence]))
+        if median_size < 60:
+            out.append(f"\n  WARNING: the tag was only {median_size:.0f} px "
+                       "during this sweep.")
+            out.append("  At that size it may be the resolution that gave way,")
+            out.append("  not the angle. Redo it with the large tag, closer.")
 
-        if diagnostiquer(diagnostic, limit, output):
-            output.append(f"\n  INCIDENCE_MAX measured = {limit:.0f} deg "
-                          f"(la value supposee etait 65 deg)")
-        elif limit is None and paliers:
-            atteint = max(p["centre"] for p in paliers)
-            output.append(f"\n  Aucune limit confirmee : a {atteint:.0f} deg, le plus "
-                          "oblique atteint,")
-            output.append("  le tag est encore detecte. Tourne-le davantage.")
+        if diagnose(diagnosis, limit, out):
+            out.append(f"\n  MAX_INCIDENCE measured = {limit:.0f} deg "
+                       f"(the assumed value was 65 deg)")
+        elif limit is None and steps:
+            reached = max(p["centre"] for p in steps)
+            out.append(f"\n  No confirmed limit: at {reached:.0f} deg, the most "
+                       "oblique reached,")
+            out.append("  the tag is still detected. Turn it further.")
 
-    output.append("\n" + "=" * 78)
-    output.append("Reporte ces deux values dans pool_layout_3d.py.")
-    output.append("=" * 78)
-    return "\n".join(output)
+    out.append("\n" + "=" * 78)
+    out.append("Carry these two values over into localization/pool_layout_3d.py.")
+    out.append("=" * 78)
+    return "\n".join(out)
 
 
-def equivalent_reel(pixels):
-    """A quelle distance le VRAI tag du pool ferait-il cette size ?
+def real_equivalent(pixels):
+    """At what distance would the REAL pool tag be this size?
 
-    Le detector ne voit que des pixels : un petit tag pres et un grand tag
-    loin lui sont indiscernables. C'est ce qui autorise a mesurer la limit
-    dans un couloir de 2 m et a la transposer au pool.
+    The detector only sees pixels: a small tag close by and a large one far
+    away are indistinguishable to it. That is what allows the limit to be
+    measured in a 2 m corridor and transposed to the pool.
     """
     return K_CALIB[0, 0] * REAL_TAG_SIZE / max(pixels, 1e-6)
 
 
-def incidence_du_tag(rvec, tvec):
+def tag_incidence(rvec, tvec):
     R = cv2.Rodrigues(rvec)[0]
-    normale, vers = R[:, 2], tvec.flatten()
-    distance = np.linalg.norm(vers)
+    normal, towards = R[:, 2], tvec.flatten()
+    distance = np.linalg.norm(towards)
     if distance < 1e-9:
         return 0.0
-    cos = abs(float(normale @ vers) / distance)
+    cos = abs(float(normal @ towards) / distance)
     return float(np.degrees(np.arccos(np.clip(cos, 0.0, 1.0))))
 
 
-def ouvrir_camera():
+def open_camera():
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
     for index in indices:
         for backend, name in backends:
-            cap = cv2.VideoCapture(index, backend) if backend else cv2.VideoCapture(index)
+            cap = (cv2.VideoCapture(index, backend) if backend
+                   else cv2.VideoCapture(index))
             if cap.isOpened():
                 cap.set(cv2.CAP_PROP_FRAME_WIDTH, RESOLUTION[0])
                 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, RESOLUTION[1])
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera : index={index}, backend={name}, {ww}x{hh}")
+                    print(f"Camera: index={index}, backend={name}, {ww}x{hh}")
                     return cap, ww, hh
             cap.release()
     return None, 0, 0
 
 
-def guide_de_portee(size):
-    """Rappelle, avant de commencer, quelle plage de pixels est atteignable."""
+def reach_guide(size):
+    """Recalls, before starting, which pixel range is reachable."""
     f = K_CALIB[0, 0]
-    rows = ["", f"TAG D'ESSAI : {100*size:.1f} cm",
-              "  distance      size apparente"]
+    rows = ["", f"TEST TAG: {100*size:.1f} cm",
+            "  distance      apparent size"]
     for d in (0.5, 1.0, 1.5, 2.0, 3.0):
         px = f * size / d
-        marque = "  <-- sous la limit supposee (30 px)" if px < 30 else ""
-        rows.append(f"  {d:>5.1f} m {px:>13.0f} px{marque}")
+        mark = "  <-- under the assumed limit (30 px)" if px < 30 else ""
+        rows.append(f"  {d:>5.1f} m {px:>13.0f} px{mark}")
     d30 = f * size / 30
-    rows.append(f"\n  30 px sont atteints a {d30:.2f} m, "
-                  f"20 px a {f * size / 20:.2f} m.")
+    rows.append(f"\n  30 px are reached at {d30:.2f} m, "
+                f"20 px at {f * size / 20:.2f} m.")
     if d30 > 2.5:
-        rows.append("  C'est loin. Si tu ne peux pas reculer autant, imprime un tag")
-        rows.append(f"  plus petit : --tag 0.05 met la limit a "
-                      f"{f * 0.05 / 30:.2f} m.")
+        rows.append("  That is far. If you cannot back off that much, print a")
+        rows.append(f"  smaller tag: --tag 0.05 puts the limit at "
+                    f"{f * 0.05 / 30:.2f} m.")
     return "\n".join(rows)
+
+
+def load_history():
+    """Past sweeps, with the pre-handover column and sweep names translated."""
+    path = CSV if CSV.exists() else LEGACY_CSV
+    if not path.exists():
+        return []
+    with open(path, newline="") as fic:
+        raw = list(csv.DictReader(fic))
+    rows = []
+    for row in raw:
+        translated = {LEGACY_COLUMNS.get(k, k): v for k, v in row.items()}
+        translated["sweep"] = LEGACY_SWEEPS.get(translated.get("sweep"),
+                                                translated.get("sweep"))
+        rows.append(translated)
+    print(f"{len(rows)} point(s) reloaded from {path.name}")
+    return rows
+
+
+def save_history(rows):
+    with open(CSV, "w", newline="") as fic:
+        writer = csv.DictWriter(fic, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def main():
     global TAG_SIZE
     parser = argparse.ArgumentParser(
-        description="Mesure PIXELS_MIN et INCIDENCE_MAX sur la true camera.")
+        description="Measures MIN_PIXELS and MAX_INCIDENCE on the real camera.")
     parser.add_argument("--tag", type=float, default=REAL_TAG_SIZE,
-                           metavar="METRES",
-                           help="cote du tag d'trial en metres (default %(default)s). "
-                                "Un petit tag rapproche la limit de detection : "
-                                "0.05 la place vers 1 m au lieu de 4.5 m.")
+                        metavar="METRES",
+                        help="side of the test tag in metres (default "
+                             "%(default)s). A small tag brings the detection "
+                             "limit closer: 0.05 puts it around 1 m instead "
+                             "of 4.5 m.")
     TAG_SIZE = parser.parse_args().tag
 
-    cam, L, H = ouvrir_camera()
+    cam, L, H = open_camera()
     if cam is None:
-        print("ERROR: aucune camera ouverte.")
+        print("ERROR: no camera opened.")
         return
 
-    demi = TAG_SIZE / 2
-    coins_3d = np.array([[-demi, demi, 0], [demi, demi, 0],
-                         [demi, -demi, 0], [-demi, -demi, 0]], dtype=np.float64)
+    half = TAG_SIZE / 2
+    corners_3d = np.array([[-half, half, 0], [half, half, 0],
+                           [half, -half, 0], [-half, -half, 0]],
+                          dtype=np.float64)
     dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
     params = cv2.aruco.DetectorParameters()
     params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
     detector = cv2.aruco.ArucoDetector(dictionary, params)
 
-    rows = []
-    if CSV.exists():
-        with open(CSV, newline="") as fic:
-            rows = list(csv.DictReader(fic))
-        print(f"{len(rows)} point(s) recharge(s) depuis {CSV.name}")
+    rows = load_history()
 
     print("=" * 70)
-    print("MESURE DES LIMITES DE DETECTION")
-    print(guide_de_portee(TAG_SIZE))
-    print("\n  'd' balayage en distance  : eloigne le tag jusqu'a le perdre")
-    print("  'i' balayage en incidence : tourne le tag jusqu'a le perdre")
-    print("  'r' report | 'e' effacer | 'q' quitter")
-    print("\n  AVANCE PAR PALIERS : at_rest 3 s, un pas, at_rest 3 s...")
-    print("  Marcher en continu file les frames et fait rater la detection")
-    print("  pour une raison qui n'a rien a voir avec ce qu'on measurement.")
-    print("  Garde le tag BIEN AU CENTRE : s'il frole le bord, la window")
-    print("  est ecartee du depouillement.")
+    print("MEASURING THE DETECTION LIMITS")
+    print(reach_guide(TAG_SIZE))
+    print("\n  'd' distance sweep  : move the tag away until you lose it")
+    print("  'i' incidence sweep : turn the tag until you lose it")
+    print("  'r' report | 'e' erase | 'q' quit")
+    print("\n  MOVE IN STEPS: hold still 3 s, one step, hold still 3 s...")
+    print("  Walking continuously smears the frames and makes the detection")
+    print("  fail for a reason unrelated to what is being measured.")
+    print("  Keep the tag WELL CENTRED: if it brushes the edge, the window is")
+    print("  discarded from the analysis.")
     print("=" * 70)
 
-    balayage = None
-    window = []          # (seen, pixels, incidence, distance) des dernieres frames
+    sweep = None
+    window = []       # the last frames: seen / not seen, with their numbers
 
     while True:
         ok, image = cam.read()
         if not ok:
             continue
-        gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        detectes, ids, _ = detector.detectMarkers(gris)
+        grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        detected, ids, _ = detector.detectMarkers(grey)
 
         seen = None
         if ids is not None and len(ids):
-            cv2.aruco.drawDetectedMarkers(image, detectes, ids)
-            aires = [cv2.contourArea(c.reshape(4, 2).astype(np.float32)) for c in detectes]
-            meilleur = int(np.argmax(aires))
-            pts = detectes[meilleur].reshape(4, 2).astype(np.float64)
-            ok2, rvec, tvec = cv2.solvePnP(coins_3d, pts, K_CALIB, DIST_CALIB,
+            cv2.aruco.drawDetectedMarkers(image, detected, ids)
+            areas = [cv2.contourArea(c.reshape(4, 2).astype(np.float32))
+                     for c in detected]
+            best = int(np.argmax(areas))
+            pts = detected[best].reshape(4, 2).astype(np.float64)
+            ok2, rvec, tvec = cv2.solvePnP(corners_3d, pts, K_CALIB, DIST_CALIB,
                                            flags=cv2.SOLVEPNP_IPPE_SQUARE)
             if ok2:
-                # size apparente = cote moyen du carre detecte, en pixels
-                cotes = [np.linalg.norm(pts[k] - pts[(k + 1) % 4]) for k in range(4)]
-                seen = {"pixels": float(np.mean(cotes)),
-                      "incidence": incidence_du_tag(rvec, tvec),
-                      "mahalanobis": float(np.linalg.norm(tvec)),
-                      # combien de pixels separent le tag du bord de l'image :
-                      # s'il le frole, les frames ratees sont des sorties de
-                      # champ et ne disent rien de la limit cherchee
-                      "bord": float(min(pts[:, 0].min(), pts[:, 1].min(),
-                                        L - pts[:, 0].max(), H - pts[:, 1].max()))}
+                # apparent size = mean side of the detected square, in pixels
+                sides = [np.linalg.norm(pts[k] - pts[(k + 1) % 4])
+                         for k in range(4)]
+                seen = {"pixels": float(np.mean(sides)),
+                        "incidence": tag_incidence(rvec, tvec),
+                        "distance": float(np.linalg.norm(tvec)),
+                        # how many pixels separate the tag from the edge of the
+                        # image: if it brushes it, the failed frames are field
+                        # exits and say nothing about the limit being sought
+                        "edge": float(min(pts[:, 0].min(), pts[:, 1].min(),
+                                          L - pts[:, 0].max(),
+                                          H - pts[:, 1].max()))}
 
-        if balayage is not None:
+        if sweep is not None:
             window.append(seen)
-            if len(window) > FENETRE:
+            if len(window) > WINDOW_FRAMES:
                 window.pop(0)
-            reussies = [f for f in window if f is not None]
-            if len(window) == FENETRE and reussies:
+            hits = [f for f in window if f is not None]
+            if len(window) == WINDOW_FRAMES and hits:
                 rows.append({
-                    "balayage": balayage,
-                    "taux": f"{len(reussies) / FENETRE:.4f}",
-                    "pixels": f"{np.mean([f['pixels'] for f in reussies]):.4f}",
-                    "incidence_deg": f"{np.mean([f['incidence'] for f in reussies]):.4f}",
-                    "distance_m": f"{np.mean([f['distance'] for f in reussies]):.4f}",
-                    "bord_px": f"{min(f['bord'] for f in reussies):.1f}",
+                    "sweep": sweep,
+                    "rate": f"{len(hits) / WINDOW_FRAMES:.4f}",
+                    "pixels": f"{np.mean([f['pixels'] for f in hits]):.4f}",
+                    "incidence_deg":
+                        f"{np.mean([f['incidence'] for f in hits]):.4f}",
+                    "distance_m":
+                        f"{np.mean([f['distance'] for f in hits]):.4f}",
+                    "edge_px": f"{min(f['edge'] for f in hits):.1f}",
                 })
 
-        # --- display ---------------------------------------------------
-        if balayage is not None:
-            reussies = [f for f in window if f is not None]
-            taux = len(reussies) / max(len(window), 1)
-            cv2.putText(image, f"BALAYAGE {balayage.upper()} — "
-                               f"{len(rows)} points", (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-            colour = (0, 220, 0) if taux > 0.95 else (
-                (0, 170, 255) if taux > 0.4 else (0, 0, 255))
-            cv2.putText(image, f"taux de detection {100*taux:3.0f} %", (10, 58),
+        # --- display -------------------------------------------------------
+        if sweep is not None:
+            hits = [f for f in window if f is not None]
+            rate = len(hits) / max(len(window), 1)
+            cv2.putText(image, f"{sweep.upper()} SWEEP — {len(rows)} points",
+                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            colour = (0, 220, 0) if rate > 0.95 else (
+                (0, 170, 255) if rate > 0.4 else (0, 0, 255))
+            cv2.putText(image, f"detection rate {100*rate:3.0f} %", (10, 58),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, colour, 2)
-            if reussies:
-                m = reussies[-1]
-                cv2.putText(image, f"{m['pixels']:.0f} px   {m['incidence']:.0f} deg"
+            if hits:
+                m = hits[-1]
+                cv2.putText(image, f"{m['pixels']:.0f} px   "
+                                   f"{m['incidence']:.0f} deg"
                                    f"   {m['distance']:.2f} m", (10, 84),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
-                cv2.putText(image, f"= tag {100*REAL_TAG_SIZE:.0f} cm seen de "
-                                   f"{equivalent_reel(m['pixels']):.2f} m", (10, 136),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 255), 1)
-            consigne = ("PAR PALIERS : at_rest 3 s, un pas en arriere, at_rest"
-                        if balayage == "mahalanobis"
-                        else "PAR PALIERS : at_rest 3 s, tourne un peu, at_rest")
-            cv2.putText(image, consigne, (10, 110),
+                cv2.putText(image, f"= {100*REAL_TAG_SIZE:.0f} cm tag seen "
+                                   f"from {real_equivalent(m['pixels']):.2f} m",
+                            (10, 136), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                            (180, 180, 255), 1)
+            instruction = ("IN STEPS: hold 3 s, one step back, hold"
+                           if sweep == "distance"
+                           else "IN STEPS: hold 3 s, turn a little, hold")
+            cv2.putText(image, instruction, (10, 110),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-            if reussies and reussies[-1]["bord"] < MARGE_BORD:
+            if hits and hits[-1]["edge"] < EDGE_MARGIN:
                 cv2.rectangle(image, (2, 2), (L - 3, H - 3), (0, 0, 255), 3)
-                cv2.putText(image, "TAG AU BORD — recentre-le, sinon la measurement "
-                                   "est perdue", (10, 162),
+                cv2.putText(image, "TAG AT THE EDGE - recentre it, or the "
+                                   "measurement is lost", (10, 162),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
         elif seen is not None:
-            cv2.putText(image, f"{seen['pixels']:.0f} px   {seen['incidence']:.0f} deg"
+            cv2.putText(image, f"{seen['pixels']:.0f} px   "
+                               f"{seen['incidence']:.0f} deg"
                                f"   {seen['distance']:.2f} m", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-            cv2.putText(image, f"= tag {100*REAL_TAG_SIZE:.0f} cm seen de "
-                               f"{equivalent_reel(seen['pixels']):.2f} m", (10, 56),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 255), 1)
-            cv2.putText(image, "'d' balayage distance   |   'i' balayage incidence",
+            cv2.putText(image, f"= {100*REAL_TAG_SIZE:.0f} cm tag seen from "
+                               f"{real_equivalent(seen['pixels']):.2f} m",
+                        (10, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        (180, 180, 255), 1)
+            cv2.putText(image, "'d' distance sweep   |   'i' incidence sweep",
                         (10, 82), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
         else:
-            cv2.putText(image, "Aucun tag visible", (10, 30),
+            cv2.putText(image, "No tag visible", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         cv2.putText(image, f"{len(rows)} point(s)   d=distance i=incidence "
-                           f"r=report e=effacer q=quitter", (10, H - 14),
+                           f"r=report e=erase q=quit", (10, H - 14),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
-        cv2.imshow("Limites de detection (q pour quitter)", image)
+        cv2.imshow("Detection limits (q to quit)", image)
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
             break
-        for name, lettre in (("mahalanobis", "d"), ("incidence", "i")):
-            if key == ord(lettre):
-                if balayage == name:
-                    balayage, window = None, []
-                    with open(CSV, "w", newline="") as fic:
-                        ecrivain = csv.DictWriter(fic, fieldnames=COLONNES)
-                        ecrivain.writeheader()
-                        ecrivain.writerows(rows)
-                    print(f"Balayage {name} arrete. {len(rows)} points au total.")
-                elif balayage is None:
-                    balayage, window = name, []
-                    print(f"Balayage {name} en cours... ('{lettre}' pour arreter)")
+        for name, letter in (("distance", "d"), ("incidence", "i")):
+            if key == ord(letter):
+                if sweep == name:
+                    sweep, window = None, []
+                    save_history(rows)
+                    print(f"{name} sweep stopped. {len(rows)} points in total.")
+                elif sweep is None:
+                    sweep, window = name, []
+                    print(f"{name} sweep running... ('{letter}' to stop)")
         if key == ord("r"):
             print(report(rows))
         if key == ord("e"):
             rows, window = [], []
             if CSV.exists():
                 CSV.unlink()
-            print("Points effaces.")
+            print("Points erased.")
 
     cam.release()
     cv2.destroyAllWindows()
     if rows:
-        with open(CSV, "w", newline="") as fic:
-            ecrivain = csv.DictWriter(fic, fieldnames=COLONNES)
-            ecrivain.writeheader()
-            ecrivain.writerows(rows)
+        save_history(rows)
     print(report(rows))
 
 

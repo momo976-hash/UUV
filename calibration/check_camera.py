@@ -30,7 +30,7 @@ from collections import deque
 import cv2
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optics  # noqa: E402
 
 CAMERA_INDEX = None          # None = detection automatique
