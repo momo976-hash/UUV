@@ -267,21 +267,21 @@ GYRO_NOISE_DEG_S = 0.106
 # as above (previously 0.05, assumed).
 ACCEL_NOISE = 0.015
 
-# L'echelle du tag, d'ou se deduit la distance, est lue sur QUATRE corners et
-# non un seul : moyenner divise le noise par racine de 4. Sans ce facteur, le
-# model surestimait l'error de depth d'un facteur 2.3 face aux measurements
+# The tag's scale, from which distance is deduced, is read on FOUR corners
+# rather than one: averaging divides the noise by the square root of 4.
+# Without this factor the model over-estimated the depth error by 2.3x
 # reelles ; avec lui l'gap tombe a 0.85x, soit 15 %.
 CORNERS_PER_TAG = 4.0
 
 
 # ===========================================================================
-# Rappel : ce qui reste a mesurer AVEC L'ENGIN, DANS L'EAU
+# Reminder: what remains to be measured WITH THE VEHICLE, IN THE WATER
 # ===========================================================================
-# La personne qui a ecrit ce code ne sera plus la le jour de cette measurement, et
-# celle qui la fera ne lit pas le Python. Le rappel est donc affiche par les
-# scripts eux-memes, en clair, avec le geste exact a faire — et il s'eteint
-# tout seul des que la measurement est faite, sans que personne n'ait a toucher au
-# code pour le faire taire.
+# The person who wrote this code will not be there on the day of that
+# measurement, and the person who takes it does not read Python. So the
+# reminder is printed by the scripts themselves, in plain words, with the
+# exact gesture to make — and it switches itself off once the measurement
+# is made, with nobody having to touch the code to silence it.
 # ===========================================================================
 
 def settings_still_assumed():
@@ -355,11 +355,11 @@ def remind_missing_measurements(with_imu=None):
 
 
 # ===========================================================================
-# Quaternions (l'orientation ne vit pas dans un espace vectoriel : on ne
-# peut pas faire la mean de deux matrices de rotation)
+# Quaternions (orientation does not live in a vector space: you cannot
+# average two rotation matrices)
 # ===========================================================================
 def matrix_to_quaternion(R):
-    """Matrice de rotation 3x3 -> quaternion [w, x, y, z]."""
+    """3x3 rotation matrix -> quaternion [w, x, y, z]."""
     trace = R[0, 0] + R[1, 1] + R[2, 2]
     if trace > 0:
         s = 0.5 / np.sqrt(trace + 1.0)
@@ -381,7 +381,7 @@ def matrix_to_quaternion(R):
 
 
 def quaternion_to_matrix(q):
-    """Quaternion [w, x, y, z] -> matrix de rotation 3x3."""
+    """Quaternion [w, x, y, z] -> 3x3 rotation matrix."""
     w, x, y, z = q / np.linalg.norm(q)
     return np.array([
         [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
@@ -391,12 +391,12 @@ def quaternion_to_matrix(q):
 
 
 def slerp(q0, q1, t):
-    """Interpolation sur la sphere des quaternions : la 'mean ponderee'
+    """Interpolation on the quaternion sphere: the correct 'weighted mean'
     correcte entre deux orientations. t=0 rend q0, t=1 rend q1."""
     q0 = q0 / np.linalg.norm(q0)
     q1 = q1 / np.linalg.norm(q1)
     product = float(q0 @ q1)
-    if product < 0.0:          # q et -q sont la meme rotation : on recolle
+    if product < 0.0:          # q and -q are the same rotation: re-glue them
         q1, product = -q1, -product
     if product > 0.9995:       # quasi confondus : interpolation lineaire
         q = q0 + t * (q1 - q0)
@@ -423,7 +423,7 @@ def quaternion_product(a, b):
 def quaternion_from_rotation(vector):
     """Vecteur de rotation (axis x angle, en radians) -> quaternion.
 
-    C'est la brique qui transforme une velocity angulaire measured en increment
+    This is the brick that turns a measured angular rate into an orientation
     d'orientation : omega * dt donne exactement un tel vector.
     """
     angle = float(np.linalg.norm(vector))
@@ -437,26 +437,26 @@ def quaternion_from_rotation(vector):
 # Passer d'une representation d'orientation a l'autre
 #
 # POURQUOI CES CONVERSIONS SONT NECESSAIRES
-# Aucune bibliotheque ne rend l'orientation dans le meme format. L'IMU de la
-# D435i donne des vitesses angulaires ; certaines piles IMU donnent un
-# quaternion, d'autres des angles d'Euler ; les detecteurs d'AprilTag rendent
-# soit un rvec (vector de Rodrigues), soit une transformation homogene. Il
-# faut savoir naviguer entre les quatre sans se tromper de convention, sinon
-# les errors sont silencieuses et l'vehicle part de travers.
+# No library returns orientation in the same format. The D435i's IMU gives
+# angular rates; some IMU stacks give a quaternion, others Euler angles;
+# AprilTag detectors return either an rvec (Rodrigues vector) or a
+# homogeneous transform. One has to move between the four without mixing up
+# conventions, otherwise the errors are silent and the vehicle drifts
+# sideways.
 #
-# CONVENTION RETENUE POUR EULER : Z-Y-X intrinseque, dite yaw-pitch-roll
-# (yaw-pitch-roll). C'est celle de la robotique et de ROS. On tourne d'abord
-# de `yaw` autour de Z, puis de `pitch` autour du new Y, puis de
-# `roll` autour du new X. Une autre convention donnerait d'autres
-# numbers pour la MEME rotation : c'est la source d'error classique.
+# CONVENTION CHOSEN FOR EULER: intrinsic Z-Y-X, i.e. yaw-pitch-roll. It is
+# the robotics and ROS convention. First rotate by `yaw` about Z, then by
+# `pitch` about the new Y, then by `roll` about the new X. Another
+# convention would give different numbers for the SAME rotation: that is
+# the classic source of error.
 # ===========================================================================
 def quaternion_to_euler(q):
-    """Quaternion [w,x,y,z] -> (roll, pitch, yaw) en radians, Z-Y-X."""
+    """Quaternion [w,x,y,z] -> (roll, pitch, yaw) in radians, Z-Y-X."""
     w, x, y, z = np.asarray(q, dtype=float) / np.linalg.norm(q)
     roll = np.arctan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
-    # Le pitch passe par un arcsin : a +/-90 deg les deux autres angles
-    # deviennent indistinguables (blocage de cardan). On borne l'argument
-    # plutot que de laisser sortir un NaN.
+    # Pitch goes through an arcsin: at +/-90 deg the other two angles become
+    # indistinguishable (gimbal lock). The argument is clamped
+    # rather than letting a NaN escape.
     sine = np.clip(2 * (w * y - z * x), -1.0, 1.0)
     pitch = np.arcsin(sine)
     yaw = np.arctan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
@@ -464,7 +464,7 @@ def quaternion_to_euler(q):
 
 
 def euler_to_quaternion(roll, pitch, yaw):
-    """(roll, pitch, yaw) en radians, Z-Y-X -> quaternion [w,x,y,z]."""
+    """(roll, pitch, yaw) in radians, Z-Y-X -> quaternion [w,x,y,z]."""
     cr, sr = np.cos(roll / 2), np.sin(roll / 2)
     cp, sp = np.cos(pitch / 2), np.sin(pitch / 2)
     cy, sy = np.cos(yaw / 2), np.sin(yaw / 2)
@@ -476,7 +476,7 @@ def euler_to_quaternion(roll, pitch, yaw):
 
 def homogeneous_transform(rotation, translation):
     """Assemble la matrix 4x4 : bloc R 3x3, bloc t 3x1, derniere row
-    (0,0,0,1). `rotation` accepte une matrix 3x3 ou un quaternion."""
+    (0,0,0,1). `rotation` accepts a 3x3 matrix or a quaternion."""
     R = np.asarray(rotation, dtype=float)
     if R.shape != (3, 3):
         R = quaternion_to_matrix(R)
@@ -493,20 +493,20 @@ def split_homogeneous(T):
 
 
 def invert_homogeneous(T):
-    """Inverse d'une transformation rigide, sans passer par une inversion
-    numerique : R^-1 = R^T pour une rotation, ce qui est exact et rapide."""
+    """Inverse of a rigid transform, without a numerical inversion:
+    R^-1 = R^T for a rotation, which is exact and fast."""
     R, t = split_homogeneous(T)
     return homogeneous_transform(R.T, -R.T @ t)
 
 
 # ===========================================================================
-# Bruit de measurement deduit de la geometrie du tag
+# Measurement noise derived from the tag geometry
 # ===========================================================================
 def tag_position_covariance(position_camera, position_tag, incidence_deg,
                             focal_length=WATER_FOCAL_LENGTH, taille_tag=TAG_SIZE,
                             sigma_pixel=SIGMA_PIXEL):
-    """Covariance 3x3, dans le frame world, de la position de la camera
-    estimatede a partir d'UN tag. Anisotrope : mauvaise le long de la visee."""
+    """3x3 covariance, in the world frame, of the camera position estimated
+    from ONE tag. Anisotropic: poor along the line of sight."""
     v = np.asarray(position_tag, dtype=float) - np.asarray(position_camera, dtype=float)
     d = float(np.linalg.norm(v))
     if d < 1e-6:
@@ -514,7 +514,7 @@ def tag_position_covariance(position_camera, position_tag, incidence_deg,
     u = v / d
 
     sigma_lat = d * sigma_pixel / focal_length
-    # seen de bias, le tag parait plus etroit : sa size apparente, d'ou l'on
+    # seen at an angle, the tag looks narrower: its apparent size, from which
     # tire la distance, porte moins d'information.
     cos_incidence = max(np.cos(np.radians(incidence_deg)), 0.20)
     sigma_prof = (d * d * sigma_pixel
@@ -526,12 +526,12 @@ def tag_position_covariance(position_camera, position_tag, incidence_deg,
 
 def tag_angle_std(distance, incidence_deg, focal_length=WATER_FOCAL_LENGTH,
                          taille_tag=TAG_SIZE, sigma_pixel=SIGMA_PIXEL):
-    """Ecart-type, en radians, de l'orientation donnee par UN tag.
+    """Standard deviation, in radians, of the orientation given by ONE tag.
 
-    Le demi-cote du tag measurement s = f·T/(2d) pixels dans l'image. Un corner
-    deplace de sigma_px fait donc tourner le tag d'environ sigma_px/s.
-    Le facteur 1/sin(incidence) traduit l'ambiguite de flip : seen
-    parfaitement de face, un tag plan renseigne tres mal son inclinaison.
+    The tag's half-side measures s = f.T/(2d) pixels in the image. A corner
+    displaced by sigma_px therefore rotates the tag by about sigma_px/s.
+    The 1/sin(incidence) factor expresses the flip ambiguity: seen perfectly
+    head-on, a planar tag says very little about its own tilt.
     """
     demi_cote_px = focal_length * taille_tag / (2.0 * max(distance, 1e-6))
     base = sigma_pixel / max(demi_cote_px, 1e-6)
@@ -539,10 +539,10 @@ def tag_angle_std(distance, incidence_deg, focal_length=WATER_FOCAL_LENGTH,
 
 
 def fuse_positions(measurements):
-    """Fusionne plusieurs estimations de position par addition des
+    """Fuse several position estimates by adding their information
     informations. `measurements` : liste de (position, covariance).
 
-    C'est la reponse chiffree a Josiah : R_total^-1 = total(R_i^-1).
+    The numeric answer to "why several tags": R_total^-1 = sum(R_i^-1).
     Retourne (position_fusionnee, covariance_fusionnee).
     """
     if not measurements:
@@ -561,14 +561,14 @@ def fuse_positions(measurements):
 
 
 # ===========================================================================
-# Le core : les cinq equations du Kalman lineaire, et rien d'autre
+# The core: the five linear Kalman equations, and nothing else
 # ===========================================================================
 class LinearKalman:
-    """Les cinq equations du filter de Kalman lineaire, telles quelles.
+    """The five equations of the linear Kalman filter, as they stand.
 
-    NOTATION. Celle du document de reference du projet — Alex Becker,
+    NOTATION. That of the project's reference document — Alex Becker,
     « Kalman Filter Explained Through Examples », kalmanfilter.net, 2026.
-    Les symboles sont les siens, exactement :
+    The symbols are his, exactly:
 
         PREDICTION
             x(n+1,n) = F x(n,n) + G u(n)          equation d'extrapolation
@@ -579,23 +579,23 @@ class LinearKalman:
             x(n,n) = x(n,n-1) + K(n) [z(n) - H x(n,n-1)]          state
             P(n,n) = (I-KH) P(n,n-1) (I-KH)' + K R K'             covariance
 
-    POURQUOI CETTE CLASSE EXISTE SEPAREMENT. Elle ne connait ni tag, ni tube,
-    ni imu inertielle : elle ne sait faire que ces cinq rows. Tout ce
-    qui est propre a l'vehicle — quel state, quel model de mouvement, quelle
-    measurement, quelle confiance — vit dans les classes qui l'utilisent.
+    WHY THIS CLASS EXISTS SEPARATELY. It knows nothing of tags, tubes or
+    IMUs: all it can do is these five lines. Everything specific to the
+    vehicle — which state, which motion model, which measurement, which
+    confidence — lives in the classes that use it.
 
-    Cette separation n'est pas une coquetterie : elle rend le coeur du filter
-    VERIFIABLE sur l'example chiffre du document lui-meme (un radar qui suit
-    un avion, state [portee, velocity]). C'est ce que fait kalman_reference_check.py,
-    qui retrouve les values imprimees dans le document a la quatrieme
-    decimale. Un desaccord la-dessus se verrait tout de suite, au lieu de se
-    cacher derriere la geometrie des tags.
+    This separation is not decoration: it makes the filter's core CHECKABLE
+    against the document's own worked example (a radar tracking an aircraft,
+    state [range, velocity]). That is what kalman_reference_check.py does,
+    recovering the values printed in the document to the fourth decimal. A
+    disagreement there would show up at once, instead of hiding behind the
+    geometry of the tags.
 
-    FORME DE JOSEPH. Le document donne deux ecritures de la mise a jour de P :
-    la simplifiee (I-KH)P, et celle de Joseph. Elles sont egales en arithmetique
-    exacte — kalman_reference_check.py le verifie, l'gap vaut 2e-15 sur his example.
-    We keep Joseph, que le document recommande : elle reste symetrique et
-    definie positive apres des milliers d'iterations en virgule flottante, la
+    JOSEPH FORM. The document gives two ways of writing the P update: the
+    simplified (I-KH)P, and Joseph's. They are equal in exact arithmetic —
+    kalman_reference_check.py checks it, the gap is 2e-15 on his example.
+    Joseph is kept, as the document recommends: it stays symmetric and
+    positive-definite after thousands of floating-point iterations, the
     simplifiee non.
     """
 
@@ -606,8 +606,8 @@ class LinearKalman:
     def predict(self, F, Q, G=None, u=None):
         """x(n+1,n) = F x + G u   et   P(n+1,n) = F P F' + Q.
 
-        G et u sont l'input connue du document (« input variable »), dont il
-        donne pour example les lectures d'un accelerometre embarque. C'est
+        G and u are the document's known input ("input variable"), for which
+        it gives onboard accelerometer readings as an example. That is
         exactement l'usage qu'on en fait ici.
         """
         self.x = F @ self.x
@@ -616,21 +616,21 @@ class LinearKalman:
         self.P = F @ self.P @ F.T + Q
 
     def innovation(self, z, H):
-        """z(n) - H x(n,n-1) : l'information neuve apportee par la measurement."""
+        """z(n) - H x(n,n-1): the new information the measurement brings."""
         return np.asarray(z, dtype=float).ravel() - H @ self.x
 
     def gain(self, H, R):
         """K = P H' (H P H' + R)^-1, et S = H P H' + R au passage.
 
-        S est la covariance de l'innovation. Le document ne s'en sert pas,
-        mais c'est elle qui permet de reconnaitre une measurement aberrante — le
-        « Outlier Treatment » qu'il renvoie a son chapitre dedie.
+        S is the innovation covariance. The document does not use it, but it
+        is what lets an outlier measurement be recognised — the "Outlier
+        Treatment" it refers to its dedicated chapter.
         """
         S = H @ self.P @ H.T + R
         return self.P @ H.T @ np.linalg.inv(S), S
 
     def correct(self, z, H, R):
-        """Les trois equations de mise a jour. Retourne (innovation, K)."""
+        """The three update equations. Returns (innovation, K)."""
         y = self.innovation(z, H)
         K, _ = self.gain(H, R)
         self.x = self.x + K @ y
@@ -640,21 +640,21 @@ class LinearKalman:
 
 
 # ===========================================================================
-# Filtre de position : le core ci-dessus, avec F, Q et H de l'vehicle
+# Position filter: the core above, with the vehicle's F, Q and H
 # ===========================================================================
 class PositionKalmanFilter:
     """Modele CINEMATIQUE a velocity constante, measurement de position seule.
 
-    C'est le model du document de reference, porte de 1 a 3 dimensions :
+    This is the reference document's model, carried from 1 to 3 dimensions:
 
         state      x = [px, py, pz, vx, vy, vz]'
         model    F = [[I3, dt.I3], [0, I3]]        velocity constante
         noise     Q = sigma_a^2 . G G'   avec G = [dt^2/2 . I3 ; dt . I3]
-        measurement    H = [I3, 0]                        les tags donnent p, pas v
+        measurement  H = [I3, 0]              the tags give p, not v
 
-    Le Q ci-dessus EST celui du document. Il ecrit, en 1D :
+    The Q above IS the document's. It writes, in 1D:
         Q = sigma_a^2 [[dt^4/4, dt^3/2], [dt^3/2, dt^2]]
-    et G G' vaut exactement ces quatre blocs. C'est verifie chiffre par
+    and G G' is exactly those four blocks. Checked number by number in
     chiffre dans kalman_reference_check.py.
     """
 
@@ -668,7 +668,7 @@ class PositionKalmanFilter:
         if accel_noise is None:
             accel_noise = ACCEL_NOISE
         self.sigma_a = float(sigma_acceleration)   # m/s^2 d'acceleration non modelisee
-        self.accel_noise = float(accel_noise)      # m/s^2 de noise du capteur
+        self.accel_noise = float(accel_noise)      # m/s^2 of sensor noise
         self.accel_used = False
         self.threshold = float(chi2_threshold)             # chi2 a 3 ddl, threshold 99.9 %
         self.max_consecutive_rejections = int(max_consecutive_rejections)
@@ -678,12 +678,12 @@ class PositionKalmanFilter:
         self.rejections = 0
         self.consecutive_rejections = 0
         self.recoveries = 0
-        # Renseigne a chaque mise a jour, pour les graphiques (voir correct).
+        # Filled in on every update, for the plots (see correct).
         # Reste None tant qu'aucune measurement n'est arrivee.
         self.last_update = None
 
-    # x et P vivent dans le core ; on les expose tels quels pour que le reste
-    # du path — et les scripts qui lisent filter.x — ne change pas.
+    # x and P live in the core; they are exposed as they are so that the rest
+    # of the file — and the scripts that read filter.x — need not change.
     @property
     def x(self):
         return self.core.x
@@ -702,10 +702,10 @@ class PositionKalmanFilter:
 
     @staticmethod
     def model(dt):
-        """F et G du model a velocity constante, pour un pas dt."""
+        """F and G of the constant-velocity model, for one step dt."""
         F = np.eye(6)
         F[:3, 3:] = dt * np.eye(3)
-        # G : effet d'une acceleration pendant dt, sur la position et la velocity
+        # G: effect of an acceleration during dt, on position and velocity
         G = np.vstack([0.5 * dt * dt * np.eye(3), dt * np.eye(3)])
         return F, G
 
@@ -715,25 +715,25 @@ class PositionKalmanFilter:
         self.started = True
 
     def predict(self, dt, acceleration=None):
-        """Fait avancer l'state de dt seconds.
+        """Advance the state by dt seconds.
 
-        acceleration : celle MESUREE par l'accelerometre, exprimee dans le
-        frame MONDE et debarrassee de la gravity. Si elle est fournie, elle
-        entre dans la prediction comme une commande connue au lieu d'etre
-        traitee comme un alea.
+        acceleration: the one MEASURED by the accelerometer, expressed in the
+        WORLD frame and with gravity removed. If given, it enters the
+        prediction as a known command instead of being treated as a random
+        unknown.
 
-        CE QUE L'ACCELEROMETRE CHANGE. Sans lui, on assumed la velocity
-        constante et on couvre l'gap par sigma_a, l'acceleration que l'vehicle
-        peut avoir sans qu'on le sache. Avec lui, cette acceleration est
-        MESUREE : il ne reste que le noise du capteur, bien plus petit. La
-        prediction suit alors les manoeuvres au lieu de retarder dessus.
+        WHAT THE ACCELEROMETER CHANGES. Without it, velocity is assumed
+        constant and the gap is covered by sigma_a, the acceleration the
+        vehicle may have without our knowing. With it, that acceleration is
+        MEASURED: only the sensor noise remains, far smaller. The prediction
+        then follows the manoeuvres instead of lagging behind them.
 
-        RESERVE HONNETE. Un accelerometre MEMS a un bias lentement variable
-        que rien ici n'estimated, et une double integration transforme ce bias
-        en error de position quadratique : un bias de 0.05 m/s2 fait 2.5 cm
-        au bout d'une seconde, 1 m au bout de dix. C'est utile pour traverser
-        une perte de tags de quelques instants, pas pour naviguer a l'estimated.
-        Les tags restent la seule source sans drift.
+        AN HONEST RESERVATION. A MEMS accelerometer has a slowly varying bias
+        that NOTHING here estimates, and double integration turns that bias
+        into a quadratic position error: a bias of 0.05 m/s2 gives 2.5 cm
+        after one second, 1 m after ten. Useful for crossing a tag dropout of
+        a few moments, not for dead reckoning. The tags remain the only
+        drift-free source.
         """
         if not self.started or dt <= 0:
             return
@@ -745,7 +745,7 @@ class PositionKalmanFilter:
             uncertainty = self.accel_noise      # acceleration measured
             input = acceleration
             self.accel_used = True
-        # Q = sigma^2 . G G' — le Q du document, ecrit en 3D.
+        # Q = sigma^2 . G G' — the document's Q, written in 3D.
         Q = uncertainty ** 2 * (G @ G.T)
         self.core.predict(F, Q, G=G, u=input)
 
@@ -761,10 +761,10 @@ class PositionKalmanFilter:
         S = self.H @ self.P @ self.H.T + R
         distance = float(y @ np.linalg.solve(S, y))
 
-        # Photographie de l'AVANT-mise a jour, pour qui veut tracer ce que le
-        # filter vient de faire (kalman_live_plots.py). C'est le seul endroit
-        # ou l'a priori existe encore : la row suivante l'ecrase. Purement
-        # passif — aucune de ces values n'est relue par le filter.
+        # A snapshot of the PRE-update state, for anyone wanting to plot what
+        # the filter just did (kalman_live_plots.py). This is the only place
+        # where the prior still exists: the next line overwrites it. Purely
+        # passive — none of these values is read back by the filter.
         self.last_update = {
             "x_prior": self.x.copy(), "P_prior": self.P.copy(),
             "z": z.copy(), "R": R.copy(), "innovation": y.copy(),
@@ -776,14 +776,14 @@ class PositionKalmanFilter:
             self.consecutive_rejections += 1
             if self.consecutive_rejections < self.max_consecutive_rejections:
                 self.rejections += 1
-                # Refusee : l'state ne bouge pas, l'apres est donc l'avant.
+                # Refused: the state does not move, so after equals before.
                 self.last_update.update(
                     x_posterior=self.x.copy(), P_posterior=self.P.copy(),
                     accepted=False)
                 return False, distance
-            # Verrouillage : autant de refus d'affilee ne s'explique plus par
-            # des measurements aberrantes, mais par un state faux. On se recale sur
-            # la measurement et on rouvre l'uncertainty.
+            # Lock-out: that many refusals in a row is no longer explained by
+            # outlier measurements, but by a wrong state. The filter
+            # re-anchors on the measurement and reopens its uncertainty.
             self.x[:3] = z
             self.P[:3, :3] = 4.0 * R
             self.P[3:, 3:] = np.eye(3) * self.recovery_speed_sigma ** 2
@@ -797,7 +797,7 @@ class PositionKalmanFilter:
             return True, distance
 
         self.consecutive_rejections = 0
-        # Les trois equations de mise a jour du document, forme de Joseph.
+        # The document's three update equations, Joseph form.
         self.core.correct(z, self.H, R)
         self.last_update["x_posterior"] = self.x.copy()
         self.last_update["P_posterior"] = self.P.copy()
@@ -819,16 +819,16 @@ class PositionKalmanFilter:
 
 
 # ===========================================================================
-# Filtre d'orientation : Kalman scalaire sur l'angle, applique par slerp
+# Orientation filter: scalar Kalman on the angle, applied through slerp
 # ===========================================================================
 class OrientationFilter:
-    """On suit un quaternion et UNE variance angulaire scalaire.
+    """We track a quaternion and ONE scalar angular variance.
 
     Approximation assumee : l'uncertainty d'orientation est supposee
-    isotrope (la meme autour des trois axes). C'est faux dans le detail --
-    le yaw est mieux contraint que le pitch quand on regarde un mur de
-    face -- mais ca evite un filter a error d'state complet tant qu'on n'a
-    pas fusionne la imu inertielle de la D435i.
+    isotropic (the same about all three axes). That is wrong in detail --
+    yaw is better constrained than pitch when looking at a wall head-on --
+    but it avoids a full error-state filter for as long as the D435i's IMU
+    is not fused in.
     """
 
     def __init__(self, derive_gyro_deg_s=None, jump_threshold_deg=25.0,
@@ -841,19 +841,19 @@ class OrientationFilter:
         self.q = np.array([1.0, 0.0, 0.0, 0.0])
         self.variance = np.radians(180.0) ** 2
         self.drift = np.radians(derive_gyro_deg_s)   # rad/s d'errance non modelisee
-        self.gyro_noise = np.radians(bruit_gyro_deg_s)  # rad/s de noise du gyro
+        self.gyro_noise = np.radians(bruit_gyro_deg_s)  # rad/s of gyro noise
         self.seuil_saut = float(jump_threshold_deg)
         self.max_consecutive_rejections = int(max_consecutive_rejections)
         self.started = False
         self.rejections = 0
         self.consecutive_rejections = 0
         self.recoveries = 0
-        # Biais du gyro, en rad/s, dans le frame de la imu. Un gyro MEMS
-        # ne measurement jamais zero au rest : ce petit decalage, integre, fait
-        # deriver l'orientation. On l'estimated sur les corrections que les tags
-        # apportent, et on le retranche des measurements suivantes.
+        # Gyro bias, in rad/s, in the IMU frame. A MEMS gyro never reads
+        # exactly zero at rest: that small offset, integrated, makes the
+        # orientation drift. It is estimated from the corrections the tags
+        # bring, and subtracted from the following measurements.
         self.bias = np.zeros(3)
-        self.bias_tau = float(bias_tau)   # constante de time de l'estimation
+        self.bias_tau = float(bias_tau)   # time constant of the estimation
         self._temps_depuis_correction = 0.0
         self._rotation_gyro = np.zeros(3)   # rotation integree depuis la derniere
         self.gyro_used = False
@@ -865,19 +865,19 @@ class OrientationFilter:
         self.started = True
 
     def predict(self, dt, omega=None):
-        """Fait avancer l'orientation de dt seconds.
+        """Advance the orientation by dt seconds.
 
-        omega : velocity angulaire measured par le GYROSCOPE, en rad/s, dans le
-        frame de la camera. Si elle est fournie, l'orientation est reellement
+        omega: angular rate measured by the GYROSCOPE, in rad/s, in the
+        camera frame. If given, the orientation is genuinely propagated
         propagee au lieu d'etre supposee constante.
 
-        CE QUE LE GYRO CHANGE. Sans lui, on assumed l'vehicle at_rest en
-        rotation et on gonfle l'uncertainty de `drift` par seconde, soit
-        10 deg/s dans nos reglages : au bout d'une seconde sans tag, on ne
-        sait plus rien. Avec lui, on SAIT de combien l'vehicle a tourne, et
-        l'uncertainty ne croit plus que du noise du gyro — deux ordres de
-        grandeur en dessous. C'est ce qui permet de traverser une perte de
-        tags sans perdre le cap.
+        WHAT THE GYRO CHANGES. Without it, the vehicle is assumed still in
+        rotation and the uncertainty is inflated by `drift` per second, i.e.
+        10 deg/s in our settings: after one second without a tag, we know
+        nothing any more. With it, we KNOW how much the vehicle turned, and
+        the uncertainty only grows by the gyro noise — two orders of
+        magnitude below. That is what allows crossing a tag dropout without
+        losing the heading.
         """
         if not self.started or dt <= 0:
             return
@@ -888,7 +888,7 @@ class OrientationFilter:
         self.gyro_used = True
         velocity = np.asarray(omega, dtype=float).ravel() - self.bias
         rotation = velocity * dt
-        # q PUIS la petite rotation, exprimee dans le frame du corps :
+        # q THEN the small rotation, expressed in the body frame:
         # l'increment se compose a DROITE.
         self.q = quaternion_product(self.q, quaternion_from_rotation(rotation))
         self.q /= np.linalg.norm(self.q)
@@ -898,22 +898,22 @@ class OrientationFilter:
 
     def correct_with_gravity(self, acceleration, sigma_deg=8.0,
                          tolerance_g=0.15, gravity=9.81):
-        """Recale le ROULIS et le TANGAGE sur la verticale vue par l'accelerometre.
+        """Re-anchor ROLL and PITCH on the vertical seen by the accelerometer.
 
-        Au rest, un accelerometre measurement la reaction a la gravity : sa
-        direction donne le haut. En comparant cette direction a celle que
+        At rest, an accelerometer measures the reaction to gravity: its
+        direction gives up. Comparing that direction with the one the current
         l'orientation current predit, on corrige les deux axes horizontaux —
-        et EUX SEULS. Le yaw reste inobservable : tourner autour de la
-        verticale ne change pas la direction de la gravity. C'est pour cela
-        que l'axis de correction, got par product vectoriel, est
+        and THOSE ONLY. Yaw stays unobservable: turning about the vertical
+        does not change the direction of gravity. That is why the correction
+        axis, obtained from a cross product, is
         automatiquement perpendiculaire a la verticale.
 
-        Interet : sans aucun tag, le roll et le pitch restent bornes
-        indefiniment. Seul le yaw drift, et c'est lui que les tags recalent.
+        The point: with no tag at all, roll and pitch stay bounded
+        indefinitely. Only yaw drifts, and yaw is what the tags re-anchor.
 
-        L'accelerometre ne distingue pas la gravity d'une acceleration de
-        l'vehicle. On ne s'en sert donc que quand la norme measured est proche de
-        g : sinon l'vehicle manoeuvre et la measurement ne dit plus ou est le bas.
+        An accelerometer cannot tell gravity from the vehicle's own
+        acceleration. So it is only used when the measured norm is close to
+        g: otherwise the vehicle is manoeuvring and the reading no longer
         Retourne (used, correction_en_degres).
         """
         if not self.started:
@@ -924,8 +924,8 @@ class OrientationFilter:
             return False, 0.0        # l'vehicle accelere : measurement inexploitable
 
         measured = a / norme
-        # Direction du "haut" telle que l'orientation current la prevoit,
-        # ramenee dans le frame du corps.
+        # Direction of "up" as the current orientation predicts it,
+        # brought back into the body frame.
         R = quaternion_to_matrix(self.q)
         attendue = R.T @ np.array([0.0, 0.0, 1.0])
         axis = np.cross(attendue, measured)
@@ -936,21 +936,21 @@ class OrientationFilter:
             return True, 0.0                       # deja aligne
         axis = axis / sine
 
-        # Gain de Kalman scalaire, comme pour la correction par les tags.
+        # Scalar Kalman gain, as for the correction by the tags.
         r = np.radians(sigma_deg) ** 2
         gain = self.variance / (self.variance + r)
-        # SIGNE. `axis, angle` decrit la rotation Delta qui amene la direction
-        # PREVUE sur la direction MESUREE, toutes deux dans le frame du corps.
-        # L'orientation q, elle, va du corps vers le world : pour que sa
+        # SIGN. `axis, angle` describes the rotation Delta that takes the
+        # PREDICTED direction onto the MEASURED one, both in the body frame.
+        # The orientation q goes from body to world: for its correction to
         # prevision R'^T.ez vaille `measured`, one must R' = R.Delta^T, donc
-        # composer a droite par l'INVERSE de Delta — d'ou le signe moins.
-        # Avec le signe oppose, la correction s'eloigne de la cible et
-        # l'orientation converge vers le point fixe a 180 degres.
+        # compose on the right by the INVERSE of Delta — hence the minus.
+        # With the opposite sign the correction moves away from the target
+        # and the orientation converges to the fixed point 180 degrees away.
         self.q = quaternion_product(
             self.q, quaternion_from_rotation(-axis * angle * gain))
         self.q /= np.linalg.norm(self.q)
-        # L'accelerometre ne renseigne que deux axes sur trois : il ne peut
-        # donc pas resserrer l'uncertainty autant qu'une measurement complete.
+        # The accelerometer constrains only two axes out of three: it cannot
+        # tighten the uncertainty as much as a full measurement would.
         self.variance = (1.0 - gain * 2.0 / 3.0) * self.variance
         return True, float(np.degrees(angle))
 
@@ -963,47 +963,47 @@ class OrientationFilter:
             return True, 0.0
 
         gap = quaternion_angle(self.q, q)
-        # un tag retourne product un saut brutal : on le refuse tant que le
-        # filter est encore confiant dans ce qu'il tient.
+        # a flipped tag produces a brutal jump: it is refused while the
+        # filter is still confident in what it holds.
         if gap > self.seuil_saut and np.degrees(np.sqrt(self.variance)) < self.seuil_saut:
             self.consecutive_rejections += 1
             if self.consecutive_rejections < self.max_consecutive_rejections:
                 self.rejections += 1
                 return False, gap
-            # meme verrouillage que pour la position : trop de refus d'affilee
-            # signifie que c'est l'orientatiwe keepe qui est fausse.
+            # same lock-out as for position: too many refusals in a row means
+            # it is the orientation being held that is wrong.
             self.start(q, max(np.degrees(sigma_mesure_rad) * 2.0, 10.0))
             self.recoveries += 1
             self.consecutive_rejections = 0
             return True, gap
 
         self.consecutive_rejections = 0
-        # gain de Kalman scalaire sur l'angle
+        # scalar Kalman gain on the angle
         r = float(sigma_mesure_rad) ** 2
         gain = self.variance / (self.variance + r)
         avant = self.q.copy()
         self.q = slerp(self.q, q, gain)
         self.variance = (1.0 - gain) * self.variance
         if self.gyro_used:
-            # On passe la MESURE, pas l'state corrige. Le gain de Kalman
-            # n'applique qu'une fraction de l'gap : estimatedr le bias sur la
-            # correction appliquee le sous-estimatedrait d'autant, et d'autant
-            # plus que le filter est confiant. L'gap complet — l'innovation —
-            # est la true measurement de la drift accumulee depuis le last tag.
+        # The MEASUREMENT is passed, not the corrected state. The Kalman gain
+        # applies only a fraction of the gap: estimating the bias from the
+        # applied correction would under-estimate it by that much, and the
+        # more so the more confident the filter is. The full gap — the
+        # innovation — is the true measure of the drift accumulated since the
             self._reestimate_bias(avant, q)
         return True, gap
 
     def _reestimate_bias(self, avant, measurement):
-        """Attribue au bias du gyro la part systematique de l'innovation.
+        """Attribute to the gyro bias the systematic part of the innovation.
 
-        Entre deux tags, l'orientation n'avance que par integration du gyro.
-        Si le gyro a un bias b, l'orientation drift de b*dt, et le tag la
-        trouve systematiquement decalee du meme cote : cet gap, divise par
-        le time ecoule, EST une measurement du bias.
+        Between two tags, the orientation only advances by integrating the
+        gyro. If the gyro has a bias b, the orientation drifts by b*dt, and
+        the tag finds it systematically offset the same way: that gap,
+        divided by the elapsed time, IS a measurement of the bias.
 
-        On la mean lentement (constante de time bias_tau) parce qu'une
-        correction isolee melange le bias et le noise du tag. Un bias reel
-        est constant, le noise ne l'est pas : seul le first survit au
+        It is averaged slowly (time constant bias_tau) because an isolated
+        correction mixes the bias with the tag's noise. A real bias is
+        constant, noise is not: only the former survives the averaging.
         averaging.
         """
         dt = self._temps_depuis_correction
@@ -1011,9 +1011,9 @@ class OrientationFilter:
         rotation_gyro = self._rotation_gyro
         self._rotation_gyro = np.zeros(3)
         if dt < 0.05:
-            return                              # trop court pour separer quoi que ce soit
+            return                              # too short to separate anything
 
-        # Rotation apportee par la correction, exprimee dans le frame du corps.
+        # Rotation brought by the correction, expressed in the body frame.
         delta = quaternion_product(np.array([avant[0], -avant[1], -avant[2],
                                               -avant[3]]), measurement)
         angle = 2.0 * np.arctan2(float(np.linalg.norm(delta[1:])),
@@ -1025,15 +1025,15 @@ class OrientationFilter:
             axis = -axis
         correction = axis * angle
 
-        # Le gyro a trop tourne de `-correction` pendant dt : c'est un bias
+        # The gyro over-turned by `-correction` during dt: that is a bias
         # apparent de -correction/dt.
         measurement = -correction / dt
-        poids = min(dt / self.bias_tau, 0.5)    # jamais plus de la moitie d'un coup
-        self.bias = (1.0 - poids) * self.bias + poids * measurement
+        weight = min(dt / self.bias_tau, 0.5)   # never more than half at once
+        self.bias = (1.0 - weight) * self.bias + weight * measurement
 
     @property
     def bias_deg_s(self):
-        """Biais estimated du gyro, en deg/s sur les trois axes."""
+        """Estimated gyro bias, in deg/s on the three axes."""
         return np.degrees(self.bias)
 
     @property
@@ -1046,47 +1046,47 @@ class OrientationFilter:
 
 
 # ===========================================================================
-# Surveillance des tags : detecter une box qui a bouge
+# Tag watchdog: detecting a box that has moved
 # ===========================================================================
 class TagWatchdog:
-    """Suit, tag par tag, la mean glissante de l'gap entre la position
-    que CE tag annonce et celle qu'annoncent les autres.
+    """Track, tag by tag, the running mean of the gap between the position
+    THIS tag reports and the one the others report.
 
-    Tag bien enregistre  -> mean qui tend vers zero.
-    Tag qui a bouge      -> mean qui tend vers son deplacement.
+    Well-registered tag -> mean tending to zero.
+    Tag that has moved  -> mean tending to its displacement.
 
-    Le module donne donc non seulement QUEL support a bouge, mais DE
-    COMBIEN et DANS QUELLE DIRECTION : de quoi correct la tag_map sans tout
+    So the module gives not only WHICH support moved, but BY HOW MUCH and
+    IN WHICH DIRECTION: enough to correct the map without redoing it all.
     reenregistrer.
 
-    Un tag est confronte aux AUTRES TAGS DE LA MEME IMAGE, jamais a la
-    output du filter. La raison est subtile mais decisive : la output du
-    filter retarde sur le mouvement reel, et ce retard depend de quel tag
-    est visible. Le confronter au filter fabrique donc de faux coupables.
+    A tag is compared with the OTHER TAGS IN THE SAME FRAME, never with the
+    filter's output. The reason is subtle but decisive: the filter's output
+    lags behind the real motion, and that lag depends on which tag is
+    visible. Comparing against the filter therefore manufactures false
     Deux measurements prises au meme timestamp, elles, n'ont aucun retard relatif.
 
-    Consequence assumee : un tag seen SEUL n'est jamais mis en default. C'est
-    la limit d'observabilite, pas un default d'implementation -- rien ne
-    distingue alors "la camera a bouge" de "le tag a bouge".
+    Accepted consequence: a tag seen ALONE is never blamed. That is the
+    observability limit, not an implementation flaw -- nothing then
+    distinguishes "the camera moved" from "the tag moved".
     """
 
     def __init__(self, window=60, threshold_mm=8.0, minimum_observations=25):
-        # Fenetre courte volontairement : elle doit se vider de l'old
-        # regime en quelques seconds de co-visibilite, sinon un deplacement
-        # recent reste dilue par les observations d'avant et l'amplitude
-        # annoncee est sous-estimatede. Le noise residuel apres mean sur 60
-        # vaut environ 1 mm, tres en dessous du threshold de 8 mm.
+        # Deliberately short window: it must flush the old regime within a
+        # few seconds of co-visibility, otherwise a recent displacement stays
+        # diluted by earlier observations and the reported amplitude is
+        # under-estimated. Residual noise after averaging over 60 is about
+        # 1 mm, well below the 8 mm threshold.
         self.window = int(window)
         self.threshold = float(threshold_mm) / 1000.0
         self.minimum = int(minimum_observations)
         self.gaps = defaultdict(lambda: deque(maxlen=self.window))
 
     def observe_group(self, measurements):
-        """`measurements` : [(identifiant, position, covariance)] d'une meme image.
+        """`measurements`: [(identifier, position, covariance)] of one frame.
 
-        On enregistre l'gap PAR PAIRE. Dans ce pool on ne voit jamais
-        plus de deux tags a la fois : un gap de paire dit qu'un des deux a
-        bouge, sans dire lequel. C'est en recoupant plusieurs partenaires
+        The gap is recorded PER PAIR. In this pool never more than two tags
+        are visible at once: a pair gap says one of the two moved, without
+        saying which. It is by cross-checking several partners that a
         qu'on tranche.
         """
         valides = [(i, p, C) for i, p, C in measurements if i is not None]
@@ -1095,22 +1095,22 @@ class TagWatchdog:
                 ia, pa, Ca = valides[rang_a]
                 ib, pb, Cb = valides[rang_b]
                 pa, pb = np.asarray(pa, dtype=float), np.asarray(pb, dtype=float)
-                # Poids inverse de la variance de la difference : une paire
-                # vue de tres loin ou tres de bias ne doit pas peser autant
-                # qu'une paire vue de pres et de face.
-                poids = 1.0 / max(np.trace(np.asarray(Ca) + np.asarray(Cb)), 1e-12)
+                # Weight inverse to the variance of the difference: a pair
+                # seen from very far or very off-axis must not weigh as much
+                # as one seen close and head-on.
+                weight = 1.0 / max(np.trace(np.asarray(Ca) + np.asarray(Cb)), 1e-12)
                 if ia < ib:
-                    self.gaps[(ia, ib)].append((pa - pb, poids))
+                    self.gaps[(ia, ib)].append((pa - pb, weight))
                 else:
-                    self.gaps[(ib, ia)].append((pb - pa, poids))
+                    self.gaps[(ib, ia)].append((pb - pa, weight))
 
     def _weighted_mean(self, observations):
         vecteurs = np.array([v for v, _ in observations])
-        poids = np.array([w for _, w in observations])
-        return (vecteurs * poids[:, None]).sum(axis=0) / poids.sum()
+        weight = np.array([w for _, w in observations])
+        return (vecteurs * weight[:, None]).sum(axis=0) / weight.sum()
 
     def _gaps_per_partner(self):
-        """{tag: {partenaire: gap moyen de la position deduite de tag}}."""
+        """{tag: {partner: mean gap of the position deduced from tag}}."""
         result = defaultdict(dict)
         for (i, j), observations in self.gaps.items():
             if len(observations) < self.minimum:
@@ -1123,13 +1123,13 @@ class TagWatchdog:
     def suspects(self):
         """Tags confirmed : {identifiant: (norme, vecteur_deplacement)}.
 
-        Un tag est kept s'il contredit AU MOINS DEUX partenaires distincts,
-        et toujours dans le meme sens. Contredire un seul voisin ne suffit
-        pas : c'est peut-etre le voisin qui a bouge.
+        A tag is kept if it contradicts AT LEAST TWO distinct partners, and
+        always in the same direction. Contradicting a single neighbour is not
+        enough: it might be the neighbour that moved.
 
-        Si la box a bouge de d, la position deduite de ce tag se decale de
-        -d : on part de la position supposee du tag, restee celle d'avant.
-        Le deplacement est donc l'oppose de l'gap moyen.
+        If the box moved by d, the position deduced from this tag shifts by
+        -d: one starts from the tag's assumed position, which stayed the old
+        one. The displacement is therefore the opposite of the mean gap.
         """
         confirmed = {}
         for tag, partenaires in self._gaps_per_partner().items():
@@ -1159,16 +1159,16 @@ class TagWatchdog:
     def main_suspect(self):
         """Tag commun a plusieurs paires en desaccord.
 
-        Indice plus faible qu'une conviction, mais souvent suffisant : si
-        toutes les paires qui se disputent contiennent le meme tag, c'est
-        le denominateur commun qu'one must aller regarder. Utile quand les
-        donnees manquent pour trancher par coherence de direction.
+        A weaker clue than a conviction, but often enough: if every disputing
+        pair contains the same tag, that common denominator is the one to go
+        and look at. Useful when there is not enough data to decide by
+        direction consistency.
         """
         douteuses = self.suspicious_pairs()
         if len(douteuses) < 2:
             return None
-        # On cumule l'AMPLITUDE des desaccords plutot que leur count : une
-        # paire qui se dispute de 21 mm accuse davantage qu'une paire a 8 mm.
+        # The AMPLITUDE of the disagreements is summed rather than their
+        # count: a pair disputing by 21 mm accuses more than one at 8 mm.
         scores = defaultdict(float)
         paires = defaultdict(int)
         for (i, j), norme in douteuses.items():
@@ -1180,7 +1180,7 @@ class TagWatchdog:
         if paires[meilleur] < 2:
             return None
         if len(ordre) > 1 and ordre[0][1] < 1.3 * ordre[1][1]:
-            return None            # trop serre pour designer qui que ce soit
+            return None            # too close to single anybody out
         return meilleur
 
     def report(self):
@@ -1191,11 +1191,11 @@ class TagWatchdog:
                           f"{vector[2]*1000:+.0f}) mm  [confirme par plusieurs voisins]")
         for (i, j), norme in sorted(self.suspicious_pairs().items()):
             rows.append(f"  paire {i}-{j} : desaccord de {norme*1000:.0f} mm, "
-                          "aucun des deux n'est formellement en cause")
+                          "neither of the two is formally at fault")
         principal = self.main_suspect()
         if principal is not None:
-            rows.append(f"  -> tag {principal} present dans toutes les paires en "
-                          "desaccord : c'est la box a check en first")
+            rows.append(f"  -> tag {principal} appears in every disagreeing "
+                          "pair: that is the box to check first")
         return "\n".join(rows) if rows else "  aucun tag suspect"
 
 
@@ -1212,30 +1212,30 @@ class PoseFilter:
         filter.apply()
 
     ---------------------------------------------------------------------
-    CE QUE LA CENTRALE INERTIELLE APPORTE, ET CE QU'ELLE N'APPORTE PAS
+    WHAT THE IMU BRINGS, AND WHAT IT DOES NOT
     ---------------------------------------------------------------------
-    Les tags et l'IMU ont des defauts opposes, et c'est ce qui rend leur
+    The tags and the IMU have opposite weaknesses, and that is what makes
     fusion interessante :
 
-      TAGS     sans drift, mais bruites, et surtout INTERMITTENTS. Des qu'on
-               ne voit plus de tag, plus aucune information.
-      GYRO     tres precis a court terme, mais son petit bias integre fait
+      TAGS     drift-free, but noisy, and above all INTERMITTENT. The moment
+               no tag is visible, there is no information at all.
+      GYRO     very precise short term, but its small bias, integrated,
                deriver l'orientation sans limit.
-      ACCEL    donne la direction du bas en permanence, donc borne le roll
-               et le pitch pour toujours — mais ne dit RIEN du yaw, et sa
+      ACCEL    gives the down direction permanently, so bounds roll and
+               pitch forever — but says NOTHING about yaw, and its
                double integration drift trop vite pour naviguer a l'estimated.
 
-    D'ou le partage : le gyro propage entre deux tags, l'accelerometre tient
-    deux axes d'orientation sur trois, les tags recalent le yaw et la
-    position et servent a estimatedr le bias du gyro. Chaque capteur couvre le
+    Hence the division of labour: the gyro propagates between two tags, the
+    accelerometer holds two orientation axes out of three, the tags
+    re-anchor yaw and position and serve to estimate the gyro bias. Each
     trou de l'autre.
 
-    REPERE DE L'IMU — piege a ne pas negliger. Sur la D435i la imu n'est
-    pas alignee avec la camera colour : il existe une rotation constante
-    entre les deux, que pyrealsense2 fournit
-    (get_extrinsics_to). Passer les measurements brutes sans cette rotation
-    melange les axes et fait deriver l'vehicle de travers, sans message
-    d'error. `imu_to_camera_rotation` est la pour ca.
+    THE IMU FRAME — a trap not to be neglected. On the D435i the IMU is not
+    aligned with the colour camera: there is a constant rotation between the
+    two, which pyrealsense2 provides (get_extrinsics_to). Passing raw
+    measurements without that rotation mixes the axes and makes the vehicle
+    drift sideways, with no error message.
+    `imu_to_camera_rotation` exists for that.
     """
 
     def __init__(self, sigma_acceleration=None, derive_gyro_deg_s=None,
@@ -1244,8 +1244,8 @@ class PoseFilter:
         self.position = PositionKalmanFilter(sigma_acceleration)
         self.orientation = OrientationFilter(derive_gyro_deg_s)
         self.watchdog = TagWatchdog(threshold_mm=displacement_threshold_mm)
-        # Rotation qui amene un vector du frame IMU vers le frame camera.
-        # Identite par default : true seulement si les deux sont alignes.
+        # Rotation taking a vector from the IMU frame to the camera frame.
+        # Identity by default: true only if the two are aligned.
         self.R_imu_camera = (np.eye(3) if imu_to_camera_rotation is None
                              else np.asarray(imu_to_camera_rotation, dtype=float))
         self.gravity = float(gravity)
@@ -1253,16 +1253,16 @@ class PoseFilter:
         self._orientations = []
 
     def predict(self, dt, gyro=None, accel=None):
-        """Fait avancer la pose de dt seconds, avec l'IMU si elle est la.
+        """Advance the pose by dt seconds, with the IMU if it is there.
 
         gyro  : velocity angulaire, rad/s, frame IMU.
         accel : acceleration specifique, m/s2, frame IMU — gravity
-                COMPRISE, telle que le capteur la rend.
+                INCLUDED, as the sensor returns it.
 
-        L'ordre compte : on propage d'abord l'orientation avec le gyro, puis
-        on s'en sert pour retirer la gravity de l'accelerometre et exprimer
-        le reste dans le frame world. Utiliser l'ancienne orientation
-        introduirait une error proportionnelle a la rotation faite pendant dt.
+        Order matters: the orientation is propagated with the gyro first,
+        then used to remove gravity from the accelerometer and express the
+        rest in the world frame. Using the old orientation would introduce an
+        error proportional to the rotation made during dt.
         """
         omega = None if gyro is None else self.R_imu_camera @ np.asarray(
             gyro, dtype=float).ravel()
@@ -1271,13 +1271,13 @@ class PoseFilter:
         acceleration_monde = None
         if accel is not None and self.orientation.started:
             a_camera = self.R_imu_camera @ np.asarray(accel, dtype=float).ravel()
-            # Vers le frame world, puis on retranche la gravity : ce qui
-            # reste est l'acceleration propre de l'vehicle.
+            # To the world frame, then gravity is subtracted: what remains is
+            # the vehicle's own acceleration.
             a_monde = quaternion_to_matrix(self.orientation.q) @ a_camera
             acceleration_monde = a_monde - np.array([0.0, 0.0, self.gravity])
         self.position.predict(dt, acceleration_monde)
 
-        # L'accelerometre recale le roll et le pitch, meme sans tag.
+        # The accelerometer re-anchors roll and pitch, even with no tag.
         if accel is not None:
             self.orientation.correct_with_gravity(
                 self.R_imu_camera @ np.asarray(accel, dtype=float).ravel(),
@@ -1285,7 +1285,7 @@ class PoseFilter:
 
     def add_tag(self, position_camera_estimatede, position_tag, incidence_deg,
                     rotation_mesuree=None, distance=None, identifiant=None):
-        """Empile la contribution d'un tag pour l'image current."""
+        """Stack one tag's contribution for the current frame."""
         covariance = tag_position_covariance(position_camera_estimatede, position_tag,
                                              incidence_deg)
         self._mesures.append((np.asarray(position_camera_estimatede, dtype=float),
@@ -1304,11 +1304,11 @@ class PoseFilter:
         if count:
             z, R = fuse_positions([(p, C) for p, C, _ in self._mesures])
             accepted, _ = self.position.correct(z, R)
-            # chaque tag est confronte aux autres tags de la MEME image :
-            # celui qui s'en ecarte systematiquement a bouge.
+            # each tag is compared with the other tags of the SAME frame:
+            # the one that departs systematically has moved.
             self.watchdog.observe_group(
                 [(identifiant, p, C) for p, C, identifiant in self._mesures])
-        # l'orientation la mieux informee est celle du tag au plus petit sigma
+        # the best-informed orientation is that of the tag with smallest sigma
         if self._orientations:
             rotation, sigma = min(self._orientations, key=lambda couple: couple[1])
             self.orientation.correct(rotation, sigma)
@@ -1342,23 +1342,23 @@ def _auto_test():
           f"(ratio {values[-1]/values[0]:.1f}x)")
     assert values[-1] > 3 * values[0], "depth must be clearly worse"
 
-    # -- deux tags sur des murs differents ----------------------------------
+    # -- two tags on different walls ----------------------------------------
     seul = tag_position_covariance([1.0, 0.8, 0.5], [1.0, 0.0, 0.35], 10.0)
     autre = tag_position_covariance([1.0, 0.8, 0.5], [0.0, 0.835, 0.65], 10.0)
     _, fusion = fuse_positions([([1.0, 0.8, 0.5], seul), ([1.0, 0.8, 0.5], autre)])
     worst_single = np.sqrt(np.linalg.eigvalsh(seul)).max()
     pire_fusion = np.sqrt(np.linalg.eigvalsh(fusion)).max()
-    # Deux measurements independantes de meme qualite gagnent deja un facteur
-    # racine de 2 par simple averaging. Depasser ce threshold prouve que c'est la
-    # GEOMETRIE qui travaille : la ou un tag est aveugle (sa depth),
-    # l'autre est precis (son lateral).
+    # Two independent measurements of equal quality already gain a factor
+    # sqrt(2) by plain averaging. Beating that threshold proves it is the
+    # GEOMETRY doing the work: where one tag is blind (its depth), the other
+    # is precise (its lateral).
     gain = worst_single / pire_fusion
     print(f"worst direction: 1 tag {worst_single*1000:.2f} mm -> "
           f"2 tags on perpendicular walls {pire_fusion*1000:.2f} mm "
           f"(gain {gain:.2f}x, plain averaging alone: 1.41x)")
     assert gain > np.sqrt(2), "perpendicular walls must beat plain averaging"
 
-    # -- le filter reduit-il vraiment le noise ? ----------------------------
+    # -- does the filter really reduce the noise? ---------------------------
     dt, n = 1 / 30, 900
     filter = PositionKalmanFilter(sigma_acceleration=0.3)
     true = np.array([1.0, 0.8, 0.5])
@@ -1411,7 +1411,7 @@ def _auto_test():
     supports = {10: np.array([1.5, 0.0, 0.35]),
                 11: np.array([2.4, 0.0, 0.65]),
                 12: np.array([0.0, 0.8, 0.50])}
-    pushed = np.array([0.018, -0.006, 0.0])       # 19 mm sur la box 11
+    pushed = np.array([0.018, -0.006, 0.0])       # 19 mm on box 11
     camera = np.array([1.2, 1.4, 0.5])
     for _ in range(150):
         groupe = []
@@ -1436,14 +1436,14 @@ def _auto_test():
         angles[1] = rng.uniform(-1.4, 1.4)      # hors blocage de cardan
         q = euler_to_quaternion(*angles)
         back = np.array(quaternion_to_euler(q))
-        # on compare les ROTATIONS, pas les triplets : deux triplets
-        # differents peuvent decrire la meme orientation.
+        # ROTATIONS are compared, not triplets: two different triplets can
+        # describe the same orientation.
         #
-        # Seuil a 1e-4 deg et non zero : `quaternion_angle` passe par un
-        # arccos, dont la derivee explose au voisinage de 1. Deux quaternions
+        # Threshold at 1e-4 deg rather than zero: `quaternion_angle` goes
+        # through an arccos, whose derivative blows up near 1. Two quaternions
         # identiques au last bit y donnent quelques 1e-6 deg d'gap
-        # apparent. C'est du noise de calcul, pas une error de conversion —
-        # verifie sur des cas ronds, l'aller-back rend les memes angles.
+        # apparent. That is numerical noise, not a conversion error —
+        # checked on round cases, the round trip gives back the same angles.
         assert quaternion_angle(q, euler_to_quaternion(*back)) < 1e-4
     print("Euler <-> quaternion round trip: 200 orientations, "
           "gap max < 1e-4 deg")
@@ -1457,7 +1457,7 @@ def _auto_test():
     print(f"4x4 homogeneous transform: T . T^-1 = I to within "
           f"{np.abs(identity - np.eye(4)).max():.1e}")
 
-    # -- le gyroscope tient-il le cap quand les tags disparaissent ? --------
+    # -- does the gyro hold the heading when the tags disappear? ------------
     # 6 seconds sans aucun tag, l'vehicle tournant a 20 deg/s.
     dt, duration = 1 / 200, 6.0
     true_rate = np.radians([3.0, -5.0, 20.0])
@@ -1483,13 +1483,13 @@ def _auto_test():
         else:
             assert gap > 100.0, "without a gyro everything must be lost"
 
-    # -- l'accelerometre borne-t-il roll et pitch sans aucun tag ? ------
+    # -- does the accelerometer bound roll and pitch with no tag at all? ----
     suivi = OrientationFilter()
     suivi.start(euler_to_quaternion(np.radians(12.0), np.radians(-9.0), 0.0),
                    sigma_deg=15.0)
     for _ in range(400):
         suivi.predict(1 / 100, np.zeros(3))
-        # vehicle at_rest et horizontal : l'accelerometre voit le haut
+        # vehicle at rest and level: the accelerometer sees up
         suivi.correct_with_gravity(np.array([0.0, 0.0, 9.81])
                                + rng.normal(0, 0.05, 3))
     roll, pitch, _ = quaternion_to_euler(suivi.q)
@@ -1497,12 +1497,12 @@ def _auto_test():
           f"pitch {np.degrees(pitch):+.2f} deg  (started from +12 and -9)")
     assert abs(np.degrees(roll)) < 2.0 and abs(np.degrees(pitch)) < 2.0
 
-    # une acceleration franche ne doit PAS etre prise pour la gravity
+    # a sharp acceleration must NOT be taken for gravity
     used, _ = suivi.correct_with_gravity(np.array([6.0, 0.0, 9.81]))
     assert not used, "a measurement far from g must be refused"
     print("accelerometer: 1.2 g measurement refused, as expected")
 
-    # -- le bias du gyro est-il retrouve sur les corrections des tags ? ----
+    # -- is the gyro bias recovered from the tags' corrections? -------------
     pose = PoseFilter()
     pose.orientation.start(np.array([1.0, 0.0, 0.0, 0.0]), sigma_deg=2.0)
     truth = np.array([1.0, 0.0, 0.0, 0.0])
@@ -1512,7 +1512,7 @@ def _auto_test():
             truth, quaternion_from_rotation(true_rate * dt))
         pose.orientation.predict(
             dt, true_rate + true_bias + rng.normal(0, np.radians(0.15), 3))
-        if pas % 50 == 0:                      # un tag toutes les 0.5 s
+        if pas % 50 == 0:                      # one tag every 0.5 s
             pose.orientation.correct(truth, np.radians(1.0))
     bias_error = np.degrees(np.linalg.norm(pose.orientation.bias - true_bias))
     print(f"gyro bias: true {np.degrees(true_bias).round(2)} deg/s, "
@@ -1520,7 +1520,7 @@ def _auto_test():
           f"(error {bias_error:.2f} deg/s)")
     assert bias_error < 0.35, f"the bias must be approached, error {bias_error:.2f}"
 
-    # -- l'accelerometre aide-t-il la position pendant une perte de tags ? --
+    # -- does the accelerometer help position during a tag dropout? ---------
     dt, duration = 1 / 100, 1.5
     results = {}
     for avec_accel in (False, True):
@@ -1528,8 +1528,8 @@ def _auto_test():
         suivi.start(np.zeros(3), sigma_position=0.01, sigma_vitesse=0.05)
         suivi.x[3:] = [0.25, 0.0, 0.0]
         vraie_p, vraie_v = np.zeros(3), np.array([0.25, 0.0, 0.0])
-        # l'vehicle accelere : c'est le cas ou l'hypothese "velocity constante"
-        # se trompe, et ou l'accelerometre a quelque chose a apporter.
+        # the vehicle accelerates: this is the case where the "constant
+        # velocity" assumption is wrong, and where the accelerometer helps.
         a = np.array([0.30, -0.15, 0.0])
         for _ in range(int(duration / dt)):
             vraie_p = vraie_p + vraie_v * dt + 0.5 * a * dt * dt
@@ -1542,11 +1542,11 @@ def _auto_test():
           f"with accel {1000*results[True]:.0f} mm")
     assert results[True] < results[False] / 3
 
-    # --- accord avec le document de reference ------------------------------
-    # L'example chiffre de Becker (radar 1D, kalmanfilter.net), passe par le
-    # core du projet. Ce test protege les cinq equations : si quelqu'un
-    # key a la prediction, au gain ou a la forme de Joseph, l'gap avec
-    # les values publiees le dit immediatement. Le detail commente vit dans
+    # --- agreement with the reference document -----------------------------
+    # Becker's worked example (1D radar, kalmanfilter.net), run through the
+    # project's core. This test protects the five equations: if anyone
+    # touches the prediction, the gain or the Joseph form, the gap with the
+    # published values says so immediately. The commented detail lives in
     # kalman_reference_check.py ; ici we keep juste le verrou.
     dt_doc, sigma_doc = 5.0, 0.2
     F_doc = np.array([[1.0, dt_doc], [0.0, 1.0]])
@@ -1561,7 +1561,7 @@ def _auto_test():
     ref.correct(np.array([11020.0, 202.0]), np.eye(2), np.diag([36.0, 2.25]))
     assert np.allclose(ref.x, [11009.37, 201.43], atol=5e-3)
     assert np.allclose(ref.P, [[14.57, 1.43], [1.43, 0.71]], atol=5e-3)
-    # Le Q 3D de l'vehicle est le Q 1D du document, bloc par bloc.
+    # The vehicle's 3D Q is the document's 1D Q, block by block.
     _, G_doc = PositionKalmanFilter.model(dt_doc)
     Q3 = sigma_doc ** 2 * (G_doc @ G_doc.T)
     assert np.isclose(Q3[0, 0], Q_doc[0, 0]) and np.isclose(Q3[0, 3], Q_doc[0, 1])
@@ -1576,8 +1576,8 @@ def _auto_test():
 
 if __name__ == "__main__":
     _auto_test()
-    # Les auto-tests ne verifient QUE les maths, et ils passent tres bien avec
-    # des reglages devines : rien dans leur reussite ne dit que l'vehicle a ete
-    # measurement. On le rappelle donc juste apres, pour que « tous les tests
-    # passent » ne soit pas lu comme « tout est measurement ».
+    # The self-tests check ONLY the maths, and they pass perfectly well with
+    # guessed settings: nothing in their success says the vehicle has been
+    # measured. So the reminder comes right after, so that "all tests pass"
+    # is not read as "everything is measured".
     remind_missing_measurements()
