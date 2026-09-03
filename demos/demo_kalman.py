@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 from kalman_filter import (PoseFilter, tag_position_covariance,
                            tag_angle_std, matrix_to_quaternion,
                            quaternion_angle)
-from pool_layout_3d import TAGS, LONGUEUR, LARGEUR, visibles_depuis
+from pool_layout_3d import TAGS, POOL_LENGTH, POOL_WIDTH, visible_from
 
 IMAGE = Path(__file__).resolve().with_name("demo_kalman.png")
 
@@ -82,9 +82,9 @@ def map_offset(tid, t):
     return np.zeros(3)
 
 
-def rotation_camera(azimut, roll, pitch):
+def rotation_camera(azimuth, roll, pitch):
     """The camera's rotation matrix: yaw, pitch, roll."""
-    ca, sa = np.cos(azimut), np.sin(azimut)
+    ca, sa = np.cos(azimuth), np.sin(azimuth)
     ct, st = np.cos(pitch), np.sin(pitch)
     cr, sr = np.cos(roll), np.sin(roll)
     Rz = np.array([[ca, -sa, 0], [sa, ca, 0], [0, 0, 1.0]])
@@ -98,10 +98,10 @@ def trajectoire(t):
     x = 1.90 + 1.40 * np.sin(2 * np.pi * t / 30.0)
     y = 1.48 + 0.12 * np.sin(2 * np.pi * t / 7.0)
     z = 0.50 + 0.05 * np.sin(2 * np.pi * t / 11.0)
-    azimut = np.radians(270.0 + 12.0 * np.sin(2 * np.pi * t / 9.0))
+    azimuth = np.radians(270.0 + 12.0 * np.sin(2 * np.pi * t / 9.0))
     roll = np.radians(4.0 * np.sin(2 * np.pi * t / 5.0))
     pitch = np.radians(3.0 * np.sin(2 * np.pi * t / 6.5))
-    return np.array([x, y, z]), azimut, roll, pitch
+    return np.array([x, y, z]), azimuth, roll, pitch
 
 
 def simulate(seed=7):
@@ -116,8 +116,8 @@ def simulate(seed=7):
     previous = None
 
     for t in instants:
-        true_position, azimut, roll, pitch = trajectoire(t)
-        R_true = rotation_camera(azimut, roll, pitch)
+        true_position, azimuth, roll, pitch = trajectoire(t)
+        R_true = rotation_camera(azimuth, roll, pitch)
         q_true = matrix_to_quaternion(R_true)
 
         dt = 1.0 / FRAME_RATE if previous is None else t - previous
@@ -126,7 +126,7 @@ def simulate(seed=7):
 
         # --- what the camera really sees from this pose --------------------
         aveugle = BUBBLES[0] <= t < BUBBLES[1]
-        seen = [] if aveugle else visibles_depuis(true_position, azimut)
+        seen = [] if aveugle else visible_from(true_position, azimuth)
 
         raw_measurement, angle_raw = None, None
         for tid, distance, incidence, _ in seen:
@@ -269,12 +269,12 @@ def plot(log):
 
     # --- 1. seen from above ------------------------------------------------
     ax = axes[0]
-    ax.add_patch(plt.Rectangle((0, 0), LONGUEUR, LARGEUR, facecolor="#e8f4fa",
+    ax.add_patch(plt.Rectangle((0, 0), POOL_LENGTH, POOL_WIDTH, facecolor="#e8f4fa",
                                edgecolor="#5c6b76", linewidth=1.2))
     for tid, _, x, y, z, _ in TAGS:
         ax.plot(x, y, "s", color="#111418", markersize=7)
         ax.annotate(str(tid), (x, y), textcoords="offset points",
-                    xytext=(0, 9 if y < LARGEUR / 2 else -16), ha="center", fontsize=8)
+                    xytext=(0, 9 if y < POOL_WIDTH / 2 else -16), ha="center", fontsize=8)
     ax.scatter(log["raw"][:, 0], log["raw"][:, 1], s=5,
                color="#f59e0b", alpha=0.35, label="raw measurements (tags)")
     ax.plot(log["true"][:, 0], log["true"][:, 1], color="#0f172a",
