@@ -1,7 +1,7 @@
 # demo_kalman.py — Le filter de Kalman mis a l'epreuve dans TON bassin.
 #
 # On simule un UUV qui longe la paroi B en regardant la paroi A, avec la
-# vraie implantation des 10 tags et le vrai champ de vision sous l'water. Les
+# true implantation des 10 tags et le vrai champ de vision sous l'water. Les
 # measurements sont bruitees selon la geometrie (un tag lointain ou seen de bias
 # est moins fiable), et on injecte deux perturbations realistes :
 #
@@ -53,7 +53,7 @@ SIGMA_ACCELERATION = 0.4       # m/s^2
 DERIVE_GYRO = 10.0             # deg/s
 
 # Les tags sont montes sur des boites en acrylique lestees, pas scellees.
-# On simule le souffle des propulseurs qui pousse une boite de 2 cm en
+# On simule le souffle des propulseurs qui pushed une boite de 2 cm en
 # cours de route : le filter continue de croire la tag_map d'origin.
 BOITE_DEPLACEE = 2
 INSTANT_DEPLACEMENT = 24.0     # s
@@ -102,15 +102,15 @@ def simuler(seed=7):
                         derive_gyro_deg_s=DERIVE_GYRO)
 
     instants = np.arange(0.0, DUREE, 1.0 / FREQUENCE)
-    log = {cle: [] for cle in ("t", "vraie", "raw", "filtered", "nb_tags",
+    log = {cle: [] for cle in ("t", "true", "raw", "filtered", "nb_tags",
                                    "err_brute", "err_filtree", "sigma",
                                    "err_angle_brut", "err_angle_filtre", "rejet")}
     previous = None
 
     for t in instants:
-        position_vraie, azimut, roll, pitch = trajectoire(t)
-        R_vraie = rotation_camera(azimut, roll, pitch)
-        q_vrai = matrix_to_quaternion(R_vraie)
+        true_position, azimut, roll, pitch = trajectoire(t)
+        R_true = rotation_camera(azimut, roll, pitch)
+        q_true = matrix_to_quaternion(R_true)
 
         dt = 1.0 / FREQUENCE if previous is None else t - previous
         previous = t
@@ -118,12 +118,12 @@ def simuler(seed=7):
 
         # --- ce que la camera voit reellement depuis cette pose -------------
         aveugle = BULLES[0] <= t < BULLES[1]
-        seen = [] if aveugle else visibles_depuis(position_vraie, azimut)
+        seen = [] if aveugle else visibles_depuis(true_position, azimut)
 
         raw_measurement, angle_brut = None, None
         for tid, distance, incidence, _ in seen:
-            C = tag_position_covariance(position_vraie, POSITION_TAG[tid], incidence)
-            position_mesuree = (position_vraie + decalage_carte(tid, t)
+            C = tag_position_covariance(true_position, POSITION_TAG[tid], incidence)
+            position_mesuree = (true_position + decalage_carte(tid, t)
                                 + rng.multivariate_normal(np.zeros(3), C))
 
             sigma_angle = tag_angle_std(distance, incidence)
@@ -131,7 +131,7 @@ def simuler(seed=7):
             norme = np.linalg.norm(perturbation)
             axis = perturbation / norme if norme > 1e-12 else np.array([1.0, 0.0, 0.0])
             dq = np.concatenate([[np.cos(norme / 2)], axis * np.sin(norme / 2)])
-            w0, v0, w1, v1 = dq[0], dq[1:], q_vrai[0], q_vrai[1:]
+            w0, v0, w1, v1 = dq[0], dq[1:], q_true[0], q_true[1:]
             q_mesure = np.concatenate([[w0 * w1 - v0 @ v1],
                                        w0 * v1 + w1 * v0 + np.cross(v0, v1)])
 
@@ -143,23 +143,23 @@ def simuler(seed=7):
                                rotation_mesuree=q_mesure, distance=distance,
                                identifiant=tid)
             if raw_measurement is None:
-                raw_measurement, angle_brut = position_mesuree, quaternion_angle(q_mesure, q_vrai)
+                raw_measurement, angle_brut = position_mesuree, quaternion_angle(q_mesure, q_true)
 
         rejets_avant = filter.position.rejections
         accepted, count = filter.apply()
         rejected = filter.position.rejections > rejets_avant
 
         log["t"].append(t)
-        log["vraie"].append(position_vraie)
+        log["true"].append(true_position)
         log["filtered"].append(filter.position.position)
         log["nb_tags"].append(count)
         log["sigma"].append(filter.position.position_uncertainty)
         log["rejet"].append(rejected)
-        log["err_filtree"].append(np.linalg.norm(filter.position.position - position_vraie))
-        log["err_angle_filtre"].append(quaternion_angle(filter.orientation.q, q_vrai))
+        log["err_filtree"].append(np.linalg.norm(filter.position.position - true_position))
+        log["err_angle_filtre"].append(quaternion_angle(filter.orientation.q, q_true))
         if raw_measurement is not None:
             log["raw"].append(raw_measurement)
-            log["err_brute"].append(np.linalg.norm(raw_measurement - position_vraie))
+            log["err_brute"].append(np.linalg.norm(raw_measurement - true_position))
             log["err_angle_brut"].append(angle_brut)
         else:
             log["raw"].append(np.full(3, np.nan))
@@ -264,8 +264,8 @@ def tracer(log):
                     xytext=(0, 9 if y < LARGEUR / 2 else -16), ha="center", fontsize=8)
     ax.scatter(log["raw"][:, 0], log["raw"][:, 1], s=5,
                color="#f59e0b", alpha=0.35, label="measurements brutes (tags)")
-    ax.plot(log["vraie"][:, 0], log["vraie"][:, 1], color="#0f172a",
-            linewidth=2.0, label="trajectoire vraie")
+    ax.plot(log["true"][:, 0], log["true"][:, 1], color="#0f172a",
+            linewidth=2.0, label="trajectoire true")
     ax.plot(log["filtered"][:, 0], log["filtered"][:, 1], color="#16a34a",
             linewidth=1.4, label="output du filter")
     ax.set_xlabel("x  length (m)")

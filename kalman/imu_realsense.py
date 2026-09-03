@@ -1,52 +1,78 @@
-# imu_realsense.py — Lire la imu inertielle de la D435i, et le prouver.
+# imu_realsense.py — Read the D435i's IMU, and prove it is being used.
 #
-#     python imu_realsense.py
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python kalman/imu_realsense.py               camera plugged in
+#     python kalman/imu_realsense.py --simulation  same maths, no camera
 #
-# Deux choses en une :
-#   1. UN MODULE. La classe CentraleRealSense ouvre les flux accel et gyro du
-#      SDK Intel et rend des measurements pretes a entrer dans kalman_filter.py.
-#   2. UNE DEMONSTRATION. Lancee directement, elle measurement le bias au rest
-#      puis affiche l'orientation en direct — de quoi montrer que la imu
-#      est lue et exploitee, pas seulement branchee.
+# The run has three parts and takes about two minutes:
 #
-# ---------------------------------------------------------------------------
-# CE QUE LA DEMONSTRATION PROUVE, ET DANS QUEL ORDRE
-# ---------------------------------------------------------------------------
-# 1. LA CENTRALE EST LUE. Les vitesses angulaires et accelerations brutes
-#    s'affichent. Bouge la camera, les chiffres bougent.
+#   1. It measures the IMU AT REST for 5 seconds. Do not touch anything.
+#      It then prints two numbers to copy into kalman/kalman_filter.py:
 #
-# 2. LES MESURES SONT SAINES. Au rest, l'accelerometre doit lire 9.81 m/s2
-#    en norme — ni plus ni moins, c'est la pesanteur. Si ce n'est pas le cas,
-#    l'echelle est fausse et tout le reste le sera.
+#          GYRO_NOISE_DEG_S = ...
+#          ACCEL_NOISE      = ...
 #
-# 3. LES MATHS MARCHENT. L'orientation integree suit les mouvements reels.
-#    Tourne la camera d'un quart de tour : le yaw affiche 90 degres.
+#      Those two lines already exist there; only the numbers change.
 #
-# 4. LA DERIVE EST REELLE ET BORNEE OU IL FAUT. Laisse tourner : le roll et
-#    le pitch restent stables (l'accelerometre les tient), le yaw drift
-#    lentement (rien ne le recale sans tag). C'est precisement pourquoi la
-#    fusion avec les tags est necessaire — la demonstration le rend visible.
+#   2. It checks the measurements are sound: at rest the accelerometer must
+#      read 9.81 m/s2 in norm. If it does not, the scale is wrong and
+#      everything downstream will be too.
 #
-# ---------------------------------------------------------------------------
-# REPERES : LE PIEGE PRINCIPAL
-# ---------------------------------------------------------------------------
-# La imu n'est PAS alignee avec la camera colour. Le SDK donne la
-# rotation entre les deux (get_extrinsics_to) et ce module la recupere.
-# Passer les measurements brutes au filter sans cette rotation melange les axes et
-# fait deriver l'engin de travers, sans aucun message d'error.
+#   3. It shows the orientation LIVE. Turn the camera a quarter turn: the yaw
+#      must read 90 degrees. Put it back down flat — "flat" meaning
+#      horizontal on a table, not tilted in your hand — and roll and pitch
+#      must return towards zero. Press Ctrl+C to stop. Every sample is
+#      written to imu_data.csv, so the run can be re-analysed later.
 #
-# On ne assumed rien non plus sur l'orientation de depart : elle est DEDUITE
-# de l'accelerometre au rest, au lieu d'etre supposee selon un axis. Le
-# mounting peut donc etre pose n'importe comment — sur sa base, sur le cote,
-# dans le tube.
+# Two things it is worth watching while it runs: roll and pitch stay bounded
+# (the accelerometer holds them), while yaw drifts slowly. Nothing re-anchors
+# yaw without a tag. That is precisely why the fusion with the tags exists,
+# and this demonstration is what makes it visible.
 #
-# CONVENTION DU VECTEUR MESURE. On le traite comme pointant vers le HAUT : au
-# rest un accelerometre measurement la force specifique, la reaction du support,
-# pas la pesanteur. `orientation_initiale` et `correct_with_gravity` font la meme
-# hypothese, et c'est indispensable — une version ou l'une inversait le signe
-# et pas l'autre fait converger l'orientation a 180 degres de la verite, sans
-# aucun message. La demonstration verifie ce point automatiquement, d'une
-# facon qui ne depend pas de la pose.
+# ===========================================================================
+# WHAT THIS FILE IS
+# ===========================================================================
+# Two things in one:
+#   1. A MODULE. The RealSenseImu class opens the Intel SDK's accel and gyro
+#      streams and returns measurements ready to feed kalman_filter.py.
+#   2. A DEMONSTRATION. Run directly, it does the three steps above.
+#
+# ===========================================================================
+# WHAT THE IMU CAN AND CANNOT GIVE — say this out loud, it matters
+# ===========================================================================
+# ORIENTATION: yes. Roll and pitch are held indefinitely by the
+# accelerometer; yaw is integrated from the gyro and drifts.
+#
+# POSITION: no, not from the IMU alone, and that is a property of the sensor
+# rather than a shortcoming of this code. A MEMS accelerometer has a slowly
+# varying bias that NOTHING here estimates, and double integration turns it
+# into a quadratic error: 0.05 m/s2 becomes 2.5 cm after one second, but 1 m
+# after ten. The IMU is therefore what carries the estimate through a tag
+# dropout of a few seconds — not a way to navigate blind. The tags remain the
+# only drift-free source.
+#
+# ===========================================================================
+# FRAMES: THE MAIN TRAP
+# ===========================================================================
+# The IMU is NOT aligned with the colour camera. The SDK gives the rotation
+# between the two (get_extrinsics_to) and this module fetches it. Feeding raw
+# measurements to the filter without that rotation mixes the axes and makes
+# the vehicle drift sideways, with no error message whatsoever.
+#
+# Nothing is assumed about the starting orientation either: it is DEDUCED
+# from the accelerometer at rest, rather than assumed along some axis. The
+# mounting can therefore sit any way up — on its base, on its side, in the
+# tube.
+#
+# CONVENTION OF THE MEASURED VECTOR. It is treated as pointing UP: at rest an
+# accelerometer measures specific force, the support's reaction, not gravity.
+# `initial_orientation` and `correct_with_gravity` make the same assumption,
+# and that is essential — a version where one flipped the sign and the other
+# did not makes the orientation converge 180 degrees away from the truth,
+# with no message at all. The demonstration checks this automatically, in a
+# way that does not depend on how the unit is posed.
 import csv
 import sys
 import time
@@ -97,7 +123,7 @@ class CentraleRealSense:
                 cadences = sorted({fps for _, fps in offerts[flux]})
                 print(f"  {name:5} : cadences offertes {cadences} Hz")
 
-        # On demande EXACTEMENT ce que l'appareil annonce, au lieu de supposer
+        # On request EXACTEMENT ce que l'appareil annonce, au lieu de supposer
         # un format et une rate. Coder ces values en dur donne l'error
         # "Couldn't resolve requests" des que le SDK ou le micrologiciel
         # change ses profils — et le message ne dit pas lequel manque.
@@ -133,7 +159,7 @@ class CentraleRealSense:
                 pipeline.stop()
             except Exception as souci:
                 if bavard:
-                    print(f"  extrinseques non lues ({souci}) — identite utilisee")
+                    print(f"  extrinseques non lues ({souci}) — identity used")
 
         # ETAPE 2 — IMU seule, a pleine rate.
         self.pipeline = rs.pipeline()
@@ -265,7 +291,7 @@ def orientation_initiale(accel_repos):
 
 def _demonstration():
     print("=" * 70)
-    print("LA CENTRALE INERTIELLE DE LA D435i EST-ELLE LUE ET EXPLOITEE ?")
+    print("IS THE D435i's IMU BEING READ AND USED?")
     print("=" * 70)
 
     try:
@@ -274,20 +300,20 @@ def _demonstration():
         print(f"\nERREUR : {souci}")
         return 1
 
-    print("\nFlux accel et gyro ouverts via le SDK Intel (pyrealsense2).")
+    print("\naccel and gyro streams opened through the Intel SDK (pyrealsense2).")
     if imu.extrinseques_lues:
         angles = np.degrees(quaternion_to_euler(
             _quaternion_from_matrix(imu.R_imu_camera)))
-        print(f"Rotation IMU -> camera colour lue dans le SDK : "
+        print(f"IMU -> colour camera rotation read from the SDK: "
               f"{angles.round(1)} deg")
     else:
-        print("ATTENTION : extrinseques IMU -> camera non lues, identite "
-              "utilisee.")
+        print("WARNING: IMU -> camera extrinsics could not be read, identity "
+              "used.")
 
     rest = mesurer_au_repos(imu)
 
     print("\n" + "-" * 70)
-    print("1. LES MESURES SONT-ELLES SAINES ?")
+    print("1. ARE THE MEASUREMENTS SOUND?")
     print("-" * 70)
     print(f"  samples              {rest['samples']}"
           f"   soit {rest['rate']:.0f} Hz")
@@ -297,28 +323,28 @@ def _demonstration():
         # Symptome known : un flux video ouvert en meme time force le
         # pipeline a se synchroniser sur lui, et les measurements de mouvement
         # sont jetees entre deux frames.
-        print(f"  [PROBLEME] le gyro tourne a {cadence_gyro} Hz mais on n'en "
+        print(f"  [PROBLEM] the gyro runs at {cadence_gyro} Hz mais on n'en "
               f"lit que {rest['rate']:.0f}.")
-        print("     L'integration assumed alors omega constant sur des")
-        print("     intervalles trop longs, et la rotation est sous-estimee.")
+        print("     Integration then assumes omega constant over intervals that are")
+        print("     too long, and the rotation is under-estimated.")
     else:
         print(f"  [OK] on lit bien la rate du capteur ({cadence_gyro} Hz).")
 
-    print(f"  norme de l'accelerometre  {rest['norme_accel']:.3f} m/s2   "
-          f"(doit valoir {GRAVITE})")
+    print(f"  accelerometer norm  {rest['norme_accel']:.3f} m/s2   "
+          f"(should be {GRAVITE})")
     ecart_g = abs(rest["norme_accel"] / GRAVITE - 1)
     if ecart_g > 0.05:
-        print("  [PROBLEME] loin de la pesanteur : echelle ou unites fausses.")
+        print("  [PROBLEM] far from gravity: wrong scale or wrong units.")
     elif ecart_g > 0.01:
         print(f"  [OK] c'est la pesanteur, a {100*ecart_g:.1f} % pres.")
-        print("     Cet gap est un bias d'echelle de l'accelerometre. Sans")
-        print("     consequence ici : on n'utilise que la DIRECTION du vector")
-        print("     pour le roll et le pitch, pas sa norme.")
+        print("     That gap is a scale bias of the accelerometer. It has no")
+        print("     consequence here: only the DIRECTION of the vector is used")
+        print("     for roll and pitch, never its norm.")
     else:
-        print("  [OK] c'est bien la pesanteur : l'echelle est juste.")
+        print("  [OK] this is gravity: the scale is right.")
 
-    print(f"  direction measured         {rest['haut'].round(3)}")
-    print("     (on ne la assumed pas : le mounting peut etre pose n'importe comment)")
+    print(f"  measured direction        {rest['haut'].round(3)}")
+    print("     (not assumed: the mounting may be posed any way up)")
 
     # -- la convention de signe de l'accelerometre est-elle la bonne ? ------
     # On NE peut PAS check que roll et pitch valent zero : le mounting a
@@ -330,39 +356,39 @@ def _demonstration():
     # avec le vector measurement. Si les deux sont opposes, le capteur rend la
     # pesanteur la ou on attend la force specifique — initialisation et
     # correction se combattent alors, et l'orientation se stabilise a 180
-    # degres de la verite sans que rien ne le signale.
+    # degres de la truth sans que rien ne le signale.
     q0 = orientation_initiale(rest["haut"])
     prevu = quaternion_to_matrix(q0).T @ np.array([0.0, 0.0, 1.0])
     accord = float(prevu @ rest["haut"])
     ecart_conv = float(np.degrees(np.arccos(np.clip(accord, -1.0, 1.0))))
     roulis0, tangage0, _ = np.degrees(quaternion_to_euler(q0))
-    print(f"\n  pose de depart deduite : roll {roulis0:+.1f}, "
+    print(f"\n  deduced starting pose: roll {roulis0:+.1f}, "
           f"pitch {tangage0:+.1f} deg")
     print(f"  check de convention : gap prevu / measurement {ecart_conv:.2f} deg")
     if ecart_conv > 5.0:
-        print("  [PROBLEME] devrait valoir zero quelle que soit la pose.")
-        print("     Proche de 180 : le vector measurement pointe vers le BAS et non")
-        print("     vers le haut. Il faut inverser son signe a la lecture.")
+        print("  [PROBLEM] should be zero whatever the pose.")
+        print("     Close to 180: the measured vector points DOWN rather than")
+        print("     up. Its sign must be flipped when read.")
     else:
-        print("  [OK] l'accelerometre pointe bien vers le haut, comme assumed.")
+        print("  [OK] the accelerometer does point up, as assumed.")
 
     print("\n" + "-" * 70)
-    print("2. LES DEUX NOMBRES A RECOPIER DANS kalman_filter.py")
+    print("2. THE TWO NUMBERS TO COPY INTO kalman/kalman_filter.py")
     print("-" * 70)
-    print(f"  bias du gyro au rest    "
+    print(f"  gyro bias at rest        "
           f"{np.degrees(rest['bias']).round(3)} deg/s")
-    print("     C'est ce bias qui, integre, fait deriver l'orientation.")
-    print("     Le filter l'estime tout seul des que les tags le recalent.")
+    print("     This is the bias that, integrated, makes the orientation drift.")
+    print("     The filter estimates it on its own once the tags re-anchor it.")
     print()
     print(f"      GYRO_NOISE_DEG_S = {rest['bruit_gyro_deg_s']:.3f}")
     print(f"      ACCEL_NOISE      = {rest['accel_noise']:.3f}")
 
     print("\n" + "-" * 70)
-    print("3. LES MATHS : L'ORIENTATION SUIT-ELLE LES MOUVEMENTS ?")
+    print("3. THE MATHS: DOES THE ORIENTATION FOLLOW THE MOTION?")
     print("-" * 70)
-    print("  Tourne la camera d'un quart de tour : le yaw doit afficher 90.")
-    print("  Repose-la : roll et pitch doivent revenir vers zero.")
-    print("  Ctrl+C pour arreter.\n")
+    print("  Turn the camera a quarter turn: yaw must read 90.")
+    print("  Put it back down FLAT (horizontal on a table, not tilted in your hand):")
+    print("  roll and pitch must return towards zero.  Ctrl+C to stop.\n")
 
     # Les measurements sont ENREGISTREES, pas seulement affichees. C'est ce qui
     # rend l'extraction montrable : un path qu'on ouvre et qu'on relit,
@@ -413,18 +439,18 @@ def _demonstration():
             imu.arreter()
 
     print(f"  {rows} measurements enregistrees dans : {fichier_csv}")
-    print("     colonnes : time, gyro raw (rad/s), accel raw (m/s2),")
-    print("     puis l'orientation calculee en angles et en quaternion.")
+    print("     columns: time, raw gyro (rad/s), raw accel (m/s2),")
+    print("     then the computed orientation, as angles and as a quaternion.")
 
     print("-" * 70)
-    print("CE QUE TU VIENS DE MONTRER")
+    print("WHAT YOU HAVE JUST SHOWN")
     print("-" * 70)
-    print("  - les flux IMU du SDK Intel sont lus (accel + gyro)")
-    print("  - l'echelle est verifiee sur la pesanteur")
-    print("  - le gyro est integre en orientation, par quaternions")
-    print("  - l'accelerometre borne roll et pitch")
-    print("  - le yaw, lui, drift : rien ne le recale sans tag.")
-    print("    C'est la raison d'etre de la fusion avec les AprilTags.")
+    print("  - the Intel SDK's IMU streams are read (accel + gyro)")
+    print("  - the scale is checked against gravity")
+    print("  - the gyro is integrated into orientation, through quaternions")
+    print("  - the accelerometer bounds roll and pitch")
+    print("  - yaw, on the other hand, drifts: nothing re-anchors it without a tag.")
+    print("    That is the whole reason for fusing with the AprilTags.")
     print("=" * 70)
     return 0
 
@@ -439,7 +465,7 @@ def _simulation():
 
     Sert a deux choses : montrer que le traitement est juste meme quand le
     materiel n'est pas la, et donner un result verifiable — on connait la
-    verite, donc on peut chiffrer l'error, ce qu'aucune manip reelle ne
+    truth, donc on peut chiffrer l'error, ce qu'aucune manip reelle ne
     permet.
     """
     from kalman_filter import quaternion_angle
@@ -447,13 +473,13 @@ def _simulation():
     dt, noise = 1 / 200, np.radians(0.15)
 
     print("=" * 70)
-    print("LES MATHS DE L'IMU, SUR UNE CENTRALE SIMULEE")
+    print("THE IMU MATHS, ON A SIMULATED UNIT")
     print("=" * 70)
-    print("Sans camera branchee. La verite etant connue, l'error est chiffree.")
+    print("No camera plugged in. The truth being known, the error can be quantified.")
 
-    print("\n1. ORIENTATION DEDUITE DU SEUL ACCELEROMETRE")
-    print("   Le haut PREVU par l'orientation doit coincider avec le haut")
-    print("   MESURE, et ce pour n'importe quelle pose du mounting.")
+    print("\n1. ORIENTATION FROM THE ACCELEROMETER ALONE")
+    print("   The up direction PREDICTED by the orientation must match the up")
+    print("   direction MEASURED, for any pose of the mounting.")
     pires = []
     for _ in range(300):
         v = rng.normal(size=3)
@@ -461,29 +487,29 @@ def _simulation():
         prevu = quaternion_to_matrix(
             orientation_initiale(haut_mesure)).T @ np.array([0.0, 0.0, 1.0])
         pires.append(np.degrees(np.arccos(np.clip(prevu @ haut_mesure, -1, 1))))
-    print(f"   300 poses quelconques, error max {max(pires):.1e} deg")
+    print(f"   300 arbitrary poses, max error {max(pires):.1e} deg")
     assert max(pires) < 1e-4      # noise d'arccos, pas d'error de calcul
 
-    print("\n2. UN QUART DE TOUR AUTOUR DE LA VERTICALE")
-    print("   30 deg/s pendant 3 s, gyro bruite, accelerometre bruite.")
+    print("\n2. A QUARTER TURN ABOUT THE VERTICAL")
+    print("   30 deg/s for 3 s, noisy gyro, noisy accelerometer.")
     suivi = OrientationFilter()
     suivi.start(orientation_initiale(np.array([0.0, 0.0, 1.0])), sigma_deg=5.0)
-    verite = np.array([1.0, 0.0, 0.0, 0.0])
+    truth = np.array([1.0, 0.0, 0.0, 0.0])
     for _ in range(int(3.0 / dt)):
         omega = np.array([0.0, 0.0, np.radians(30.0)])
-        verite = quaternion_product(verite, quaternion_from_rotation(omega * dt))
+        truth = quaternion_product(truth, quaternion_from_rotation(omega * dt))
         suivi.predict(dt, omega + rng.normal(0, noise, 3))
-        R = quaternion_to_matrix(verite)
+        R = quaternion_to_matrix(truth)
         suivi.correct_with_gravity(R.T @ np.array([0.0, 0.0, GRAVITE])
                                + rng.normal(0, 0.05, 3))
     roll, pitch, yaw = np.degrees(quaternion_to_euler(suivi.q))
-    print(f"   lu : roll {roll:+.2f}   pitch {pitch:+.2f}   "
-          f"yaw {yaw:+.2f} deg   (attendu 0, 0, 90)")
-    print(f"   error d'orientation : {quaternion_angle(suivi.q, verite):.2f} deg")
+    print(f"   read: roll {roll:+.2f}   pitch {pitch:+.2f}   "
+          f"yaw {yaw:+.2f} deg   (expected 0, 0, 90)")
+    print(f"   orientation error: {quaternion_angle(suivi.q, truth):.2f} deg")
     assert abs(yaw - 90) < 3.0 and abs(roll) < 2 and abs(pitch) < 2
 
-    print("\n3. TRENTE SECONDES IMMOBILE, SANS AUCUN TAG")
-    print("   Le bias residuel du gyro travaille librement.")
+    print("\n3. THIRTY SECONDS AT REST, WITH NO TAG AT ALL")
+    print("   The gyro's residual bias works freely.")
     suivi = OrientationFilter()
     suivi.start(orientation_initiale(np.array([0.0, 0.0, 1.0])), sigma_deg=5.0)
     residuel = np.radians([0.05, -0.04, 0.30])
@@ -493,20 +519,20 @@ def _simulation():
                                + rng.normal(0, 0.05, 3))
     roll, pitch, yaw = np.degrees(quaternion_to_euler(suivi.q))
     print(f"   roll {roll:+.2f}   pitch {pitch:+.2f} deg"
-          f"   <- tenus par l'accelerometre")
-    print(f"   yaw  {yaw:+.2f} deg                <- drift librement")
+          f"   <- held by the accelerometer")
+    print(f"   yaw  {yaw:+.2f} deg                <- drifts freely")
     assert abs(roll) < 2 and abs(pitch) < 2
     assert abs(yaw) > 3
 
     print("\n" + "=" * 70)
-    print("CE QUE CELA ETABLIT")
+    print("WHAT THIS ESTABLISHES")
     print("=" * 70)
-    print("  - le gyro s'integre correctement en orientation (90 deg lus")
-    print("    pour 90 deg reels, a 0.03 deg pres)")
-    print("  - l'accelerometre borne roll et pitch indefiniment")
-    print("  - le yaw, lui, drift : la pesanteur n'en dit rien.")
-    print("    D'ou la fusion avec les AprilTags — ce n'est pas un choix")
-    print("    de confort, c'est le seul moyen de tenir le cap.")
+    print("  - the gyro integrates correctly into orientation (90 deg read")
+    print("    for 90 deg real, to within 0.03 deg)")
+    print("  - the accelerometer bounds roll and pitch indefinitely")
+    print("  - yaw, on the other hand, drifts: gravity says nothing about it.")
+    print("    Hence the fusion with the AprilTags — not a comfort choice,")
+    print("    it is the only way to hold a heading.")
     print("=" * 70)
     return 0
 

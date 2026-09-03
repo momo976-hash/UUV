@@ -1,49 +1,64 @@
-"""settings_sensitivity.py — Quels reglages comptent VRAIMENT, et quand.
+"""settings_sensitivity.py — Which settings REALLY matter, and when.
 
-POURQUOI CE SCRIPT
-Le protocole (docs/kalman_protocol.md) demande de mesurer quatre
-numbers. Deux d'entre eux — SIGMA_ACCELERATION et GYRO_DRIFT_DEG_S —
-exigent l'engin reel en mouvement dans le bassin (etape 5). Quand l'engin
-n'est pas disponible, la tentation est d'inventer une value « theorique »
-a partir de la fiche constructeur de la camera. C'est impossible : ces deux
-numbers decrivent comment L'ENGIN accelere et tourne — sa masse, ses
-propulseurs, la trainee de l'water — et aucune fiche de camera ne les
-contient.
+===========================================================================
+HOW TO USE IT
+===========================================================================
+    python kalman/settings_sensitivity.py
 
-Mais la vraie question n'est pas « quelle value ? », c'est « est-ce que
-cette value change quelque chose dans NOTRE configuration ? ». Ce script y
-repond par la measurement, pas par l'argument.
+No camera, no hardware, a few seconds. It runs the filter for real over a
+simulated trajectory, varying one setting at a time, and prints what changes.
 
-CE QUE LE CODE DIT DEJA
-Dans kalman_filter.py, les deux params sont sur une branche `is None` :
+Run it when someone asks whether the two still-assumed settings are a
+problem. It answers with numbers instead of an opinion.
 
-    PositionKalmanFilter.predict :
+===========================================================================
+WHY THIS SCRIPT EXISTS
+===========================================================================
+The protocol (docs/kalman_protocol.md) asks for four numbers to be measured.
+Two of them — SIGMA_ACCELERATION and GYRO_DRIFT_DEG_S — require the real
+vehicle moving in the pool (step 5). When the vehicle is not available, the
+temptation is to invent a "theoretical" value from the camera's datasheet.
+That is impossible: these two numbers describe how THE VEHICLE accelerates
+and turns — its mass, its thrusters, the drag of the water — and no camera
+datasheet contains them.
+
+But the real question is not "what value?", it is "does that value change
+anything in OUR configuration?". This script answers by measuring, not by
+arguing.
+
+===========================================================================
+WHAT THE CODE ALREADY SAYS
+===========================================================================
+In kalman_filter.py, both parameters sit on an `is None` branch:
+
+    PositionKalmanFilter.predict:
         if acceleration is None:
             uncertainty = self.sigma_a      <- SIGMA_ACCELERATION
         else:
             uncertainty = self.accel_noise  <- ACCEL_NOISE
 
-    OrientationFilter.predict :
+    OrientationFilter.predict:
         if omega is None:
             self.variance += (self.drift * dt) ** 2      <- GYRO_DRIFT_DEG_S
         ...
-        self.variance += (self.gyro_noise * dt) ** 2      <- GYRO_NOISE_DEG_S
+        self.variance += (self.gyro_noise * dt) ** 2     <- GYRO_NOISE_DEG_S
 
-Autrement dit : des que la imu de la D435i alimente le filter, ces deux
-reglages ne sont plus jamais lus. Ce script le VERIFIE en faisant tourner le
-filter pour de vrai, plutot que de faire confiance a une lecture de code.
+In other words: as soon as the D435i's IMU feeds the filter, these two
+settings are never read again. This script CHECKS that by actually running
+the filter, rather than trusting a reading of the code.
 
-CE QU'IL FAUT EN CONCLURE, ET CE QU'IL NE FAUT PAS
-A conclure : avec l'IMU branchee, l'etape 5 n'est pas un prealable. Les deux
-numbers qui gouvernent alors — GYRO_NOISE_DEG_S et ACCEL_NOISE — se mesurent
-engin IMMOBILE, sans bassin ni deplacement (imu_realsense.py).
+===========================================================================
+WHAT TO CONCLUDE, AND WHAT NOT TO
+===========================================================================
+To conclude: with the IMU connected, step 5 is not a prerequisite. The two
+numbers that then govern — GYRO_NOISE_DEG_S and ACCEL_NOISE — are measured
+with the vehicle AT REST (kalman/imu_realsense.py), with no pool, no motion
+and no vehicle needed.
 
-A NE PAS conclure : que l'etape 5 est inutile. Le jour ou la imu n'est
-pas la, tombe en panne, ou n'est pas branchee dans une manip donnee, ce sont
-SIGMA_ACCELERATION et GYRO_DRIFT_DEG_S qui reprennent la main — et la
-column « SANS IMU » ci-dessous montre qu'ils comptent alors beaucoup.
-
-    python kalman/settings_sensitivity.py
+NOT to conclude: that step 5 is useless. The day the IMU is absent, fails, or
+is simply not connected for a given run, SIGMA_ACCELERATION and
+GYRO_DRIFT_DEG_S take over — and the "WITHOUT IMU" column below shows they
+matter a great deal then.
 """
 import sys
 from pathlib import Path
@@ -116,63 +131,63 @@ def incertitude_cap(derive_gyro_deg_s, avec_gyro, seconds=3.0):
 
 def main():
     print("=" * 70)
-    print("QUELS REGLAGES COMPTENT, ET DANS QUELLE CONFIGURATION")
+    print("WHICH SETTINGS MATTER, AND IN WHICH CONFIGURATION")
     print("=" * 70)
-    print("Engin simule doux (0.3 m/s2), tags a 10 Hz bruites a 8 mm.")
+    print("Gentle simulated vehicle (0.3 m/s2), tags at 10 Hz with 8 mm noise.")
     print(f"Reglages IMU measurements : GYRO_NOISE_DEG_S = {GYRO_NOISE_DEG_S}, "
           f"ACCEL_NOISE = {ACCEL_NOISE}")
 
     print("\n" + "-" * 70)
-    print("1. SIGMA_ACCELERATION — RMS de position (mm)")
+    print("1. SIGMA_ACCELERATION — position RMS (mm)")
     print("-" * 70)
-    print(f"  {'sigma_acc (m/s2)':>18} | {'AVEC IMU':>9} | {'SANS IMU':>9}")
+    print(f"  {'sigma_acc (m/s2)':>18} | {'WITH IMU':>9} | {'WITHOUT IMU':>9}")
     print("  " + "-" * 44)
     avec = []
     for s in (0.05, SIGMA_ACCELERATION, 4.0, 40.0, 228.6):
         a, utilise = rms_position(s, True)
         sans, _ = rms_position(s, False)
         avec.append(a)
-        marque = "  <- value installee" if s == SIGMA_ACCELERATION else ""
+        marque = "  <- installed value" if s == SIGMA_ACCELERATION else ""
         print(f"  {s:>18} | {a:>8.2f}  | {sans:>8.2f}{marque}")
-    assert utilise, "l'accelerometre doit alimenter le filter dans la column AVEC"
-    etendue = max(avec) - min(avec)
-    print(f"\n  Colonne AVEC IMU : etendue {etendue:.4f} mm sur un facteur "
-          f"{228.6/0.05:.0f} de sigma_acc.")
-    assert etendue < 1e-6, "sigma_acceleration ne doit RIEN changer avec l'IMU"
-    print("  -> strictement identique : le parametre n'est jamais lu.")
-    print("  Colonne SANS IMU : il change tout. Il n'est pas inutile, il est")
-    print("  court-circuite tant que l'accelerometre alimente la prediction.")
+    assert utilise, "l'accelerometre doit alimenter le filter dans la WITH"
+    spread = max(avec) - min(avec)
+    print(f"\n  WITH IMU column: spread {spread:.4f} mm over a factor "
+          f"{228.6/0.05:.0f} of sigma_acc.")
+    assert spread < 1e-6, "sigma_acceleration must change NOTHING with the IMU"
+    print("  -> strictly identical: the parameter is never read.")
+    print("  WITHOUT IMU column: it changes everything. It is not useless, it is")
+    print("  short-circuited as long as the accelerometer feeds the prediction.")
 
     print("\n" + "-" * 70)
-    print("2. GYRO_DRIFT_DEG_S — uncertainty de cap apres 3 s sans tag (deg)")
+    print("2. GYRO_DRIFT_DEG_S — heading uncertainty after 3 s with no tag (deg)")
     print("-" * 70)
-    print(f"  {'drift (deg/s)':>16} | {'AVEC GYRO':>10} | {'SANS GYRO':>10}")
+    print(f"  {'drift (deg/s)':>16} | {'WITH GYRO':>10} | {'WITHOUT GYRO':>10}")
     print("  " + "-" * 42)
     avec_g = []
     for d in (1.0, GYRO_DRIFT_DEG_S, 100.0, 171.0):
         a = incertitude_cap(d, True)
         s = incertitude_cap(d, False)
         avec_g.append(a)
-        marque = "  <- value installee" if d == GYRO_DRIFT_DEG_S else ""
+        marque = "  <- installed value" if d == GYRO_DRIFT_DEG_S else ""
         print(f"  {d:>16} | {a:>9.3f}  | {s:>9.3f}{marque}")
-    etendue_g = max(avec_g) - min(avec_g)
-    print(f"\n  Colonne AVEC GYRO : etendue {etendue_g:.4f} deg.")
-    assert etendue_g < 1e-9, "derive_gyro ne doit RIEN changer avec le gyro"
-    print("  -> strictement identique : le parametre n'est jamais lu.")
-    print("  Sans gyro, l'uncertainty explose et c'est lui qui la gouverne.")
+    spread_g = max(avec_g) - min(avec_g)
+    print(f"\n  WITH GYRO column: spread {spread_g:.4f} deg.")
+    assert spread_g < 1e-9, "gyro drift must change NOTHING with the gyro"
+    print("  -> strictly identical: the parameter is never read.")
+    print("  Without a gyro the uncertainty explodes, and it is what governs it.")
 
     print("\n" + "=" * 70)
-    print("CE QUE CELA ETABLIT")
+    print("WHAT THIS ESTABLISHES")
     print("=" * 70)
-    print("  - Avec la imu de la D435i branchee, SIGMA_ACCELERATION et")
-    print("    GYRO_DRIFT_DEG_S ne sont jamais lus par le filter. Les laisser")
-    print("    a leur value supposee n'a aucune consequence mesurable.")
-    print("  - Ce qui gouverne alors, ce sont GYRO_NOISE_DEG_S et ACCEL_NOISE,")
-    print("    qui se mesurent ENGIN IMMOBILE (imu_realsense.py) — sans bassin,")
-    print("    sans deplacement, sans l'engin lui-meme.")
-    print("  - L'etape 5 du protocole reste necessaire pour le jour ou la")
-    print("    imu n'alimente pas le filter : la column SANS IMU montre")
-    print("    que ces deux numbers comptent alors beaucoup.")
+    print("  - With the D435i's IMU connected, SIGMA_ACCELERATION and")
+    print("    GYRO_DRIFT_DEG_S are never read by the filter. Leaving them at")
+    print("    their assumed value has no measurable consequence.")
+    print("  - What governs then is GYRO_NOISE_DEG_S and ACCEL_NOISE, which are")
+    print("    measured with the VEHICLE AT REST (kalman/imu_realsense.py) — no")
+    print("    pool, no motion, not even the vehicle itself.")
+    print("  - Step 5 of the protocol remains necessary for the day the IMU does")
+    print("    not feed the filter: the WITHOUT IMU column shows those two")
+    print("    numbers matter a great deal then.")
     print("=" * 70)
     return 0
 

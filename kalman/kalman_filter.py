@@ -506,7 +506,7 @@ def tag_position_covariance(position_camera, position_tag, incidence_deg,
                             focal_length=WATER_FOCAL_LENGTH, taille_tag=TAG_SIZE,
                             sigma_pixel=SIGMA_PIXEL):
     """Covariance 3x3, dans le frame world, de la position de la camera
-    estimee a partir d'UN tag. Anisotrope : mauvaise le long de la visee."""
+    estimatede a partir d'UN tag. Anisotrope : mauvaise le long de la visee."""
     v = np.asarray(position_tag, dtype=float) - np.asarray(position_camera, dtype=float)
     d = float(np.linalg.norm(v))
     if d < 1e-6:
@@ -593,7 +593,7 @@ class LinearKalman:
 
     FORME DE JOSEPH. Le document donne deux ecritures de la mise a jour de P :
     la simplifiee (I-KH)P, et celle de Joseph. Elles sont egales en arithmetique
-    exacte — kalman_reference_check.py le verifie, l'gap vaut 2e-15 sur son exemple.
+    exacte — kalman_reference_check.py le verifie, l'gap vaut 2e-15 sur his example.
     On garde Joseph, que le document recommande : elle reste symetrique et
     definie positive apres des milliers d'iterations en virgule flottante, la
     simplifiee non.
@@ -729,10 +729,10 @@ class PositionKalmanFilter:
         prediction suit alors les manoeuvres au lieu de retarder dessus.
 
         RESERVE HONNETE. Un accelerometre MEMS a un bias lentement variable
-        que rien ici n'estime, et une double integration transforme ce bias
+        que rien ici n'estimated, et une double integration transforme ce bias
         en error de position quadratique : un bias de 0.05 m/s2 fait 2.5 cm
         au bout d'une seconde, 1 m au bout de dix. C'est utile pour traverser
-        une perte de tags de quelques instants, pas pour naviguer a l'estime.
+        une perte de tags de quelques instants, pas pour naviguer a l'estimated.
         Les tags restent la seule source sans drift.
         """
         if not self.started or dt <= 0:
@@ -833,7 +833,7 @@ class OrientationFilter:
 
     def __init__(self, derive_gyro_deg_s=None, jump_threshold_deg=25.0,
                  max_consecutive_rejections=5, bruit_gyro_deg_s=None,
-                 tau_biais=20.0):
+                 bias_tau=20.0):
         if derive_gyro_deg_s is None:
             derive_gyro_deg_s = GYRO_DRIFT_DEG_S
         if bruit_gyro_deg_s is None:
@@ -850,10 +850,10 @@ class OrientationFilter:
         self.recoveries = 0
         # Biais du gyro, en rad/s, dans le frame de la imu. Un gyro MEMS
         # ne measurement jamais zero au rest : ce petit decalage, integre, fait
-        # deriver l'orientation. On l'estime sur les corrections que les tags
+        # deriver l'orientation. On l'estimated sur les corrections que les tags
         # apportent, et on le retranche des measurements suivantes.
         self.bias = np.zeros(3)
-        self.tau_biais = float(tau_biais)   # constante de time de l'estimation
+        self.bias_tau = float(bias_tau)   # constante de time de l'estimation
         self._temps_depuis_correction = 0.0
         self._rotation_gyro = np.zeros(3)   # rotation integree depuis la derniere
         self.gyro_used = False
@@ -905,7 +905,7 @@ class OrientationFilter:
         l'orientation current predit, on corrige les deux axes horizontaux —
         et EUX SEULS. Le yaw reste inobservable : tourner autour de la
         verticale ne change pas la direction de la pesanteur. C'est pour cela
-        que l'axis de correction, obtenu par product vectoriel, est
+        que l'axis de correction, got par product vectoriel, est
         automatiquement perpendiculaire a la verticale.
 
         Interet : sans aucun tag, le roll et le pitch restent bornes
@@ -914,7 +914,7 @@ class OrientationFilter:
         L'accelerometre ne distingue pas la pesanteur d'une acceleration de
         l'engin. On ne s'en sert donc que quand la norme measured est proche de
         g : sinon l'engin manoeuvre et la measurement ne dit plus ou est le bas.
-        Retourne (utilisee, correction_en_degres).
+        Retourne (used, correction_en_degres).
         """
         if not self.started:
             return False, 0.0
@@ -986,10 +986,10 @@ class OrientationFilter:
         self.variance = (1.0 - gain) * self.variance
         if self.gyro_used:
             # On passe la MESURE, pas l'state corrige. Le gain de Kalman
-            # n'applique qu'une fraction de l'gap : estimer le bias sur la
-            # correction appliquee le sous-estimerait d'autant, et d'autant
+            # n'applique qu'une fraction de l'gap : estimatedr le bias sur la
+            # correction appliquee le sous-estimatedrait d'autant, et d'autant
             # plus que le filter est confiant. L'gap complet — l'innovation —
-            # est la vraie measurement de la drift accumulee depuis le last tag.
+            # est la true measurement de la drift accumulee depuis le last tag.
             self._reestimate_bias(avant, q)
         return True, gap
 
@@ -1001,10 +1001,10 @@ class OrientationFilter:
         trouve systematiquement decalee du meme cote : cet gap, divise par
         le time ecoule, EST une measurement du bias.
 
-        On la mean lentement (constante de time tau_biais) parce qu'une
+        On la mean lentement (constante de time bias_tau) parce qu'une
         correction isolee melange le bias et le noise du tag. Un bias reel
         est constant, le noise ne l'est pas : seul le first survit au
-        moyennage.
+        averaging.
         """
         dt = self._temps_depuis_correction
         self._temps_depuis_correction = 0.0
@@ -1028,12 +1028,12 @@ class OrientationFilter:
         # Le gyro a trop tourne de `-correction` pendant dt : c'est un bias
         # apparent de -correction/dt.
         measurement = -correction / dt
-        poids = min(dt / self.tau_biais, 0.5)    # jamais plus de la moitie d'un coup
+        poids = min(dt / self.bias_tau, 0.5)    # jamais plus de la moitie d'un coup
         self.bias = (1.0 - poids) * self.bias + poids * measurement
 
     @property
     def bias_deg_s(self):
-        """Biais estime du gyro, en deg/s sur les trois axes."""
+        """Biais estimated du gyro, en deg/s sur les trois axes."""
         return np.degrees(self.bias)
 
     @property
@@ -1074,7 +1074,7 @@ class TagWatchdog:
         # Fenetre courte volontairement : elle doit se vider de l'old
         # regime en quelques seconds de co-visibilite, sinon un deplacement
         # recent reste dilue par les observations d'avant et l'amplitude
-        # annoncee est sous-estimee. Le noise residuel apres mean sur 60
+        # annoncee est sous-estimatede. Le noise residuel apres mean sur 60
         # vaut environ 1 mm, tres en dessous du threshold de 8 mm.
         self.window = int(window)
         self.threshold = float(threshold_mm) / 1000.0
@@ -1121,7 +1121,7 @@ class TagWatchdog:
         return result
 
     def suspects(self):
-        """Tags convaincus : {identifiant: (norme, vecteur_deplacement)}.
+        """Tags confirmed : {identifiant: (norme, vecteur_deplacement)}.
 
         Un tag est kept s'il contredit AU MOINS DEUX partenaires distincts,
         et toujours dans le meme sens. Contredire un seul voisin ne suffit
@@ -1131,7 +1131,7 @@ class TagWatchdog:
         -d : on part de la position supposee du tag, restee celle d'avant.
         Le deplacement est donc l'oppose de l'gap moyen.
         """
-        convaincus = {}
+        confirmed = {}
         for tag, partenaires in self._gaps_per_partner().items():
             grands = [v for v in partenaires.values() if np.linalg.norm(v) > self.threshold]
             if len(grands) < 2:
@@ -1141,18 +1141,18 @@ class TagWatchdog:
                 for k, a in enumerate(grands) for b in grands[k + 1:])
             if coherent:
                 moyen = np.mean(np.array(grands), axis=0)
-                convaincus[tag] = (float(np.linalg.norm(moyen)), -moyen)
-        return convaincus
+                confirmed[tag] = (float(np.linalg.norm(moyen)), -moyen)
+        return confirmed
 
     def suspicious_pairs(self):
         """Paires en desaccord dont aucun membre n'est formellement convaincu."""
-        convaincus = set(self.suspects())
+        confirmed = set(self.suspects())
         douteuses = {}
         for (i, j), observations in self.gaps.items():
             if len(observations) < self.minimum:
                 continue
             norme = float(np.linalg.norm(self._weighted_mean(observations)))
-            if norme > self.threshold and i not in convaincus and j not in convaincus:
+            if norme > self.threshold and i not in confirmed and j not in confirmed:
                 douteuses[(i, j)] = norme
         return douteuses
 
@@ -1186,7 +1186,7 @@ class TagWatchdog:
     def report(self):
         rows = []
         for identifiant, (norme, vector) in sorted(self.suspects().items()):
-            rows.append(f"  tag {identifiant} : boite deplacee de {norme*1000:.0f} mm "
+            rows.append(f"  tag {identifiant} : box displaced by {norme*1000:.0f} mm "
                           f"({vector[0]*1000:+.0f}, {vector[1]*1000:+.0f}, "
                           f"{vector[2]*1000:+.0f}) mm  [confirme par plusieurs voisins]")
         for (i, j), norme in sorted(self.suspicious_pairs().items()):
@@ -1208,7 +1208,7 @@ class PoseFilter:
     Utilisation type, a chaque image :
         filter.predict(dt, gyro=omega, accel=a)     # IMU facultative
         for tag in tags_vus:
-            filter.add_tag(position_estimee, position_tag, incidence, R_mesuree)
+            filter.add_tag(position_estimatede, position_tag, incidence, R_mesuree)
         filter.apply()
 
     ---------------------------------------------------------------------
@@ -1223,11 +1223,11 @@ class PoseFilter:
                deriver l'orientation sans limit.
       ACCEL    donne la direction du bas en permanence, donc borne le roll
                et le pitch pour toujours — mais ne dit RIEN du yaw, et sa
-               double integration drift trop vite pour naviguer a l'estime.
+               double integration drift trop vite pour naviguer a l'estimated.
 
     D'ou le partage : le gyro propage entre deux tags, l'accelerometre tient
     deux axes d'orientation sur trois, les tags recalent le yaw et la
-    position et servent a estimer le bias du gyro. Chaque capteur couvre le
+    position et servent a estimatedr le bias du gyro. Chaque capteur couvre le
     trou de l'autre.
 
     REPERE DE L'IMU — piege a ne pas negliger. Sur la D435i la imu n'est
@@ -1245,7 +1245,7 @@ class PoseFilter:
         self.orientation = OrientationFilter(derive_gyro_deg_s)
         self.watchdog = TagWatchdog(threshold_mm=displacement_threshold_mm)
         # Rotation qui amene un vector du frame IMU vers le frame camera.
-        # Identite par default : vrai seulement si les deux sont alignes.
+        # Identite par default : true seulement si les deux sont alignes.
         self.R_imu_camera = (np.eye(3) if imu_to_camera_rotation is None
                              else np.asarray(imu_to_camera_rotation, dtype=float))
         self.gravity = float(gravity)
@@ -1283,17 +1283,17 @@ class PoseFilter:
                 self.R_imu_camera @ np.asarray(accel, dtype=float).ravel(),
                 gravity=self.gravity)
 
-    def add_tag(self, position_camera_estimee, position_tag, incidence_deg,
+    def add_tag(self, position_camera_estimatede, position_tag, incidence_deg,
                     rotation_mesuree=None, distance=None, identifiant=None):
         """Empile la contribution d'un tag pour l'image current."""
-        covariance = tag_position_covariance(position_camera_estimee, position_tag,
+        covariance = tag_position_covariance(position_camera_estimatede, position_tag,
                                              incidence_deg)
-        self._mesures.append((np.asarray(position_camera_estimee, dtype=float),
+        self._mesures.append((np.asarray(position_camera_estimatede, dtype=float),
                               covariance, identifiant))
         if rotation_mesuree is not None:
             if distance is None:
                 distance = float(np.linalg.norm(np.asarray(position_tag, dtype=float)
-                                                - np.asarray(position_camera_estimee, dtype=float)))
+                                                - np.asarray(position_camera_estimatede, dtype=float)))
             sigma = tag_angle_std(distance, incidence_deg)
             self._orientations.append((rotation_mesuree, sigma))
 
@@ -1323,72 +1323,72 @@ class PoseFilter:
 def _auto_test():
     rng = np.random.default_rng(12345)
     print("=" * 68)
-    print("AUTO-TEST DU FILTRE")
+    print("FILTER SELF-TESTS")
     print("=" * 68)
 
-    # -- quaternions : aller-retour matrix <-> quaternion -------------------
+    # -- quaternions : aller-back matrix <-> quaternion -------------------
     angle = 0.7
     R = np.array([[np.cos(angle), -np.sin(angle), 0],
                   [np.sin(angle), np.cos(angle), 0], [0, 0, 1.0]])
     error = np.abs(quaternion_to_matrix(matrix_to_quaternion(R)) - R).max()
-    print(f"aller-retour matrix <-> quaternion : error max {error:.2e}")
+    print(f"matrix <-> quaternion round trip: max error {error:.2e}")
     assert error < 1e-9
 
     # -- anisotropie de R ---------------------------------------------------
     C = tag_position_covariance([0.0, 0.0, 0.0], [1.6, 0.0, 0.0], 20.0)
     values = np.sqrt(np.sort(np.linalg.eigvalsh(C)))
-    print(f"un tag a 1.6 m : sigma lateral {values[0]*1000:.2f} mm, "
+    print(f"one tag at 1.6 m: lateral sigma {values[0]*1000:.2f} mm, "
           f"depth {values[-1]*1000:.2f} mm "
-          f"(report {values[-1]/values[0]:.1f}x)")
-    assert values[-1] > 3 * values[0], "la depth doit etre nettement pire"
+          f"(ratio {values[-1]/values[0]:.1f}x)")
+    assert values[-1] > 3 * values[0], "depth must be clearly worse"
 
     # -- deux tags sur des murs differents ----------------------------------
     seul = tag_position_covariance([1.0, 0.8, 0.5], [1.0, 0.0, 0.35], 10.0)
     autre = tag_position_covariance([1.0, 0.8, 0.5], [0.0, 0.835, 0.65], 10.0)
     _, fusion = fuse_positions([([1.0, 0.8, 0.5], seul), ([1.0, 0.8, 0.5], autre)])
-    pire_seul = np.sqrt(np.linalg.eigvalsh(seul)).max()
+    worst_single = np.sqrt(np.linalg.eigvalsh(seul)).max()
     pire_fusion = np.sqrt(np.linalg.eigvalsh(fusion)).max()
     # Deux measurements independantes de meme qualite gagnent deja un facteur
-    # racine de 2 par simple moyennage. Depasser ce threshold prouve que c'est la
+    # racine de 2 par simple averaging. Depasser ce threshold prouve que c'est la
     # GEOMETRIE qui travaille : la ou un tag est aveugle (sa depth),
     # l'autre est precis (son lateral).
-    gain = pire_seul / pire_fusion
-    print(f"pire direction : 1 tag {pire_seul*1000:.2f} mm -> "
-          f"2 tags sur murs perpendiculaires {pire_fusion*1000:.2f} mm "
-          f"(gain {gain:.2f}x, moyennage seul : 1.41x)")
-    assert gain > np.sqrt(2), "les murs perpendiculaires doivent faire mieux que moyenner"
+    gain = worst_single / pire_fusion
+    print(f"worst direction: 1 tag {worst_single*1000:.2f} mm -> "
+          f"2 tags on perpendicular walls {pire_fusion*1000:.2f} mm "
+          f"(gain {gain:.2f}x, plain averaging alone: 1.41x)")
+    assert gain > np.sqrt(2), "perpendicular walls must beat plain averaging"
 
     # -- le filter reduit-il vraiment le noise ? ----------------------------
     dt, n = 1 / 30, 900
     filter = PositionKalmanFilter(sigma_acceleration=0.3)
-    vraie = np.array([1.0, 0.8, 0.5])
+    true = np.array([1.0, 0.8, 0.5])
     velocity = np.array([0.25, 0.0, 0.0])
-    raw, filtre_rms, rejets_injectes = [], [], 0
+    raw, filtre_rms, injected_outliers = [], [], 0
     for i in range(n):
-        vraie = vraie + velocity * dt
-        C = tag_position_covariance(vraie, [vraie[0] + 1.6, vraie[1], vraie[2]], 15.0)
+        true = true + velocity * dt
+        C = tag_position_covariance(true, [true[0] + 1.6, true[1], true[2]], 15.0)
         noise = rng.multivariate_normal(np.zeros(3), C)
-        measurement = vraie + noise
+        measurement = true + noise
         if i % 97 == 96:                    # aberration type flip
             measurement = measurement + np.array([0.35, -0.25, 0.15])
-            rejets_injectes += 1
+            injected_outliers += 1
         filter.predict(dt)
         filter.correct(measurement, C)
-        raw.append(np.linalg.norm(measurement - vraie))
-        filtre_rms.append(np.linalg.norm(filter.position - vraie))
+        raw.append(np.linalg.norm(measurement - true))
+        filtre_rms.append(np.linalg.norm(filter.position - true))
 
-    rms_brut = float(np.sqrt(np.mean(np.square(raw))))
-    rms_filtre = float(np.sqrt(np.mean(np.square(filtre_rms))))
-    print(f"RMS raw {rms_brut*1000:.2f} mm -> filter {rms_filtre*1000:.2f} mm "
-          f"({rms_brut/rms_filtre:.1f}x mieux)")
-    print(f"aberrations injectees {rejets_injectes}, rejetees {filter.rejections}")
-    assert rms_filtre < rms_brut, "le filter doit reduire l'error"
-    assert filter.rejections >= rejets_injectes * 0.8, "le rejet doit attraper les flips"
+    rms_raw = float(np.sqrt(np.mean(np.square(raw))))
+    rms_filtered = float(np.sqrt(np.mean(np.square(filtre_rms))))
+    print(f"raw RMS {rms_raw*1000:.2f} mm -> filter {rms_filtered*1000:.2f} mm "
+          f"({rms_raw/rms_filtered:.1f}x better)")
+    print(f"outliers injected {injected_outliers}, rejected {filter.rejections}")
+    assert rms_filtered < rms_raw, "the filter must reduce the error"
+    assert filter.rejections >= injected_outliers * 0.8, "rejection must catch the flips"
 
     # -- orientation --------------------------------------------------------
     orientation = OrientationFilter()
-    q_vrai = matrix_to_quaternion(R)
-    orientation.start(q_vrai, sigma_deg=5.0)
+    q_true = matrix_to_quaternion(R)
+    orientation.start(q_true, sigma_deg=5.0)
     sigma = tag_angle_std(1.6, 20.0)
     gaps = []
     for _ in range(300):
@@ -1397,13 +1397,13 @@ def _auto_test():
         axis = perturbation / norme if norme > 1e-12 else np.array([1.0, 0, 0])
         dq = np.concatenate([[np.cos(norme / 2)], axis * np.sin(norme / 2)])
         w0, v0 = dq[0], dq[1:]
-        w1, v1 = q_vrai[0], q_vrai[1:]
+        w1, v1 = q_true[0], q_true[1:]
         q_mesure = np.concatenate([[w0 * w1 - v0 @ v1], w0 * v1 + w1 * v0 + np.cross(v0, v1)])
         orientation.predict(1 / 30)
         orientation.correct(q_mesure, sigma)
-        gaps.append(quaternion_angle(orientation.q, q_vrai))
-    print(f"orientation : noise tag {np.degrees(sigma):.2f} deg -> "
-          f"apres filtrage {np.mean(gaps[-100:]):.2f} deg")
+        gaps.append(quaternion_angle(orientation.q, q_true))
+    print(f"orientation: tag noise {np.degrees(sigma):.2f} deg -> "
+          f"after filtering {np.mean(gaps[-100:]):.2f} deg")
     assert np.mean(gaps[-100:]) < np.degrees(sigma)
 
     # -- detection d'une boite deplacee -------------------------------------
@@ -1411,31 +1411,31 @@ def _auto_test():
     supports = {10: np.array([1.5, 0.0, 0.35]),
                 11: np.array([2.4, 0.0, 0.65]),
                 12: np.array([0.0, 0.8, 0.50])}
-    pousse = np.array([0.018, -0.006, 0.0])       # 19 mm sur la boite 11
+    pushed = np.array([0.018, -0.006, 0.0])       # 19 mm sur la boite 11
     camera = np.array([1.2, 1.4, 0.5])
     for _ in range(150):
         groupe = []
         for tid, endroit in supports.items():
             C = tag_position_covariance(camera, endroit, 20.0)
-            bias = -pousse if tid == 11 else np.zeros(3)
+            bias = -pushed if tid == 11 else np.zeros(3)
             z = camera + bias + rng.multivariate_normal(np.zeros(3), C)
             groupe.append((tid, z, C))
         watchdog.observe_group(groupe)
-    convaincus = watchdog.suspects()
-    assert 11 in convaincus, f"la boite 11 doit etre detectee, obtenu {sorted(convaincus)}"
-    assert set(convaincus) == {11}, f"aucune autre ne doit l'etre : {sorted(convaincus)}"
-    estime = convaincus[11][1]
-    error = float(np.linalg.norm(estime - pousse))
-    print(f"boite deplacee de {1000*np.linalg.norm(pousse):.0f} mm -> detectee a "
-          f"{1000*convaincus[11][0]:.0f} mm (error {1000*error:.1f} mm)")
-    assert error < 0.004, "le deplacement estime doit etre juste a 4 mm pres"
+    confirmed = watchdog.suspects()
+    assert 11 in confirmed, f"box 11 must be detected, got {sorted(confirmed)}"
+    assert set(confirmed) == {11}, f"no other one may be: {sorted(confirmed)}"
+    estimated = confirmed[11][1]
+    error = float(np.linalg.norm(estimated - pushed))
+    print(f"box displaced by {1000*np.linalg.norm(pushed):.0f} mm -> detected at "
+          f"{1000*confirmed[11][0]:.0f} mm (error {1000*error:.1f} mm)")
+    assert error < 0.004, "the estimated displacement must be right to within 4 mm"
 
     # -- conversions entre representations d'orientation --------------------
     for trial in range(200):
         angles = rng.uniform(-np.pi, np.pi, 3)
         angles[1] = rng.uniform(-1.4, 1.4)      # hors blocage de cardan
         q = euler_to_quaternion(*angles)
-        retour = np.array(quaternion_to_euler(q))
+        back = np.array(quaternion_to_euler(q))
         # on compare les ROTATIONS, pas les triplets : deux triplets
         # differents peuvent decrire la meme orientation.
         #
@@ -1443,45 +1443,45 @@ def _auto_test():
         # arccos, dont la derivee explose au voisinage de 1. Deux quaternions
         # identiques au last bit y donnent quelques 1e-6 deg d'gap
         # apparent. C'est du noise de calcul, pas une error de conversion —
-        # verifie sur des cas ronds, l'aller-retour rend les memes angles.
-        assert quaternion_angle(q, euler_to_quaternion(*retour)) < 1e-4
-    print("aller-retour Euler <-> quaternion : 200 orientations, "
+        # verifie sur des cas ronds, l'aller-back rend les memes angles.
+        assert quaternion_angle(q, euler_to_quaternion(*back)) < 1e-4
+    print("Euler <-> quaternion round trip: 200 orientations, "
           "gap max < 1e-4 deg")
 
-    T = homogeneous_transform(quaternion_to_matrix(q_vrai), [1.0, -2.0, 0.5])
+    T = homogeneous_transform(quaternion_to_matrix(q_true), [1.0, -2.0, 0.5])
     assert T.shape == (4, 4) and np.allclose(T[3], [0, 0, 0, 1])
-    identite = T @ invert_homogeneous(T)
-    assert np.abs(identite - np.eye(4)).max() < 1e-12
-    R_lu, t_lu = split_homogeneous(T)
-    assert np.allclose(t_lu, [1.0, -2.0, 0.5])
-    print(f"transformation homogene 4x4 : T . T^-1 = I a "
-          f"{np.abs(identite - np.eye(4)).max():.1e} pres")
+    identity = T @ invert_homogeneous(T)
+    assert np.abs(identity - np.eye(4)).max() < 1e-12
+    R_lu, t_read = split_homogeneous(T)
+    assert np.allclose(t_read, [1.0, -2.0, 0.5])
+    print(f"4x4 homogeneous transform: T . T^-1 = I to within "
+          f"{np.abs(identity - np.eye(4)).max():.1e}")
 
     # -- le gyroscope tient-il le cap quand les tags disparaissent ? --------
     # 6 seconds sans aucun tag, l'engin tournant a 20 deg/s.
     dt, duration = 1 / 200, 6.0
-    vitesse_vraie = np.radians([3.0, -5.0, 20.0])
-    biais_vrai = np.radians([0.4, -0.3, 0.6])
+    true_rate = np.radians([3.0, -5.0, 20.0])
+    true_bias = np.radians([0.4, -0.3, 0.6])
     for avec_gyro in (False, True):
         suivi = OrientationFilter()
         suivi.start(np.array([1.0, 0.0, 0.0, 0.0]), sigma_deg=2.0)
-        verite = np.array([1.0, 0.0, 0.0, 0.0])
+        truth = np.array([1.0, 0.0, 0.0, 0.0])
         for _ in range(int(duration / dt)):
-            verite = quaternion_product(
-                verite, quaternion_from_rotation(vitesse_vraie * dt))
-            measurement = (vitesse_vraie + biais_vrai
+            truth = quaternion_product(
+                truth, quaternion_from_rotation(true_rate * dt))
+            measurement = (true_rate + true_bias
                       + rng.normal(0, np.radians(0.15), 3))
             suivi.predict(dt, measurement if avec_gyro else None)
-        gap = quaternion_angle(suivi.q, verite)
-        etiquette = "avec gyro " if avec_gyro else "sans gyro "
-        print(f"{etiquette}: apres {duration:.0f} s sans tag, error de cap "
-              f"{gap:6.1f} deg   (uncertainty annoncee "
+        gap = quaternion_angle(suivi.q, truth)
+        label = "with gyro   " if avec_gyro else "without gyro"
+        print(f"{label}: after {duration:.0f} s with no tag, heading error "
+              f"{gap:6.1f} deg   (reported uncertainty "
               f"{suivi.uncertainty_deg:5.1f} deg)")
         if avec_gyro:
-            # le bias non estime domine : 0.6 deg/s pendant 6 s = 3.6 deg
-            assert gap < 8.0, f"le gyro doit tenir le cap, obtenu {gap:.1f} deg"
+            # le bias non estimated domine : 0.6 deg/s pendant 6 s = 3.6 deg
+            assert gap < 8.0, f"the gyro must hold the heading, got {gap:.1f} deg"
         else:
-            assert gap > 100.0, "sans gyro on doit avoir tout perdu"
+            assert gap > 100.0, "without a gyro everything must be lost"
 
     # -- l'accelerometre borne-t-il roll et pitch sans aucun tag ? ------
     suivi = OrientationFilter()
@@ -1493,36 +1493,36 @@ def _auto_test():
         suivi.correct_with_gravity(np.array([0.0, 0.0, 9.81])
                                + rng.normal(0, 0.05, 3))
     roll, pitch, _ = quaternion_to_euler(suivi.q)
-    print(f"accelerometre seul : roll {np.degrees(roll):+.2f} deg, "
-          f"pitch {np.degrees(pitch):+.2f} deg  (partis de +12 et -9)")
+    print(f"accelerometer alone: roll {np.degrees(roll):+.2f} deg, "
+          f"pitch {np.degrees(pitch):+.2f} deg  (started from +12 and -9)")
     assert abs(np.degrees(roll)) < 2.0 and abs(np.degrees(pitch)) < 2.0
 
     # une acceleration franche ne doit PAS etre prise pour la pesanteur
-    utilisee, _ = suivi.correct_with_gravity(np.array([6.0, 0.0, 9.81]))
-    assert not utilisee, "une measurement loin de g doit etre refusee"
-    print("accelerometre : measurement a 1.2 g refusee, comme attendu")
+    used, _ = suivi.correct_with_gravity(np.array([6.0, 0.0, 9.81]))
+    assert not used, "a measurement far from g must be refused"
+    print("accelerometer: 1.2 g measurement refused, as expected")
 
     # -- le bias du gyro est-il retrouve sur les corrections des tags ? ----
     pose = PoseFilter()
     pose.orientation.start(np.array([1.0, 0.0, 0.0, 0.0]), sigma_deg=2.0)
-    verite = np.array([1.0, 0.0, 0.0, 0.0])
+    truth = np.array([1.0, 0.0, 0.0, 0.0])
     dt = 1 / 100
     for pas in range(6000):
-        verite = quaternion_product(
-            verite, quaternion_from_rotation(vitesse_vraie * dt))
+        truth = quaternion_product(
+            truth, quaternion_from_rotation(true_rate * dt))
         pose.orientation.predict(
-            dt, vitesse_vraie + biais_vrai + rng.normal(0, np.radians(0.15), 3))
+            dt, true_rate + true_bias + rng.normal(0, np.radians(0.15), 3))
         if pas % 50 == 0:                      # un tag toutes les 0.5 s
-            pose.orientation.correct(verite, np.radians(1.0))
-    erreur_biais = np.degrees(np.linalg.norm(pose.orientation.bias - biais_vrai))
-    print(f"bias du gyro : vrai {np.degrees(biais_vrai).round(2)} deg/s, "
-          f"estime {pose.orientation.bias_deg_s.round(2)} deg/s "
-          f"(error {erreur_biais:.2f} deg/s)")
-    assert erreur_biais < 0.35, f"le bias doit etre approche, error {erreur_biais:.2f}"
+            pose.orientation.correct(truth, np.radians(1.0))
+    bias_error = np.degrees(np.linalg.norm(pose.orientation.bias - true_bias))
+    print(f"gyro bias: true {np.degrees(true_bias).round(2)} deg/s, "
+          f"estimated {pose.orientation.bias_deg_s.round(2)} deg/s "
+          f"(error {bias_error:.2f} deg/s)")
+    assert bias_error < 0.35, f"the bias must be approached, error {bias_error:.2f}"
 
     # -- l'accelerometre aide-t-il la position pendant une perte de tags ? --
     dt, duration = 1 / 100, 1.5
-    resultats = {}
+    results = {}
     for avec_accel in (False, True):
         suivi = PositionKalmanFilter()
         suivi.start(np.zeros(3), sigma_position=0.01, sigma_vitesse=0.05)
@@ -1536,11 +1536,11 @@ def _auto_test():
             vraie_v = vraie_v + a * dt
             suivi.predict(dt, (a + rng.normal(0, 0.05, 3))
                           if avec_accel else None)
-        resultats[avec_accel] = float(np.linalg.norm(suivi.position - vraie_p))
-    print(f"perte de tags de {duration:.1f} s en pleine acceleration : "
-          f"sans accel {1000*resultats[False]:.0f} mm, "
-          f"avec accel {1000*resultats[True]:.0f} mm")
-    assert resultats[True] < resultats[False] / 3
+        results[avec_accel] = float(np.linalg.norm(suivi.position - vraie_p))
+    print(f"tag dropout of {duration:.1f} s in mid-acceleration: "
+          f"without accel {1000*results[False]:.0f} mm, "
+          f"with accel {1000*results[True]:.0f} mm")
+    assert results[True] < results[False] / 3
 
     # --- accord avec le document de reference ------------------------------
     # L'exemple chiffre de Becker (radar 1D, kalmanfilter.net), passe par le
@@ -1566,11 +1566,11 @@ def _auto_test():
     Q3 = sigma_doc ** 2 * (G_doc @ G_doc.T)
     assert np.isclose(Q3[0, 0], Q_doc[0, 0]) and np.isclose(Q3[0, 3], Q_doc[0, 1])
     assert np.isclose(Q3[3, 3], Q_doc[1, 1])
-    print("accord avec Becker (kalmanfilter.net) : les 8 values publiees de "
-          "son exemple sont retrouvees")
+    print("agreement with Becker (kalmanfilter.net): the 8 published values of "
+          "his example are recovered")
 
     print("=" * 68)
-    print("TOUS LES TESTS PASSENT")
+    print("ALL TESTS PASS")
     print("=" * 68)
 
 

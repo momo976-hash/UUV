@@ -1,13 +1,13 @@
 # simuler_limites_tag.py — Les limites de detection, sans salle et sans recul
 #
 # POURQUOI CE SCRIPT
-# measure_tag_limits.py cherche PIXELS_MIN et INCIDENCE_MAX sur la vraie
+# measure_tag_limits.py cherche PIXELS_MIN et INCIDENCE_MAX sur la true
 # camera. Encore faut-il pouvoir perdre le tag : avec les 22.3 cm du bassin
 # il faut reculer a 4.5 m pour seulement atteindre 30 px, et la camera est au
 # bout d'un cable. Les balayages s'arretent a 58 px, tag toujours detecte.
 #
 # Ici on prend le probleme par l'autre bout : on FABRIQUE l'image d'un tag a
-# la size et sous l'angle voulus, on y met le flou et le noise d'une vraie
+# la size et sous l'angle voulus, on y met le flou et le noise d'une true
 # camera, et on appelle exactement le meme detector cv2.aruco que le reste
 # du projet. Ce n'est pas un model du detector — c'est le detector.
 #
@@ -253,7 +253,7 @@ def sensibilite(detector, motif, garde):
     exacts, la formation de l'image est supposee. Autant montrer l'gap
     plutot que de donner un chiffre unique qu'on croirait measurement.
     """
-    # Les deux faits measurements sur la vraie camera qui servent d'arbitre. Le
+    # Les deux faits measurements sur la true camera qui servent d'arbitre. Le
     # second vient du balayage contamine : ses taux absolus sont douteux, mais
     # une detection observee est une detection, aucune contamination n'en
     # fabrique. C'est donc un plancher sur, et c'est lui qui tranche.
@@ -309,7 +309,7 @@ def main():
 
     print("=" * 72)
     print("LIMITES DE DETECTION PAR SIMULATION")
-    print(f"  vrai detector cv2.aruco, vraie matrix camera")
+    print(f"  vrai detector cv2.aruco, true matrix camera")
     print(f"  flou objectif {options.flou} px, noise capteur "
           f"{options.noise} niveaux, contraste {NOIR}-{BLANC}")
     print("=" * 72)

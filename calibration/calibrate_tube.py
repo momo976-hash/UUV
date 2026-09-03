@@ -55,7 +55,7 @@
 #
 # 3. VALIDITE DE LA DISTORSION. Le polynome doit rester monotone jusqu'au corner
 #    de l'image. S'il s'inverse avant, deux directions du world donnent le meme
-#    pixel : impossible pour une vraie lentille, et signe d'un ajustement mal
+#    pixel : impossible pour une true lentille, et signe d'un ajustement mal
 #    conditionne. Le default passe inapercu autrement.
 #
 # ---------------------------------------------------------------------------
@@ -239,7 +239,7 @@ def est_en_couleur(cap, trials=5):
     qui sort vraiment.
 
     Un flux gris recopie a l'identique sur les trois canaux : leur difference
-    est exactement nulle. Une vraie image colour, meme d'une scene terne, ne
+    est exactement nulle. Une true image colour, meme d'une scene terne, ne
     l'est jamais.
     """
     for _ in range(trials):
@@ -465,7 +465,7 @@ def diagnostic(mounting, K, dist, rms, vues, distance_damier=None):
     else:
         print(f"     [PROBLEME] inversion a r = {inversion:.3f}, DANS l'image.")
         print("     Deux directions du world y donnent le meme pixel : impossible")
-        print("     pour une vraie lentille. Les corners n'ont pas ete assez seen.")
+        print("     pour une true lentille. Les corners n'ont pas ete assez seen.")
         soucis.append("la distorsion s'inverse a l'interieur de l'image")
 
     # -- 5. residu -----------------------------------------------------------
@@ -631,7 +631,7 @@ def main():
                       f"{PORTEE_MINI:.0%}.")
                 print("  Un corner du damier doit approcher un COIN de l'image,")
                 print("  pas seulement entrer dans sa zone. Recule le damier")
-                print("  pour qu'il soit petit, et pousse-le vraiment au bord.")
+                print("  pour qu'il soit petit, et pushed-le vraiment au bord.")
                 continue
             break
 

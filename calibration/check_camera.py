@@ -5,7 +5,7 @@ import sys
 # Contrairement aux tests precedents, on se place ici dans le cas reel du projet :
 # le TAG est FIXE (colle au mur / dans la piscine) et c'est la CAMERA qui bouge
 # (embarquee sur l'UUV). On calcule donc la pose de la camera dans le frame du
-# tag, ce qui est exactement la grandeur utilisee pour localiser le vehicule.
+# tag, ce qui est exactement la grandeur used pour localiser le vehicule.
 #
 #   T_tag_camera = inverse(T_camera_tag)
 #       position    = ou se trouve la camera par report au tag
@@ -67,7 +67,7 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera utilisee : index={index}, backend={name}, {ww}x{hh}")
+                    print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
                     return cap, ww, hh
             cap.release()
     return None, 0, 0
@@ -78,7 +78,7 @@ def pose_camera(pts, K, dist):
 
     solvePnP donne la pose du tag seen depuis la camera ; on l'inverse pour
     obtenir la pose de la camera vue depuis le tag, qui est la grandeur
-    reellement utilisee pour localiser l'UUV.
+    reellement used pour localiser l'UUV.
     """
     ok, rvec, tvec = cv2.solvePnP(coins_3d, pts, K, dist,
                                   flags=cv2.SOLVEPNP_IPPE_SQUARE)
@@ -116,7 +116,7 @@ try:
     Lc, Hc = int(path["width"]), int(path["height"])
     print("Calibration chargee depuis calibration_camera.npz")
 except Exception:
-    print("Calibration integree au script utilisee")
+    print("Calibration integree au script used")
 print(f"  calibration : {Lc}x{Hc} (fx = {K_calib[0, 0]:.1f})   capture : {L}x{H}")
 if (L, H) != (Lc, Hc):
     print("  >>> ATTENTION : formats differents, la calibration n'est pas valable ici.")

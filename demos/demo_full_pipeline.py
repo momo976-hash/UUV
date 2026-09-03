@@ -56,7 +56,7 @@ def sauver_carte(tag_map):
 
 
 def dessiner_carte(tag_map, cam_xyz, cam_R, trace):
-    """Vue de dessus, cadrage automatique. Tags = carres, sans etiquette."""
+    """Vue de dessus, cadrage automatique. Tags = carres, sans label."""
     m = np.full((CARTE_PX, CARTE_PX, 3), 28, dtype=np.uint8)
 
     pts_monde = list(trace) + [T[:3, 3] for T in tag_map.values()]
@@ -90,7 +90,7 @@ def dessiner_carte(tag_map, cam_xyz, cam_R, trace):
                     cv2.line(m, (0, sy), (CARTE_PX, sy), (44, 44, 44), 1)
             k += 1
 
-    # tags : carres bleus, SANS etiquette
+    # tags : carres bleus, SANS label
     for T in tag_map.values():
         px, py = to_px(T[0, 3], T[2, 3])
         cv2.rectangle(m, (px - 6, py - 6), (px + 6, py + 6), (255, 150, 0), -1)
@@ -145,7 +145,7 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera utilisee : index={index}, backend={name}, {ww}x{hh}")
+                    print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
                     if (ww, hh) != RESOLUTION:
                         print(f"  ATTENTION : resolution obtenue {ww}x{hh} au lieu de "
                               f"{RESOLUTION[0]}x{RESOLUTION[1]}. La calibration ne sera "

@@ -50,7 +50,7 @@ MONTAGE = optics.ACTIVE_MOUNTING
 # Tant qu'il n'est pas calibre, optics.py retombe sur la camera nue en le
 # disant.
 K_CALIB, DIST_CALIB = optics.load(MONTAGE)
-LARGEUR_CALIB = 640          # resolution utilisee lors de la calibration
+LARGEUR_CALIB = 640          # resolution used lors de la calibration
 
 
 def charger_calibration(width, height):
@@ -61,7 +61,7 @@ def charger_calibration(width, height):
         K, d, Lc = f["K"].astype(np.float64), f["dist"].ravel(), int(f["width"])
         print("Calibration chargee depuis calibration_camera.npz")
     except Exception:
-        print("Calibration integree au script utilisee")
+        print("Calibration integree au script used")
     if width != Lc:                      # mise a l'echelle si resolution differente
         K = K.copy()
         K[:2] *= width / Lc
@@ -154,7 +154,7 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera utilisee : index={index}, backend={name}, {ww}x{hh}")
+                    print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
                     if (ww, hh) != RESOLUTION:
                         print(f"  ATTENTION : resolution obtenue {ww}x{hh} au lieu de "
                               f"{RESOLUTION[0]}x{RESOLUTION[1]}. La calibration ne sera "

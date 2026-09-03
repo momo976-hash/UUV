@@ -1,7 +1,7 @@
 # auto_enregistrement.py — Construit la tag_map des tags AUTOMATIQUEMENT.
 #
 # Principe (comme le "Step 2" de Thein) :
-#   - Le first tag seen devient l'ORIGINE (l'ancre) : T_monde_ancre = identite.
+#   - Le first tag seen devient l'ORIGINE (l'ancre) : T_monde_ancre = identity.
 #   - Quand la camera voit une paire (A deja enregistre, B new), on calcule
 #     la position de B a partir de A, sans connaitre la position de la camera :
 #         T_monde_B = T_monde_A @ inverse(T_camera_A) @ T_camera_B

@@ -439,7 +439,7 @@ def focal_length(mounting=None):
 
 # --- garde-fou : ce que la camera voit contredit-il le mounting declare ? ----
 # Ce test ne DECIDE rien, il alerte. L'water absorbe le rouge (~0.4 /m) et
-# presque pas le bleu (~0.02 /m) : sur un aller-retour de trois metres le canal
+# presque pas le bleu (~0.02 /m) : sur un aller-back de trois metres le canal
 # rouge tombe a un tiers pendant que le bleu ne bouge pas. Une image de bassin
 # est donc franchement bleue, une image de bureau ne l'est pas.
 #
@@ -771,7 +771,7 @@ def grandissement_section(decentrement=None, indice_exterieur=WATER_INDEX,
 def residu_section(decentrement=None, indice_exterieur=WATER_INDEX, K=None):
     """Ce que le menisque laisse APRES que la focal_length ait absorbe ce qu'elle peut.
 
-    C'est la vraie error du mounting : la part de la deviation qu'aucune
+    C'est la true error du mounting : la part de la deviation qu'aucune
     calibration ne peut ranger dans un parametre. A comparer a CORNER_NOISE_PX.
     """
     K = K_BARE_AIR if K is None else K
@@ -1074,7 +1074,7 @@ def report():
             "  Sur l'axis, tout radius frappe les deux surfaces perpendiculairement",
             "  et ressort sans devier. Hors de l'axis le menisque agit — mais",
             "  presque uniquement comme un CHANGEMENT DE FOCALE, que la",
-            "  calibration absorbe. Seul le residu est une vraie error.",
+            "  calibration absorbe. Seul le residu est une true error.",
             "",
             f"  {'gap a l axis':>14} {'deviation raw':>16} {'-> focal_length fy':>14} "
             f"{'residu reel':>13}",

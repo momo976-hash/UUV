@@ -235,7 +235,7 @@ try:
     Lc, Hc = int(path["width"]), int(path["height"])
     print("Calibration chargee depuis calibration_camera.npz")
 except Exception:
-    print("Calibration integree au script utilisee")
+    print("Calibration integree au script used")
 if (L, H) != (Lc, Hc):
     print(f"  >>> ATTENTION : capture {L}x{H} mais calibration {Lc}x{Hc}.")
 
@@ -301,7 +301,7 @@ CSV = os.path.abspath("world_frame_check.csv")
 #
 # sigma_filtre_mm est l'uncertainty que le filter ANNONCE. C'est elle qui
 # permet de repondre a la seule question qui compte vraiment : le filter
-# dit-il la verite sur sa propre precision ?
+# dit-il la truth sur sa propre precision ?
 ENTETE = ["mode", "valeur_reelle", "raw", "erreur_brut",
           "filter", "erreur_filtre", "sigma_filtre_mm", "nb_tags"]
 if os.path.exists(CSV):
@@ -732,15 +732,15 @@ def bilan_filtre():
         return
 
     rms = lambda v: float(np.sqrt(np.mean(np.square(v))))
-    rms_brut = rms([b for b, _ in apparies])
-    rms_filtre = rms([f for _, f in apparies])
-    print(f"  error RMS   raw   {rms_brut*1000:7.1f} mm")
-    print(f"               filter {rms_filtre*1000:7.1f} mm", end="")
-    if rms_filtre > 0:
-        print(f"     -> gain {rms_brut/rms_filtre:.2f}x")
+    rms_raw = rms([b for b, _ in apparies])
+    rms_filtered = rms([f for _, f in apparies])
+    print(f"  error RMS   raw   {rms_raw*1000:7.1f} mm")
+    print(f"               filter {rms_filtered*1000:7.1f} mm", end="")
+    if rms_filtered > 0:
+        print(f"     -> gain {rms_raw/rms_filtered:.2f}x")
     else:
         print()
-    gain = rms_brut / rms_filtre if rms_filtre > 0 else float("inf")
+    gain = rms_raw / rms_filtered if rms_filtered > 0 else float("inf")
     if gain >= 1.2:
         print("  [OK] le filter reduit l'error.")
     elif gain > 1.0:
@@ -768,7 +768,7 @@ def bilan_filtre():
             print("  [OK] le filter est prudent : il annonce plus d'error qu'il")
             print("       n'en fait. Sans danger, mais il se sous-estime.")
         elif report <= 2.0:
-            print("  [OK] le filter dit la verite sur sa precision.")
+            print("  [OK] le filter dit la truth sur sa precision.")
         elif report <= 4.0:
             print("  [ATTENTION] le filter se croit plus precis qu'il n'est.")
             print("       Ne pas se fier au +/- affiche tel quel.")
@@ -834,5 +834,5 @@ if len(vitesses_angulaires) > 100:
     print("  GYRO_DRIFT_DEG_S, and change ONLY the numbers to the two values")
     print("  shown above. Save. Nothing else to change anywhere.")
     print("=" * 66)
-    print("  Valable si ce que tu viens de faire ressemble a une vraie mission.")
+    print("  Valable si ce que tu viens de faire ressemble a une true mission.")
     print("  Une session ou la camera reste posee ne measurement rien d'utile.")

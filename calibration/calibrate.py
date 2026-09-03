@@ -41,7 +41,7 @@
 #
 # La calibration en air fait ainsi d'une pierre deux coups : elle valide le
 # mounting, et elle donne le seul parametre geometrique qu'on ne sait pas
-# mesurer autrement. Sous l'water la paroi devient une vraie lentille dans les
+# mesurer autrement. Sous l'water la paroi devient une true lentille dans les
 # deux directions, et la recalibration n'est plus optionnelle.
 #
 # Touches : c = capturer | k = calibrer | z = annuler la derniere | q = quitter
@@ -116,7 +116,7 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera utilisee : index={index}, backend={name}, {ww}x{hh}")
+                    print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
                     if (ww, hh) != RESOLUTION:
                         print(f"  ATTENTION : resolution obtenue {ww}x{hh} au lieu de "
                               f"{RESOLUTION[0]}x{RESOLUTION[1]}. La calibration ne sera "

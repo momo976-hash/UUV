@@ -1,25 +1,38 @@
-# kalman_reference_check.py — Le filter du projet EST celui du document de reference.
+# kalman_reference_check.py — The project's filter IS the reference document's.
 #
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
 #     python kalman/kalman_reference_check.py
 #
-# DOCUMENT DE REFERENCE
-#   Alex Becker, « Kalman Filter Explained Through Examples »,
-#   kalmanfilter.net, consulte le 02/09/2026.
+# No camera, no hardware, a few seconds. It either prints that the 9 published
+# values are recovered, or it fails. Nothing to configure.
 #
-# CE QUE FAIT CE SCRIPT, ET POURQUOI
-# Le document deroule un exemple chiffre : un radar 1D qui suit un avion. Il
-# imprime toutes les values intermediaires — F, Q, P(1,0), K(1), x(1,1),
-# P(1,1), x(2,1), P(2,1). Ce script fait tourner CE meme exemple a travers la
-# classe LinearKalman du projet, celle-la meme qui filter la position de
-# l'engin, et compare chaque count a celui imprime dans le document.
+# This is the script to run when someone asks "is this really a Kalman filter,
+# or something that looks like one?".
 #
-# Autrement dit : ce n'est pas un filter ecrit pour la demonstration, c'est le
-# filter de l'engin qu'on met a l'epreuve sur un probleme dont la reponse est
-# publiee. S'il s'ecartait des equations du cours, la comparaison le dirait
-# tout de suite au lieu de le cacher derriere la geometrie des tags.
+# ===========================================================================
+# REFERENCE DOCUMENT
+# ===========================================================================
+#   Alex Becker, "Kalman Filter Explained Through Examples",
+#   kalmanfilter.net, consulted 02/09/2026.
 #
-# Le script montre ensuite que le model de l'engin est le MEME model
-# cinematique a velocity constante, simplement porte de 1 a 3 dimensions.
+# ===========================================================================
+# WHAT THIS SCRIPT DOES, AND WHY
+# ===========================================================================
+# The document works through a numerical example: a 1D radar tracking an
+# aircraft. It prints every intermediate value — F, Q, P(1,0), K(1), x(1,1),
+# P(1,1), x(2,1), P(2,1). This script runs THAT SAME example through the
+# project's LinearKalman class, the very one that filters the vehicle's
+# position, and compares each number with the one printed in the document.
+#
+# In other words: this is not a filter written for the demonstration, it is
+# the vehicle's filter put to the test on a problem whose answer is
+# published. If it departed from the course's equations, the comparison would
+# say so immediately instead of hiding it behind the geometry of the tags.
+#
+# The script then shows that the vehicle's model is the SAME constant-velocity
+# kinematic model, simply carried from 1 to 3 dimensions.
 import sys
 from pathlib import Path
 
@@ -53,7 +66,7 @@ _resultats = []
 
 
 def comparer(name, calcule):
-    """Compare une value calculee a celle imprimee dans le document."""
+    """Compare a computed value with the one printed in the document."""
     attendu = DOC[name]
     calcule = np.asarray(calcule, dtype=float)
     gap = float(np.max(np.abs(calcule - attendu)))
@@ -64,15 +77,15 @@ def comparer(name, calcule):
     plat = " ".join(f"{v:12.4f}" for v in np.ravel(calcule))
     doc = " ".join(f"{v:12.4f}" for v in np.ravel(attendu))
     marque = "OK " if ok else "NON"
-    print(f"  [{marque}] {name:8s} calcule : {plat}")
+    print(f"  [{marque}] {name:8s} computed: {plat}")
     print(f"          {'':8s} document: {doc}     gap {gap:.2e}")
     return ok
 
 
 def exemple_du_document():
-    """L'exemple du radar, deroule avec le core du projet."""
+    """The radar example, worked through with the project's core."""
     print("=" * 74)
-    print("EXEMPLE DU DOCUMENT — radar 1D next un avion")
+    print("THE DOCUMENT'S EXAMPLE — 1D radar tracking an aircraft")
     print("  Alex Becker, Kalman Filter Explained Through Examples,")
     print("  kalmanfilter.net")
     print("=" * 74)
@@ -98,12 +111,12 @@ def exemple_du_document():
     comparer("Q", Q)
 
     # --- ITERATION 0 : initialisation puis prediction ----------------------
-    print("\nITERATION 0 — initialisation par la premiere measurement")
+    print("\nITERATION 0 — initialised from the first measurement")
     filter = LinearKalman(
         x=np.array([10000.0, 200.0]),
         P=np.diag([sigma_portee ** 2, sigma_vitesse ** 2]))
     print(f"  x(0,0) = {filter.x.tolist()}   P(0,0) = "
-          f"{np.diag(filter.P).tolist()} (diagonale)")
+          f"{np.diag(filter.P).tolist()} (diagonal)")
 
     print("\nITERATION 0 — prediction")
     filter.predict(F, Q)
@@ -111,8 +124,8 @@ def exemple_du_document():
     comparer("P(1,0)", filter.P)
 
     # --- ITERATION 1 : mise a jour ----------------------------------------
-    print("\nITERATION 1 — mise a jour par la second measurement")
-    print(f"  z(1) = {z1.tolist()}   R(1) = {np.diag(R1).tolist()} (diagonale)")
+    print("\nITERATION 1 — update from the second measurement")
+    print(f"  z(1) = {z1.tolist()}   R(1) = {np.diag(R1).tolist()} (diagonal)")
     K, _ = filter.gain(H, R1)
     comparer("K(1)", K)
 
@@ -128,10 +141,10 @@ def exemple_du_document():
     # le croire.
     simplifiee = (np.eye(2) - K @ H) @ P_avant
     gap = float(np.max(np.abs(filter.P - simplifiee)))
-    print(f"\n  forme de Joseph vs forme simplifiee : gap {gap:.1e}")
-    print("    -> identiques, comme l'annonce le document. On garde Joseph,")
-    print("       qui reste symetrique definie positive apres des milliers")
-    print("       d'iterations en virgule flottante.")
+    print(f"\n  Joseph form vs simplified form: gap {gap:.1e}")
+    print("    -> identical, as the document states. Joseph is kept, since it")
+    print("       stays symmetric positive-definite after thousands of")
+    print("       floating-point iterations.")
 
     # --- ITERATION 1 : prediction suivante ---------------------------------
     print("\nITERATION 1 — prediction")
@@ -141,15 +154,15 @@ def exemple_du_document():
 
 
 def modele_de_lengin():
-    """Le meme model, porte de 1 a 3 dimensions pour l'engin."""
+    """The same model, carried from 1 to 3 dimensions for the vehicle."""
     print("\n" + "=" * 74)
-    print("LE MEME MODELE, APPLIQUE A L'ENGIN")
+    print("THE SAME MODEL, APPLIED TO THE VEHICLE")
     print("=" * 74)
     print("""
-  Le document raisonne sur un state a deux composantes, [portee, velocity],
-  parce que son radar est unidimensionnel. L'engin se deplace dans l'water :
-  son state en a six, [px py pz vx vy vz]. Le model est le meme, bloc par
-  bloc — c'est le meme model CINEMATIQUE a velocity constante.
+  The document reasons about a two-component state, [range, velocity],
+  because its radar is one-dimensional. The vehicle moves through water: its
+  state has six, [px py pz vx vy vz]. The model is the same, block by block —
+  it is the same CONSTANT-VELOCITY KINEMATIC model.
 
       document              engin
       F = [[1, dt],         F = [[I3, dt.I3],
@@ -158,7 +171,7 @@ def modele_de_lengin():
       Q = sa^2 [[dt^4/4, dt^3/2],      Q = sa^2 . G G'
                 [dt^3/2, dt^2  ]]      avec G = [dt^2/2 . I3 ; dt . I3]
 
-  Ces deux ecritures de Q sont la meme. Verification numerique :""")
+  These two ways of writing Q are the same. Numerical check:""")
 
     dt, sigma_a = 5.0, 0.2
     _, G = PositionKalmanFilter.model(dt)
@@ -167,46 +180,46 @@ def modele_de_lengin():
                 ("croise    dt^3/2", Q3[0, 3], sigma_a ** 2 * dt ** 3 / 2),
                 ("velocity   dt^2  ", Q3[3, 3], sigma_a ** 2 * dt ** 2))
     tout_bon = True
-    for name, obtenu, attendu in attendus:
-        ok = abs(obtenu - attendu) < 1e-12
+    for name, got, attendu in attendus:
+        ok = abs(got - attendu) < 1e-12
         tout_bon &= ok
-        print(f"    [{'OK ' if ok else 'NON'}] bloc {name} : "
-              f"G G' donne {obtenu:8.4f}, formule du document {attendu:8.4f}")
+        print(f"    [{'OK ' if ok else 'NON'}] block {name} : "
+              f"G G' donne {got:8.4f}, formule du document {attendu:8.4f}")
     _resultats.append(("Q en 3D = Q du document", tout_bon, 0.0))
 
     print("""
-  UNE SEULE DIFFERENCE, ET ELLE EST DANS H. Le radar du document measurement la
-  portee ET la velocity, donc H = I. Les tags ne donnent qu'une position :
+  ONE SINGLE DIFFERENCE, AND IT IS IN H. The document's radar measures range
+  AND velocity, so H = I. The tags only give a position:
 
       H = [I3  0]
 
-  Les vitesses ne sont jamais measured, elles sont DEDUITES par le filter a
-  partir de l'evolution des positions. C'est le cas le plus current, et le
-  document le prevoit explicitement : « the measurement and the system state
-  may belong to different physical domains ».
+  Velocities are never measured, they are DEDUCED by the filter from how the
+  positions evolve. That is the more common case, and the document allows for
+  it explicitly: "the measurement and the system state may belong to
+  different physical domains".
 
-  CE QUE LE PROJET AJOUTE, ET POURQUOI
-  Trois choses seulement, toutes prevues par le document :
+  WHAT THE PROJECT ADDS, AND WHY
+  Three things only, all of them foreseen by the document:
 
-    1. L'ENTREE u. Le document ecrit x(n+1,n) = F x(n,n) + G u(n) et donne
-       pour exemple d'input « readings from an onboard accelerometer ».
-       C'est exactement ce que fait PositionKalmanFilter.predict(dt, accel) :
-       sans accelerometre l'acceleration est un alea couvert par sigma_a,
-       avec lui elle est measured et il ne reste que le noise du capteur.
+    1. THE INPUT u. The document writes x(n+1,n) = F x(n,n) + G u(n) and
+       gives as an example of input "readings from an onboard accelerometer".
+       That is exactly what PositionKalmanFilter.predict(dt, accel) does:
+       without an accelerometer the acceleration is a random unknown covered
+       by sigma_a; with one it is measured, and only sensor noise remains.
 
-    2. LE REJET DES MESURES ABERRANTES. Un tag seen de trop bias peut se
-       retourner et donner une pose fausse de plusieurs decimetres. On la
-       reconnait a sa distance de Mahalanobis y' S^-1 y, ou S = H P H' + R
-       est deja calculee pour le gain. Le document renvoie ce sujet a son
-       chapitre « Outlier Treatment » : « in practice it is often necessary
-       to reject certain measurements ».
+    2. OUTLIER REJECTION. A tag seen too far off-axis can flip and give a
+       pose wrong by several decimetres. It is recognised by its Mahalanobis
+       distance y' S^-1 y, where S = H P H' + R is already computed for the
+       gain. The document refers this subject to its "Outlier Treatment"
+       chapter: "in practice it is often necessary to reject certain
+       measurements".
 
-    3. L'ORIENTATION A PART. Les rotations ne s'additionnent pas, donc un
-       Kalman lineaire ne s'applique pas directement a une orientation. Elle
-       est traitee par un filter scalaire sur l'angle, applique par slerp sur
-       les quaternions — c'est le sujet des filtres non lineaires, que le
-       document renvoie a son livre. La POSITION, elle, reste exactement le
-       filter lineaire ci-dessus.
+    3. ORIENTATION HANDLED SEPARATELY. Rotations do not add up, so a linear
+       Kalman filter does not apply directly to an orientation. It is handled
+       by a scalar filter on the angle, applied through slerp on the
+       quaternions — the subject of nonlinear filters, which the document
+       refers to its book. POSITION, on the other hand, remains exactly the
+       linear filter above.
 """)
 
 
@@ -217,15 +230,15 @@ def main():
     print("=" * 74)
     echecs = [name for name, ok, _ in _resultats if not ok]
     if echecs:
-        print(f"DESACCORD avec le document sur : {', '.join(echecs)}")
+        print(f"DISAGREEMENT with the document on: {', '.join(echecs)}")
         print("=" * 74)
         return 1
-    print(f"LES {len(_resultats)} VALEURS DU DOCUMENT SONT RETROUVEES")
+    print(f"THE {len(_resultats)} PUBLISHED VALUES ARE ALL RECOVERED")
     print("")
-    print("  Le filter de position du projet n'est pas inspire du document :")
-    print("  c'est le meme filter. Il reproduit son exemple chiffre a la")
-    print("  quatrieme decimale, avec la classe qui tourne reellement sur")
-    print("  l'engin (kalman_filter.LinearKalman).")
+    print("  The project's position filter is not inspired by the document:")
+    print("  it IS the same filter. It reproduces the document's worked")
+    print("  example to the fourth decimal, using the class that actually")
+    print("  runs on the vehicle (kalman_filter.LinearKalman).")
     print("=" * 74)
     return 0
 

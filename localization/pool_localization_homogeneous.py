@@ -1,7 +1,7 @@
 # localisation_piscine_homogene.py
 # Meme result que localisation_piscine.py, mais ecrit avec des
 # TRANSFORMATIONS HOMOGENES (matrices 4x4) -> plus propre, et pret a gerer
-# des tags orientes differemment (indispensable pour la vraie piscine).
+# des tags orientes differemment (indispensable pour la true piscine).
 #
 # Rappel des notations :
 #   T_A_B = pose du frame B seen depuis le frame A (convertit un point B -> A).
@@ -95,7 +95,7 @@ while True:
             R, _ = cv2.Rodrigues(rvec)
             T_camera_tag = transformation(R, tvec)              # tag seen depuis la camera
 
-            # Pose du tag dans la piscine. Rotation = identite (tags orientes pareil).
+            # Pose du tag dans la piscine. Rotation = identity (tags orientes pareil).
             # NOTE : pour un tag incline, remplace np.eye(3) par sa rotation R_tag.
             T_piscine_tag = transformation(np.eye(3), CARTE_DES_TAGS[tag_id])
 

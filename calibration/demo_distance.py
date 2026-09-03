@@ -47,7 +47,7 @@
 # Pas cette demo : le principe. On calibre l'objet qu'on utilise. Quelle que
 # soit la cause du decalage, la calibration faite dans le tube en tient
 # compte et celle faite dehors ne le peut pas, par construction. L'argument
-# sans ambiguite viendra sous l'water, ou la paroi devient une vraie lentille
+# sans ambiguite viendra sous l'water, ou la paroi devient une true lentille
 # (focales attendues 804 / 625 px au lieu de 596 / 608) : la, l'gap se
 # compte en dizaines de pourcents et le metre a ruban le verra.
 #
@@ -269,7 +269,7 @@ def composer(image, cameras, detector, taille_tag, reference, mounting, echelle)
                 ecart_3d = float(np.linalg.norm(tvec - etalon))
             rows.append((name, detail, distance, ecart_3d, colour))
 
-        # L'etiquette va AU-DESSUS du tag : ecrite au centre, elle masquerait
+        # L'label va AU-DESSUS du tag : ecrite au centre, elle masquerait
         # le motif que la personne est justement en train de regarder.
         cote_px = float(np.max(np.linalg.norm(
             coins_2d - np.roll(coins_2d, -1, axis=0), axis=1)))
@@ -297,7 +297,7 @@ def main():
                                 f"{TAILLES[0]} et {TAILLES[1]})")
     parser.add_argument("--reference", type=float, default=0.0,
                            metavar="METRES",
-                           help="distance vraie measured au metre a ruban ; "
+                           help="distance true measured au metre a ruban ; "
                                 "active l'display des errors")
     parser.add_argument("--mounting", default=optics.ACTIVE_MOUNTING,
                            choices=optics.MOUNTINGS,

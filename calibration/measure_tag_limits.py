@@ -132,7 +132,7 @@ def limite_par_paliers(samples, cle, croissant, taux_limite=TAUX_LIMITE,
        reference, et l'appelant est prevenu.
     2. On ne conclut qu'apres PALIERS_CONFIRMATION paliers consecutifs sous
        le threshold. Un creux isole est du noise, pas une limit : au-dela de la
-       vraie limit, la detection ne revient jamais.
+       true limit, la detection ne revient jamais.
 
     `logarithmique` decoupe les paliers en proportions plutot qu'en gaps.
     C'est ce qu'il faut pour la size apparente : entre 20 et 210 px, des
@@ -290,7 +290,7 @@ def report(rows):
                   + (f", {hors_cadre_d} ecartes (tag au bord de l'image)"
                      if hors_cadre_d else ""))
     if len(distance) < 12:
-        output.append("  Trop peu de points. Refais un aller-retour complet ('d').")
+        output.append("  Trop peu de points. Refais un aller-back complet ('d').")
     else:
         limit, paliers, diagnostic = limite_par_paliers(distance, "pixels",
                                                          croissant=False,
@@ -418,7 +418,7 @@ def guide_de_portee(size):
 def main():
     global TAG_SIZE
     parser = argparse.ArgumentParser(
-        description="Mesure PIXELS_MIN et INCIDENCE_MAX sur la vraie camera.")
+        description="Mesure PIXELS_MIN et INCIDENCE_MAX sur la true camera.")
     parser.add_argument("--tag", type=float, default=REAL_TAG_SIZE,
                            metavar="METRES",
                            help="cote du tag d'trial en metres (default %(default)s). "

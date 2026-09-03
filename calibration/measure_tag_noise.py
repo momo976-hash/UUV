@@ -87,7 +87,7 @@ def _poids_lissage(demi_fenetre, degre):
     """Poids d'un lissage polynomial local (Savitzky-Golay) et son bias.
 
     Renvoie aussi le facteur par lequel la variance des residus sous-estime
-    la vraie variance du noise : le lissage absorbe une part du noise.
+    la true variance du noise : le lissage absorbe une part du noise.
     """
     x = np.arange(-demi_fenetre, demi_fenetre + 1, dtype=float)
     A = np.vander(x, degre + 1, increasing=True)

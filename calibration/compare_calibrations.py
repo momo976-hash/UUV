@@ -63,7 +63,7 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera utilisee : index={index}, backend={name}, {ww}x{hh}")
+                    print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
                     return cap, ww, hh
             cap.release()
     return None, 0, 0
@@ -107,7 +107,7 @@ try:
     Lc, Hc = int(path["width"]), int(path["height"])
     print("Calibration chargee depuis calibration_camera.npz")
 except Exception:
-    print("Calibration integree au script utilisee")
+    print("Calibration integree au script used")
 print(f"  calibration : {Lc}x{Hc} (fx = {K_calib[0, 0]:.1f})   capture : {L}x{H}")
 if (L, H) != (Lc, Hc):
     print("  >>> ATTENTION : formats differents, la calibration n'est pas valable ici.")

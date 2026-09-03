@@ -9,7 +9,7 @@
 #
 #     python check_distance.py --reel 1.000 --pi
 #
-# Le Pi tient la camera au bord du bassin et pousse les frames ; ce PC les
+# Le Pi tient la camera au bord du bassin et pushed les frames ; ce PC les
 # recoit, measurement, et affiche la window. Utile quand la camera ne se laisse
 # pas ouvrir sous Windows. Le protocole est celui du script de Josiah, repris
 # tel quel : le PC est le SERVEUR (il ecoute, port 5000 par default) et le
@@ -52,7 +52,7 @@
 # est 12 % trop petit, les distances sortent 12 % trop courtes. Le tag tranche
 # donc ce qu'aucun raisonnement n'a tranche.
 #
-# Et le result est directement exploitable : de l'gap entre distance vraie
+# Et le result est directement exploitable : de l'gap entre distance true
 # et distance measured, on DEDUIT la focal_length correcte.
 #
 # ---------------------------------------------------------------------------
@@ -527,7 +527,7 @@ def main():
     print("\n" + "=" * 66)
     print("RESULTAT")
     print("=" * 66)
-    print(f"  distance vraie    {options.reel:.3f} m")
+    print(f"  distance true    {options.reel:.3f} m")
     print(f"  distance measured  {measured:.3f} m   (+/- {spread*1000:.0f} mm)")
     print(f"  gap             {gap:+.1f} %")
     print(f"  cote apparent     {cote_px:.1f} px")
@@ -594,8 +594,8 @@ def main():
     # -- enregistrement : plus jamais une measurement perdue ---------------------
     # Des measurements faites et jamais notees ont deja coute deux semaines de
     # travail. Chaque lancement s'ajoute desormais a un path, avec tout ce
-    # qu'il faut pour reconstruire l'analyse plus tard : distance vraie,
-    # distance measured, mounting, focal_length utilisee.
+    # qu'il faut pour reconstruire l'analyse plus tard : distance true,
+    # distance measured, mounting, focal_length used.
     # fy_utilise est enregistre au meme titre que fx : deux trials peuvent
     # partager fx et differer par fy (c'est precisement ce que --focal_length rend
     # facile), et solvePnP les distingue. Sans cette column, l'ajustement plus
@@ -605,7 +605,7 @@ def main():
     # aussitot perdu, alors que c'est le seul chiffre qui permette de comparer
     # ce script a une AUTRE chaine de measurement (apriltag_ros, par exemple). La
     # distance vaut d = fx.S/s : si deux chaines annoncent la meme distance
-    # vraie avec la meme focal_length mais divergent, l'gap est soit dans S (la
+    # true avec la meme focal_length mais divergent, l'gap est soit dans S (la
     # size declaree du tag), soit dans s (la ou chaque detector pose les
     # corners). Sans s enregistre, impossible de dire lequel des deux — et c'est
     # exactement la question restee ouverte face aux measurements de Josiah.
@@ -703,7 +703,7 @@ def main():
     with open(fichier_historique, newline="") as f:
         rows = [l for l in csv.DictReader(f) if _meme_optique(l)]
     if len(rows) >= 3:
-        vrais = np.array([float(l["distance_vraie_m"]) for l in rows])
+        true_values = np.array([float(l["distance_vraie_m"]) for l in rows])
         measurements = np.array([float(l["distance_mesuree_m"]) for l in rows])
         # La spread image-a-image, enregistree a chaque measurement, sert de
         # barre d'error. Sans elle on ne peut pas dire si un decalage est
@@ -718,22 +718,22 @@ def main():
         print("-" * 66)
 
         # Ajustement pondere, avec l'uncertainty sur les deux params.
-        A = np.vstack([vrais, np.ones_like(vrais)]).T
+        A = np.vstack([true_values, np.ones_like(true_values)]).T
         W = np.diag(1.0 / sigmas ** 2)
         try:
             covariance = np.linalg.inv(A.T @ W @ A)
         except np.linalg.LinAlgError:
             covariance = None
         if covariance is None or len(rows) < 3:
-            pente, decalage = np.polyfit(vrais, measurements, 1)
+            pente, decalage = np.polyfit(true_values, measurements, 1)
             sigma_decalage = float("inf")
         else:
             pente, decalage = covariance @ A.T @ W @ measurements
             sigma_decalage = float(np.sqrt(covariance[1, 1]))
 
         # Modele le plus simple : pure echelle, sans decalage.
-        echelle = float(np.sum(vrais * measurements / sigmas ** 2)
-                        / np.sum(vrais ** 2 / sigmas ** 2))
+        echelle = float(np.sum(true_values * measurements / sigmas ** 2)
+                        / np.sum(true_values ** 2 / sigmas ** 2))
 
         print(f"  pure echelle : d_mesuree = {echelle:.4f} x d_vraie")
         print(f"                 -> fx ideal = {fx / echelle:.1f} "
@@ -752,14 +752,14 @@ def main():
         # statistique, et il faut les afficher separement.
         significatif = (np.isfinite(sigma_decalage)
                         and abs(decalage) > 2.0 * sigma_decalage)
-        etendue = float(vrais.max() - vrais.min())
+        etendue = float(true_values.max() - true_values.min())
         if not np.isfinite(sigma_decalage):
             pass
         elif not significatif:
             print(f"\n  Le decalage tient dans le noise ({abs(decalage)/sigma_decalage:.1f} "
                   f"sigma) : une pure error d'echelle")
             print(f"  suffit a tout expliquer, donc la focal_length seule.")
-            if etendue > 0 and vrais.min() > 0.6:
+            if etendue > 0 and true_values.min() > 0.6:
                 print(f"  Pour le trancher pour de bon, mesurer A COURTE DISTANCE")
                 print(f"  (0.5 m) : c'est la qu'un decalage fixe se voit le plus en")
                 print(f"  pourcentage, alors qu'une error d'echelle donne le meme")

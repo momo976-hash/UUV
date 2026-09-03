@@ -270,8 +270,8 @@ def dessiner(ax):
             ax.plot(*zip(centre, fleche), color="#334155", linewidth=1.2)
             ax.scatter(*fleche, color="#334155", s=8)
 
-        etiquette = centre + 0.13 * n - 0.16 * vertical
-        ax.text(*etiquette, str(tid), color="#0f172a", fontsize=9, weight="bold",
+        label = centre + 0.13 * n - 0.16 * vertical
+        ax.text(*label, str(tid), color="#0f172a", fontsize=9, weight="bold",
                 ha="center", va="center",
                 bbox=dict(boxstyle="circle,pad=0.18", facecolor="white",
                           edgecolor=COULEUR_PAROI[paroi], linewidth=1.2))
@@ -350,7 +350,7 @@ def resume_console():
     tour = sum(np.linalg.norm(positions[(i + 1) % len(TAGS)] - positions[i])
                for i in range(len(TAGS)))
     print(f"Tour complet de la boucle : {tour:.3f} m  "
-          "(le retour au tag 0 doit redonner l'identite)")
+          "(le back au tag 0 doit redonner l'identity)")
     print("=" * 70)
 
 
