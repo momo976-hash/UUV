@@ -42,7 +42,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 # 1. Le bassin et les tags
 # --------------------------------------------------------------------------
 LONGUEUR, LARGEUR, PROFONDEUR = 3.80, 1.67, 1.00
-TAILLE_TAG = optics.TAILLE_TAG_GRAND   # mesure au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # mesure au pied a coulisse, pas 223 mm nominal
 BORDURE = 0.020          # ruban noir autour du tag (methode de Josiah)
 
 # id, paroi, x, y, z (profondeur), normale (dirigee vers l'interieur du bassin)
@@ -69,7 +69,7 @@ COULEUR_PAROI = {
 # --------------------------------------------------------------------------
 # 2. La camera sous l'eau, dans son tube
 # --------------------------------------------------------------------------
-# Toute l'optics vient de optics.py : matrice de calibration, refraction du
+# Toute l'optics vient de optics.py : matrix de calibration, refraction du
 # hublot, et le TUBE, qui peut rogner le champ avant meme que l'eau s'en mele.
 # Le champ retenu ci-dessous est donc le plus petit des deux.
 LARGEUR_PX, HAUTEUR_PX = optics.RESOLUTION
@@ -91,7 +91,7 @@ DEMI_FOV_V = np.radians(optics.demi_champ_eau(_demi_v_air, "section"))
 # meme s'il est large dans l'autre. Sous l'eau et dans ce montage, la moins
 # grossie est la VERTICALE — donc immerger ne fait pas gagner de portee, au
 # contraire du raccourci « x 1.33 » qui ne vaut que pour un hublot plat.
-FOCALE_EAU = optics.focale_eau()
+WATER_FOCAL_LENGTH = optics.focale_eau()
 
 # Vignettage : le tube est un tuyau, et la camera regarde par un bout.
 _VIGNETTAGE = optics.vignettage()
@@ -159,7 +159,7 @@ def visibles_depuis(position, azimut):
         incidence = np.degrees(np.arccos(np.clip(float(-v @ n) / distance, -1.0, 1.0)))
         if incidence > INCIDENCE_MAX:
             continue
-        pixels = FOCALE_EAU * TAILLE_TAG / distance
+        pixels = WATER_FOCAL_LENGTH * TAG_SIZE / distance
         # Le critere porte sur la largeur du tag UNE FOIS COMPRIME par
         # l'angle : la simulation a montre que l'incidence ne fait rien
         # d'autre que le retrecir d'un facteur cosinus, jusqu'au plafond dur
@@ -252,7 +252,7 @@ def dessiner(ax):
     if etat["camera"]:
         vus = {t[0]: t for t in visibles_depuis(camera["position"], camera["azimut"])}
 
-    demi_tag = TAILLE_TAG / 2
+    demi_tag = TAG_SIZE / 2
     for tid, paroi, x, y, z, normale in TAGS:
         centre = np.array([x, y, z])
         n, droite, vertical = repere_tag(normale)
@@ -335,7 +335,7 @@ def resume_console():
     print("=" * 70)
     print(f"BASSIN {LONGUEUR} x {LARGEUR} x {PROFONDEUR} m     "
           f"{LONGUEUR * LARGEUR * PROFONDEUR:.2f} m3")
-    print(f"Tag {TAILLE_TAG * 1000:.0f} mm + ruban noir {BORDURE * 1000:.0f} mm")
+    print(f"Tag {TAG_SIZE * 1000:.0f} mm + ruban noir {BORDURE * 1000:.0f} mm")
     print(f"Champ de vision sous l'eau : {np.degrees(2 * DEMI_FOV_H):.1f} deg horizontal, "
           f"{np.degrees(2 * DEMI_FOV_V):.1f} deg vertical")
     print("-" * 70)

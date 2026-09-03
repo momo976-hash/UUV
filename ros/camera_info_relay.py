@@ -78,9 +78,9 @@ class CameraInfoRelay(Node):
         chemin = self.get_parameter("calibration_file").value
         if not chemin:
             raise RuntimeError("Set the 'calibration_file' parameter.")
-        self.modele, montage = charger_yaml(chemin)
+        self.model, montage = charger_yaml(chemin)
 
-        fx, fy = self.modele.k[0], self.modele.k[4]
+        fx, fy = self.model.k[0], self.model.k[4]
         self.get_logger().info(
             f"mounting '{montage}': fx={fx:.2f} fy={fy:.2f} "
             f"(anamorphic ratio {max(fx, fy)/min(fx, fy):.2f})")
@@ -100,29 +100,29 @@ class CameraInfoRelay(Node):
             f"Relaying {topic_image} -> {sortie}/image_raw + {sortie}/camera_info")
         self.get_logger().info(
             f"Using calibration {chemin} "
-            f"({self.modele.width}x{self.modele.height}, fx={self.modele.k[0]:.2f})")
+            f"({self.model.width}x{self.model.height}, fx={self.model.k[0]:.2f})")
         self.averti = False
 
     def on_image(self, image):
         # The calibration is only valid at the resolution it was made for.
-        if (image.width, image.height) != (self.modele.width, self.modele.height) \
+        if (image.width, image.height) != (self.model.width, self.model.height) \
                 and not self.averti:
             self.get_logger().warn(
                 f"Image is {image.width}x{image.height} but the calibration is "
-                f"{self.modele.width}x{self.modele.height}. On a RealSense the "
+                f"{self.model.width}x{self.model.height}. On a RealSense the "
                 f"field of view changes with the requested format, so the "
                 f"intrinsics do NOT transfer between resolutions.")
             self.averti = True
 
         info = CameraInfo()
         info.header = image.header          # same timestamp and frame_id
-        info.width = self.modele.width
-        info.height = self.modele.height
-        info.distortion_model = self.modele.distortion_model
-        info.d = list(self.modele.d)
-        info.k = list(self.modele.k)
-        info.r = list(self.modele.r)
-        info.p = list(self.modele.p)
+        info.width = self.model.width
+        info.height = self.model.height
+        info.distortion_model = self.model.distortion_model
+        info.d = list(self.model.d)
+        info.k = list(self.model.k)
+        info.r = list(self.model.r)
+        info.p = list(self.model.p)
 
         self.pub_image.publish(image)
         self.pub_info.publish(info)

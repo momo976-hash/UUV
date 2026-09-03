@@ -36,7 +36,7 @@
 #   fy, l'axe VERTICAL, est circonferentiel : c'est un menisque. Il ne devie
 #   rien non plus SI la pupille est sur l'axe du tube, et de plus en plus
 #   quand elle s'en ecarte. Or la pupille de la D435i est forcement en retrait
-#   de quelques millimetres. Le rapport fy_tube / fy_nue MESURE donc ce
+#   de quelques millimetres. Le report fy_tube / fy_nue MESURE donc ce
 #   retrait, sans rien demonter. C'est la seule facon de le connaitre.
 #
 # La calibration en air fait ainsi d'une pierre deux coups : elle valide le
@@ -173,7 +173,7 @@ def relire_le_montage(K, erreur_rms):
             print(f"\n  fy = {fy:.2f}  ({100*(fy/nue[1,1]-1):+.2f} % / camera nue)")
             print("    Selon la circonference la paroi est un menisque : il ne")
             print("    devie rien si la pupille est sur l'axe, et d'autant plus")
-            print("    qu'elle s'en ecarte. Ce rapport MESURE cet ecart.")
+            print("    qu'elle s'en ecarte. Ce report MESURE cet ecart.")
             print(f"\n    decentrement mesure  : {ecart_mm:+.1f} mm")
             print(f"    decentrement suppose : {suppose:+.1f} mm  "
                   f"(fy attendu {attendu:.2f})")
@@ -186,7 +186,7 @@ def relire_le_montage(K, erreur_rms):
                                    - optics.JEU_ARRIERE
                                    - optics.CAMERA_PROFONDEUR) + ecart_mm)
                 print(f"    Valeur compatible avec la mesure : "
-                      f"{-corrige:.1f} mm. La corriger dans optics.py")
+                      f"{-corrige:.1f} mm. La correct dans optics.py")
                 print("    rendra justes toutes les predictions sous l'eau.")
             else:
                 print("\n    Coherent avec la geometrie supposee : optics.py "
@@ -195,7 +195,7 @@ def relire_le_montage(K, erreur_rms):
                   f"{optics.residu_section(ecart_mm/1000, optics.INDICE_EAU):.2f} px "
                   f"sous l'eau")
             print(f"    (bruit de detection mesure : "
-                  f"{optics.BRUIT_COIN_PX:.3f} px)")
+                  f"{optics.CORNER_NOISE_PX:.3f} px)")
         return
 
     # tube_eau
@@ -224,7 +224,7 @@ def relire_le_montage(K, erreur_rms):
         print("    Les deux axes ne grossissent pas pareil : c'est normal et")
         print("    c'est la signature du montage radial. Une anamorphose de 1.00")
         print("    voudrait dire que la camera n'est pas orientee comme on croit.")
-    print(f"\n  RMS {erreur_rms:.3f} px : sous l'eau le modele plumb_bob")
+    print(f"\n  RMS {erreur_rms:.3f} px : sous l'eau le model plumb_bob")
     print("  n'a pas la symetrie de revolution qu'il suppose, un residu plus")
     print("  eleve qu'en air est attendu — pas forcement une mauvaise calibration.")
 

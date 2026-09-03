@@ -2,7 +2,7 @@
 # encore a une calibration deja enregistree.
 #
 # Principe : une calibration est propre a UN EXEMPLAIRE de camera, pas a un
-# modele. Deux RealSense identiques peuvent avoir des cx/cy/distorsion legerement
+# model. Deux RealSense identiques peuvent avoir des cx/cy/distorsion legerement
 # differents (tolerances de fabrication). Ce script prend des photos du damier
 # avec la camera ACTUELLEMENT branchee, applique la calibration enregistree
 # (SANS la recalculer), et mesure l'erreur de reprojection :

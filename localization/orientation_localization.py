@@ -9,7 +9,7 @@
 import cv2
 import numpy as np
 
-TAILLE_TAG = 0.10
+TAG_SIZE = 0.10
 FACTEUR_FOCALE = 0.95
 
 # CARTE DES TAGS : ID -> (x, y, z, yaw_deg)
@@ -70,7 +70,7 @@ if cam is None:
 FOCALE = L * FACTEUR_FOCALE
 K = np.array([[FOCALE, 0, L / 2], [0, FOCALE, H / 2], [0, 0, 1]], dtype=np.float64)
 dist = np.zeros(5)
-h = TAILLE_TAG / 2
+h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
@@ -97,7 +97,7 @@ while True:
                                            flags=cv2.SOLVEPNP_IPPE_SQUARE)
             if not ok2:
                 continue
-            cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAILLE_TAG / 2, 2)
+            cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAG_SIZE / 2, 2)
 
             # Tag vu depuis la camera
             R_cam, _ = cv2.Rodrigues(rvec)
@@ -111,7 +111,7 @@ while True:
             T_piscine_camera = T_piscine_tag @ inverse(T_camera_tag)
             positions_camera.append(T_piscine_camera[:3, 3])
 
-            # ORIENTATION de la camera dans la piscine (partie rotation de la matrice)
+            # ORIENTATION de la camera dans la piscine (partie rotation de la matrix)
             R_cam_piscine = T_piscine_camera[:3, :3]
             roll, pitch, yaw = cv2.RQDecomp3x3(R_cam_piscine)[0]
             orientations_camera.append((roll, pitch, yaw))

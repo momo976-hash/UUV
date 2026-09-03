@@ -8,8 +8,8 @@ import sys
 # tag, ce qui est exactement la grandeur utilisee pour localiser le vehicule.
 #
 #   T_tag_camera = inverse(T_camera_tag)
-#       position    = ou se trouve la camera par rapport au tag
-#       orientation = comment la camera est orientee par rapport au tag
+#       position    = ou se trouve la camera par report au tag
+#       orientation = comment la camera est orientee par report au tag
 #
 # PROCEDURE
 #   1. Colle UN tag, laisse-le immobile pendant tout le test.
@@ -36,7 +36,7 @@ import optics  # noqa: E402
 CAMERA_INDEX = None          # None = detection automatique
 RESOLUTION = (640, 480)      # doit etre identique a celle de la calibration
 
-TAILLE_TAG = optics.TAILLE_TAG_GRAND   # mesure au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # mesure au pied a coulisse, pas 223 mm nominal
 FACTEUR_APPROX = 0.95        # ancienne approximation (focale = largeur x facteur)
 LISSAGE = 20                 # images moyennees pour stabiliser l'affichage
 
@@ -121,7 +121,7 @@ print(f"  calibration : {Lc}x{Hc} (fx = {K_calib[0, 0]:.1f})   capture : {L}x{H}
 if (L, H) != (Lc, Hc):
     print("  >>> ATTENTION : formats differents, la calibration n'est pas valable ici.")
 
-h = TAILLE_TAG / 2
+h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)

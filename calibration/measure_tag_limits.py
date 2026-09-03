@@ -4,7 +4,7 @@
 # Le plan de pose des tags s'appuie sur deux limites qui, jusqu'ici, venaient
 # de regles empiriques lues dans la litterature AprilTag :
 #     PIXELS_MIN    = 30 px   taille apparente minimale du tag dans l'image
-#     INCIDENCE_MAX = 65 deg  angle au-dela duquel le tag est trop de biais
+#     INCIDENCE_MAX = 65 deg  angle au-dela duquel le tag est trop de bias
 # Ces deux nombres decident de l'espacement des tags dans le bassin. Autant
 # les mesurer sur le vrai materiel plutot que les croire sur parole.
 #
@@ -30,8 +30,8 @@
 # Avec les 22.3 cm du bassin, 30 px ne sont atteints qu'a 4.5 m : impossible
 # avec une camera au bout d'un cable. Avec un tag de 5 cm, 30 px tombent a
 # 1.0 m et 20 px a 1.5 m — tout le domaine utile tient sur un bureau.
-# On passe la taille du tag d'essai avec --tag ; le rapport, lui, reconvertit
-# toujours vers TAILLE_TAG_REELLE.
+# On passe la taille du tag d'essai avec --tag ; le report, lui, reconvertit
+# toujours vers REAL_TAG_SIZE.
 #
 # MODE D'EMPLOI
 #   1. Un tag bien eclaire, pose contre un mur.
@@ -42,10 +42,10 @@
 #      pour que la taille apparente ne soit jamais le facteur limitant.
 #      Tourne progressivement jusqu'a perdre le tag. Idem, 'i' pour arreter.
 #      (relance le script avec --tag 0.223 entre les deux balayages)
-#   4. 'r' : le rapport, avec les deux limites mesurees.
+#   4. 'r' : le report, avec les deux limites mesurees.
 #
 # Touches : d = balayage distance | i = balayage incidence
-#           r = rapport | e = effacer | q = quitter
+#           r = report | e = effacer | q = quitter
 import argparse
 import csv
 import sys
@@ -74,8 +74,8 @@ RESOLUTION = optics.RESOLUTION
 
 # mesure au pied a coulisse (optics.py) : les tags du bassin s'ecartent du
 # nominal 223 mm, et c'est vers ce nombre-la qu'on conclut, pas vers 0.223.
-TAILLE_TAG_REELLE = optics.TAILLE_TAG_GRAND
-TAILLE_TAG = TAILLE_TAG_REELLE   # le tag d'essai devant la camera (option --tag)
+REAL_TAG_SIZE = optics.LARGE_TAG_SIZE
+TAG_SIZE = REAL_TAG_SIZE   # le tag d'essai devant la camera (option --tag)
 
 FENETRE = 30          # images sur lesquelles on estime le taux de detection
 TAUX_LIMITE = 0.95    # en dessous, on considere la detection non fiable
@@ -107,7 +107,7 @@ def pixels_pire_cas():
     jamais. Il suffit d'avoir verifie la detection jusqu'en dessous.
     """
     diagonale = float(np.linalg.norm(BASSIN))
-    return optics.focale_eau(MONTAGE) * TAILLE_TAG_REELLE / diagonale, diagonale
+    return optics.focale_eau(MONTAGE) * REAL_TAG_SIZE / diagonale, diagonale
 
 
 CSV = Path(__file__).resolve().with_name("limites_tag.csv")
@@ -123,7 +123,7 @@ def limite_par_paliers(echantillons, cle, croissant, taux_limite=TAUX_LIMITE,
     DESCEND. On parcourt donc du plus facile vers le plus difficile.
 
     Deux precautions, apprises a nos depens sur un balayage ou le taux
-    sautait de 70 a 100 % sans rapport avec la taille du tag :
+    sautait de 70 a 100 % sans report avec la taille du tag :
 
     1. On mesure d'abord un TAUX DE REFERENCE sur les paliers les plus
        faciles. S'il n'est pas proche de 100 %, c'est qu'une cause etrangere
@@ -191,7 +191,7 @@ def lire_balayage(lignes, nom):
 
     Une fenetre ou le tag a frole le bord de l'image ne mesure rien
     d'exploitable : les images ratees le sont parce que le tag est sorti du
-    champ, pas parce qu'il etait trop petit ou trop de biais.
+    champ, pas parce qu'il etait trop petit ou trop de bias.
     """
     gardees, ecartees = [], 0
     for ligne in lignes:
@@ -245,7 +245,7 @@ def besoin_du_bassin(atteint, recul):
     pire, diagonale = pixels_pire_cas()
     lignes = ["", "  CE QUE LE BASSIN DEMANDE VRAIMENT"]
     lignes.append(f"  Sa diagonale fait {diagonale:.2f} m. A cette distance — le pire cas —")
-    lignes.append(f"  un tag de {100*TAILLE_TAG_REELLE:.1f} cm paraitra {pire:.0f} px "
+    lignes.append(f"  un tag de {100*REAL_TAG_SIZE:.1f} cm paraitra {pire:.0f} px "
                   f"sous l'eau, dans l'axe")
     lignes.append(f"  le moins grossi par le tube (focale {optics.focale_eau(MONTAGE):.0f} px "
                   f"contre {max(optics.focales_eau(MONTAGE)):.0f} dans l'autre).")
@@ -262,8 +262,8 @@ def besoin_du_bassin(atteint, recul):
                       f"{pire:.0f} px.")
         lignes.append(f"  Il reste la tranche {pire:.0f}-{atteint:.0f} px a couvrir "
                       "pour conclure. Avec")
-        lignes.append(f"  ce tag de {100*TAILLE_TAG:.1f} cm il faudrait reculer jusqu'a "
-                      f"{K_CALIB[0, 0] * TAILLE_TAG / pire:.1f} m ;")
+        lignes.append(f"  ce tag de {100*TAG_SIZE:.1f} cm il faudrait reculer jusqu'a "
+                      f"{K_CALIB[0, 0] * TAG_SIZE / pire:.1f} m ;")
         besoin = pire * recul / K_CALIB[0, 0]
         lignes.append(f"  en restant a {recul:.1f} m, il faut un tag de "
                       f"{100*besoin:.0f} cm  (--tag {besoin:.3f}).")
@@ -271,18 +271,18 @@ def besoin_du_bassin(atteint, recul):
     lignes.append(f"\n  Pour la limite ABSOLUE de detection il faudrait descendre vers")
     lignes.append(f"  {CIBLE_PIXELS:.0f} px — un 36h11 fait huit cellules de large et il "
                   "en faut deux")
-    lignes.append("  pixels chacune pour decoder. Utile pour le rapport, pas pour poser")
+    lignes.append("  pixels chacune pour decoder. Utile pour le report, pas pour poser")
     lignes.append(f"  les tags. Il faudrait un tag de "
                   f"{100 * CIBLE_PIXELS * recul / K_CALIB[0, 0]:.0f} cm a {recul:.1f} m.")
     return lignes
 
 
-def rapport(lignes):
+def report(lignes):
     if not lignes:
         return "Aucun balayage. 'd' pour la distance, 'i' pour l'incidence."
     sortie = ["", "=" * 78, "LIMITES DE DETECTION MESUREES", "=" * 78]
 
-    distance, hors_cadre_d = lire_balayage(lignes, "distance")
+    distance, hors_cadre_d = lire_balayage(lignes, "mahalanobis")
     incidence, hors_cadre_i = lire_balayage(lignes, "incidence")
 
     # --- taille apparente minimale ----------------------------------------
@@ -303,13 +303,13 @@ def rapport(lignes):
         if diagnostiquer(diagnostic, limite, sortie):
             sortie.append(f"\n  PIXELS_MIN mesure = {limite:.0f} px "
                           f"(la valeur supposee etait 30 px)")
-            if abs(TAILLE_TAG - TAILLE_TAG_REELLE) > 1e-6:
+            if abs(TAG_SIZE - REAL_TAG_SIZE) > 1e-6:
                 sortie.append(f"  (mesure avec un tag d'essai de "
-                              f"{100*TAILLE_TAG:.1f} cm ; la limite est en pixels,")
+                              f"{100*TAG_SIZE:.1f} cm ; la limite est en pixels,")
                 sortie.append(f"   elle vaut donc aussi pour les "
-                              f"{100*TAILLE_TAG_REELLE:.1f} cm du bassin)")
-            portee = min(K_CALIB[0, 0], K_CALIB[1, 1]) * TAILLE_TAG_REELLE / limite
-            sortie.append(f"  Pour un tag de {100*TAILLE_TAG_REELLE:.1f} cm, cela donne")
+                              f"{100*REAL_TAG_SIZE:.1f} cm du bassin)")
+            portee = min(K_CALIB[0, 0], K_CALIB[1, 1]) * REAL_TAG_SIZE / limite
+            sortie.append(f"  Pour un tag de {100*REAL_TAG_SIZE:.1f} cm, cela donne")
             sortie.append(f"  une portee de {portee:.2f} m en air, "
                           f"{optics.portee_eau(portee, MONTAGE):.2f} m sous l'eau")
             sortie.append("  (pas de « x 1.33 » ici : la camera est couchee dans le "
@@ -317,7 +317,7 @@ def rapport(lignes):
             sortie.append("   c'est l'axe le MOINS grossi qui decide de la detection)")
         elif limite is None and paliers:
             atteint = min(p["centre"] for p in paliers)
-            recul = K_CALIB[0, 0] * TAILLE_TAG / atteint
+            recul = K_CALIB[0, 0] * TAG_SIZE / atteint
             sortie.append(f"\n  Aucune limite confirmee : a {atteint:.0f} px, le plus "
                           "petit atteint, le tag")
             sortie.append("  est encore detecte. La limite est en dessous.")
@@ -365,7 +365,7 @@ def equivalent_reel(pixels):
     loin lui sont indiscernables. C'est ce qui autorise a mesurer la limite
     dans un couloir de 2 m et a la transposer au bassin.
     """
-    return K_CALIB[0, 0] * TAILLE_TAG_REELLE / max(pixels, 1e-6)
+    return K_CALIB[0, 0] * REAL_TAG_SIZE / max(pixels, 1e-6)
 
 
 def incidence_du_tag(rvec, tvec):
@@ -416,22 +416,22 @@ def guide_de_portee(taille):
 
 
 def main():
-    global TAILLE_TAG
+    global TAG_SIZE
     analyseur = argparse.ArgumentParser(
         description="Mesure PIXELS_MIN et INCIDENCE_MAX sur la vraie camera.")
-    analyseur.add_argument("--tag", type=float, default=TAILLE_TAG_REELLE,
+    analyseur.add_argument("--tag", type=float, default=REAL_TAG_SIZE,
                            metavar="METRES",
                            help="cote du tag d'essai en metres (defaut %(default)s). "
                                 "Un petit tag rapproche la limite de detection : "
                                 "0.05 la place vers 1 m au lieu de 4.5 m.")
-    TAILLE_TAG = analyseur.parse_args().tag
+    TAG_SIZE = analyseur.parse_args().tag
 
     cam, L, H = ouvrir_camera()
     if cam is None:
         print("ERREUR : aucune camera ouverte.")
         return
 
-    demi = TAILLE_TAG / 2
+    demi = TAG_SIZE / 2
     coins_3d = np.array([[-demi, demi, 0], [demi, demi, 0],
                          [demi, -demi, 0], [-demi, -demi, 0]], dtype=np.float64)
     dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
@@ -447,10 +447,10 @@ def main():
 
     print("=" * 70)
     print("MESURE DES LIMITES DE DETECTION")
-    print(guide_de_portee(TAILLE_TAG))
+    print(guide_de_portee(TAG_SIZE))
     print("\n  'd' balayage en distance  : eloigne le tag jusqu'a le perdre")
     print("  'i' balayage en incidence : tourne le tag jusqu'a le perdre")
-    print("  'r' rapport | 'e' effacer | 'q' quitter")
+    print("  'r' report | 'e' effacer | 'q' quitter")
     print("\n  AVANCE PAR PALIERS : immobile 3 s, un pas, immobile 3 s...")
     print("  Marcher en continu file les images et fait rater la detection")
     print("  pour une raison qui n'a rien a voir avec ce qu'on mesure.")
@@ -481,7 +481,7 @@ def main():
                 cotes = [np.linalg.norm(pts[k] - pts[(k + 1) % 4]) for k in range(4)]
                 vu = {"pixels": float(np.mean(cotes)),
                       "incidence": incidence_du_tag(rvec, tvec),
-                      "distance": float(np.linalg.norm(tvec)),
+                      "mahalanobis": float(np.linalg.norm(tvec)),
                       # combien de pixels separent le tag du bord de l'image :
                       # s'il le frole, les images ratees sont des sorties de
                       # champ et ne disent rien de la limite cherchee
@@ -519,11 +519,11 @@ def main():
                 cv2.putText(image, f"{m['pixels']:.0f} px   {m['incidence']:.0f} deg"
                                    f"   {m['distance']:.2f} m", (10, 84),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
-                cv2.putText(image, f"= tag {100*TAILLE_TAG_REELLE:.0f} cm vu de "
+                cv2.putText(image, f"= tag {100*REAL_TAG_SIZE:.0f} cm vu de "
                                    f"{equivalent_reel(m['pixels']):.2f} m", (10, 136),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 255), 1)
             consigne = ("PAR PALIERS : immobile 3 s, un pas en arriere, immobile"
-                        if balayage == "distance"
+                        if balayage == "mahalanobis"
                         else "PAR PALIERS : immobile 3 s, tourne un peu, immobile")
             cv2.putText(image, consigne, (10, 110),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
@@ -536,7 +536,7 @@ def main():
             cv2.putText(image, f"{vu['pixels']:.0f} px   {vu['incidence']:.0f} deg"
                                f"   {vu['distance']:.2f} m", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-            cv2.putText(image, f"= tag {100*TAILLE_TAG_REELLE:.0f} cm vu de "
+            cv2.putText(image, f"= tag {100*REAL_TAG_SIZE:.0f} cm vu de "
                                f"{equivalent_reel(vu['pixels']):.2f} m", (10, 56),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 255), 1)
             cv2.putText(image, "'d' balayage distance   |   'i' balayage incidence",
@@ -545,14 +545,14 @@ def main():
             cv2.putText(image, "Aucun tag visible", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         cv2.putText(image, f"{len(lignes)} point(s)   d=distance i=incidence "
-                           f"r=rapport e=effacer q=quitter", (10, H - 14),
+                           f"r=report e=effacer q=quitter", (10, H - 14),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
         cv2.imshow("Limites de detection (q pour quitter)", image)
         touche = cv2.waitKey(1) & 0xFF
         if touche == ord("q"):
             break
-        for nom, lettre in (("distance", "d"), ("incidence", "i")):
+        for nom, lettre in (("mahalanobis", "d"), ("incidence", "i")):
             if touche == ord(lettre):
                 if balayage == nom:
                     balayage, fenetre = None, []
@@ -565,7 +565,7 @@ def main():
                     balayage, fenetre = nom, []
                     print(f"Balayage {nom} en cours... ('{lettre}' pour arreter)")
         if touche == ord("r"):
-            print(rapport(lignes))
+            print(report(lignes))
         if touche == ord("e"):
             lignes, fenetre = [], []
             if CSV.exists():
@@ -579,7 +579,7 @@ def main():
             ecrivain = csv.DictWriter(fic, fieldnames=COLONNES)
             ecrivain.writeheader()
             ecrivain.writerows(lignes)
-    print(rapport(lignes))
+    print(report(lignes))
 
 
 if __name__ == "__main__":

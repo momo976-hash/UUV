@@ -11,7 +11,7 @@
 import cv2
 import numpy as np
 
-TAILLE_TAG = 0.10
+TAG_SIZE = 0.10
 FACTEUR_FOCALE = 0.95
 
 # CARTE DES TAGS : ID -> position (x, y, z) du centre du tag dans la piscine (metres).
@@ -23,7 +23,7 @@ CARTE_DES_TAGS = {
 
 
 def transformation(R, t):
-    """Construit une matrice homogene 4x4 a partir d'une rotation R et d'une translation t."""
+    """Construit une matrix homogene 4x4 a partir d'une rotation R et d'une translation t."""
     T = np.eye(4)
     T[:3, :3] = R
     T[:3, 3] = np.asarray(t, dtype=np.float64).flatten()
@@ -63,7 +63,7 @@ if cam is None:
 FOCALE = L * FACTEUR_FOCALE
 K = np.array([[FOCALE, 0, L / 2], [0, FOCALE, H / 2], [0, 0, 1]], dtype=np.float64)
 dist = np.zeros(5)
-h = TAILLE_TAG / 2
+h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
@@ -89,7 +89,7 @@ while True:
                                            flags=cv2.SOLVEPNP_IPPE_SQUARE)
             if not ok2:
                 continue
-            cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAILLE_TAG / 2, 2)
+            cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAG_SIZE / 2, 2)
 
             # --- Transformations homogenes ---
             R, _ = cv2.Rodrigues(rvec)
@@ -102,7 +102,7 @@ while True:
             # Composition : piscine <- tag <- camera
             T_piscine_camera = T_piscine_tag @ inverse(T_camera_tag)
 
-            # La position de la camera = la partie translation de la matrice
+            # La position de la camera = la partie translation de la matrix
             positions_camera.append(T_piscine_camera[:3, 3])
 
     if positions_camera:

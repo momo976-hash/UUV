@@ -7,7 +7,7 @@
 # lesquels manquent ni pourquoi. Les causes possibles se ressemblent toutes a
 # l'ecran :
 #
-#   - c'est une D435 et non une D435i : le modele SANS "i" n'a pas d'IMU.
+#   - c'est une D435 et non une D435i : le model SANS "i" n'a pas d'IMU.
 #     C'est de loin le cas le plus frequent, et rien ne le signale autrement
 #     que par cette erreur.
 #   - deux cameras sont branchees et le SDK a pris celle qui n'a pas d'IMU.
@@ -75,7 +75,7 @@ def main():
     print("=" * 68)
     if not avec_imu:
         print("Aucun appareil branche n'a de centrale inertielle.")
-        print("\nLe modele D435 (sans 'i') n'en a PAS ; seul le D435i en porte")
+        print("\nLe model D435 (sans 'i') n'en a PAS ; seul le D435i en porte")
         print("une. Verifie le nom exact affiche plus haut : c'est la seule")
         print("facon de les distinguer, ils sont physiquement identiques.")
         print("\nimu_realsense.py ne peut donc pas fonctionner avec celui-ci.")
@@ -89,8 +89,8 @@ def main():
     if len(appareils) > 1:
         print("\nATTENTION : plusieurs appareils sont branches. Le SDK prend le")
         print("premier qu'il trouve, et rien ne dit lequel. Pour toute mesure")
-        print("qui compte — biais du gyro, bruit — DEBRANCHE les autres :")
-        print("le biais est propre a un exemplaire, comme une calibration.")
+        print("qui compte — bias du gyro, bruit — DEBRANCHE les autres :")
+        print("le bias est propre a un exemplaire, comme une calibration.")
     print("\nTu peux lancer :  python imu_realsense.py")
     return 0
 

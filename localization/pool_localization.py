@@ -1,7 +1,7 @@
 # localisation_piscine.py — Position de la CAMERA/UUV dans le repere "piscine".
 #
 # Idee : on connait la position de chaque tag dans la piscine (CARTE_DES_TAGS).
-# La camera mesure ou est le tag par rapport a elle. En combinant les deux, on
+# La camera mesure ou est le tag par report a elle. En combinant les deux, on
 # en deduit ou est la CAMERA dans la piscine.
 #
 # Version simple : tous les tags sont plats sur un meme mur, orientes pareil
@@ -9,7 +9,7 @@
 import cv2
 import numpy as np
 
-TAILLE_TAG = 0.10          # cote reel du carre noir, en metres
+TAG_SIZE = 0.10          # cote reel du carre noir, en metres
 FACTEUR_FOCALE = 0.95      # correction de focale trouvee a la validation
 
 # ---------------------------------------------------------------------------
@@ -47,7 +47,7 @@ if cam is None:
 FOCALE = L * FACTEUR_FOCALE
 K = np.array([[FOCALE, 0, L / 2], [0, FOCALE, H / 2], [0, 0, 1]], dtype=np.float64)
 dist = np.zeros(5)
-h = TAILLE_TAG / 2
+h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
@@ -75,7 +75,7 @@ while True:
                                            flags=cv2.SOLVEPNP_IPPE_SQUARE)
             if not ok2:
                 continue
-            cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAILLE_TAG / 2, 2)
+            cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAG_SIZE / 2, 2)
 
             # Position de la camera dans le repere du TAG : -R^T . t
             R, _ = cv2.Rodrigues(rvec)

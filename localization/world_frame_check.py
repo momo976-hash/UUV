@@ -36,8 +36,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "calibration"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "kalman"))
 import optics  # noqa: E402
 
-from kalman_filter import (FiltrePose, rappel_mesures_manquantes,
-                           SIGMA_ACCELERATION, DERIVE_GYRO_DEG_S)
+from kalman_filter import (PoseFilter, remind_missing_measurements,
+                           SIGMA_ACCELERATION, GYRO_DRIFT_DEG_S)
 
 try:
     import pyrealsense2 as rs
@@ -47,7 +47,7 @@ except ImportError:
 CAMERA_INDEX = None
 RESOLUTION = optics.RESOLUTION
 
-TAILLE_TAG = optics.TAILLE_TAG_GRAND   # mesure au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # mesure au pied a coulisse, pas 223 mm nominal
 MIN_LIAISON = 6      # co-visibilites avant d'utiliser un tag (liaison rapide)
 MAX_LIAISON = 60     # on garde ce nombre d'observations pour affiner la liaison
 LISSAGE = 15
@@ -239,7 +239,7 @@ except Exception:
 if (L, H) != (Lc, Hc):
     print(f"  >>> ATTENTION : capture {L}x{H} mais calibration {Lc}x{Hc}.")
 
-h = TAILLE_TAG / 2
+h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
@@ -257,7 +257,7 @@ lissage = deque(maxlen=LISSAGE)
 saisie = ""
 
 # --- filtre de Kalman (touche 'f' pour l'activer / le couper) --------------
-filtre = FiltrePose()
+filtre = PoseFilter()
 filtre_actif = True
 dernier_temps = None
 ref_p_filtre = ref_R_filtre = None
@@ -283,7 +283,7 @@ def incidence_du_tag(pose_camera_tag):
     """Angle en degres sous lequel la camera voit ce tag (0 = pile en face).
 
     La normale du tag dans le repere camera est sa 3e colonne ; le tag est vu
-    d'autant plus de biais que cette normale s'ecarte de l'axe camera->tag."""
+    d'autant plus de bias que cette normale s'ecarte de l'axe camera->tag."""
     normale = pose_camera_tag[:3, 2]
     vers_tag = pose_camera_tag[:3, 3]
     distance = np.linalg.norm(vers_tag)
@@ -333,7 +333,7 @@ print("=" * 66)
 # Le rappel est affiche AVANT la session, pas seulement apres : c'est
 # maintenant que la personne a l'engin dans l'eau sous la main. Le lui dire
 # une fois la manip terminee l'obligerait a tout recommencer.
-rappel_mesures_manquantes(avec_imu=cam.avec_imu)
+remind_missing_measurements(avec_imu=cam.avec_imu)
 
 # --- les figures du cours, en direct (option --graphiques) -----------------
 # Facultatif et sans consequence si matplotlib manque : au bassin, une mesure
@@ -414,7 +414,7 @@ while True:
         cam_p = T_monde_cam[:3, 3]
         cam_R = T_monde_cam[:3, :3]
 
-    # --- ce que l'engin fait vraiment : vitesse de rotation et acceleration -
+    # --- ce que l'engin fait vraiment : velocity de rotation et acceleration -
     # Mesure sur la pose BRUTE, entre deux images consecutives.
     #
     # Deux poses consecutives ne sont comparables QUE si elles viennent de LA
@@ -443,11 +443,11 @@ while True:
             intervalle = instant - precedent_t
             if 1e-3 < intervalle < 0.5:      # on ignore les trous (tag perdu)
                 vitesses_angulaires.append(angle_entre(precedent_R, cam_R) / intervalle)
-                vitesse = (cam_p - precedent_p) / intervalle
+                velocity = (cam_p - precedent_p) / intervalle
                 if precedente_vitesse is not None:
                     accelerations.append(
-                        float(np.linalg.norm(vitesse - precedente_vitesse) / intervalle))
-                precedente_vitesse = vitesse
+                        float(np.linalg.norm(velocity - precedente_vitesse) / intervalle))
+                precedente_vitesse = velocity
             else:
                 precedente_vitesse = None
         else:
@@ -470,16 +470,16 @@ while True:
     if filtre_actif and connus_vus:
         # Le gyro propage l'orientation entre deux tags, l'accelerometre tient
         # le roulis et le tangage. Sans centrale les deux valent None, et la
-        # prediction retombe sur l'hypothese "vitesse constante" d'avant.
-        filtre.predire(dt, gyro=gyro_mesure, accel=accel_mesure)
+        # prediction retombe sur l'hypothese "velocity constante" d'avant.
+        filtre.predict(dt, gyro=gyro_mesure, accel=accel_mesure)
         for i in connus_vus:
             T_i = carte[i] @ inverse(poses[i])           # pose camera vue par le tag i
-            filtre.ajouter_tag(T_i[:3, 3], carte[i][:3, 3],
+            filtre.add_tag(T_i[:3, 3], carte[i][:3, 3],
                                incidence_du_tag(poses[i]),
                                rotation_mesuree=T_i[:3, :3],
                                distance=float(np.linalg.norm(poses[i][:3, 3])),
                                identifiant=i)
-        filtre.appliquer()
+        filtre.apply()
         # Les quatre figures du cours, tracees sur CETTE mesure-ci. La mesure
         # brute passee en reference est celle du meilleur tag visible, la meme
         # que la position brute affichee a l'ecran.
@@ -489,9 +489,9 @@ while True:
                 tags=[(i, float(np.linalg.norm(poses[i][:3, 3])),
                        incidence_du_tag(poses[i])) for i in connus_vus])
             fenetres.rafraichir()
-        if filtre.position.demarre:
+        if filtre.position.started:
             cam_p_filtre = filtre.position.position
-            cam_R_filtre = filtre.orientation.matrice
+            cam_R_filtre = filtre.orientation.matrix
             # la reference filtree est la 1ere pose stable apres un 'o'.
             if ref_p is not None and ref_p_filtre is None:
                 ref_p_filtre = cam_p_filtre.copy()
@@ -546,7 +546,7 @@ while True:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         y += 24
     if cam_p_filtre is not None:
-        sigma = filtre.position.incertitude_position
+        sigma = filtre.position.position_uncertainty
         cv2.putText(image, f"CAMERA filtre : x={cam_p_filtre[0]:+.2f} "
                            f"y={cam_p_filtre[1]:+.2f} z={cam_p_filtre[2]:+.2f} m  "
                            f"(+/- {sigma*1000:.0f} mm)", (10, y),
@@ -613,7 +613,7 @@ while True:
             ref_p, ref_R = T_monde_cam[:3, 3].copy(), T_monde_cam[:3, :3].copy()
             lissage.clear()
             # on repart aussi le filtre depuis cette reference.
-            filtre = FiltrePose()
+            filtre = PoseFilter()
             ref_p_filtre = ref_R_filtre = None
             lissage_filtre.clear()
             print(f"Reference = tag {origine}. Bouge vers le 2e tag : la "
@@ -625,7 +625,7 @@ while True:
         origine = None
         ref_p = ref_R = None
         lissage.clear()
-        filtre = FiltrePose()
+        filtre = PoseFilter()
         ref_p_filtre = ref_R_filtre = None
         lissage_filtre.clear()
         print("Remis a zero : regarde le tag de reference et appuie sur 'o'.")
@@ -641,8 +641,8 @@ while True:
             continue
         e = d - reel
         ef = None if d_filtre is None else d_filtre - reel
-        sigma_mm = (filtre.position.incertitude_position * 1000
-                    if filtre.position.demarre else None)
+        sigma_mm = (filtre.position.position_uncertainty * 1000
+                    if filtre.position.started else None)
         with open(CSV, "a", newline="") as fic:
             csv.writer(fic).writerow([
                 MODES[mode], f"{reel:.3f}", f"{d:.3f}", f"{e:+.3f}",
@@ -683,19 +683,19 @@ def bilan_filtre():
 
     DEUX questions distinctes, et la seconde est la plus importante.
 
-    1. Le filtre REDUIT-IL l'erreur ? Se lit sur le rapport des RMS. C'est la
+    1. Le filtre REDUIT-IL l'erreur ? Se lit sur le report des RMS. C'est la
        question qu'on pose spontanement, et la plus facile.
 
     2. Le filtre DIT-IL LA VERITE sur sa propre precision ? Un filtre qui
        annonce +/- 2 mm alors qu'il se trompe de 20 est plus dangereux qu'un
        filtre qui ne lisse rien : tout ce qui consomme sa sortie -- une
-       commande, une carte, un rapport -- le croit sur parole. Cette
+       commande, une carte, un report -- le croit sur parole. Cette
        question-la ne se voit pas a l'oeil sur l'ecran, seulement ici.
 
     Reserve a garder en tete pour le point 2 : l'erreur enregistree porte sur
     une DISTANCE entre deux poses, quand sigma porte sur UNE position. Les
     deux ne sont pas la meme grandeur (facteur ~racine de 2 au pire), et
-    l'erreur du metre a ruban s'y ajoute. Le rapport ci-dessous se lit donc
+    l'erreur du metre a ruban s'y ajoute. Le report ci-dessous se lit donc
     en ordre de grandeur : il attrape un filtre qui ment d'un facteur 3, pas
     un ecart de 20 %.
     """
@@ -760,16 +760,16 @@ def bilan_filtre():
     if len(couples) >= 3:
         reel = float(np.median([f * 1000 for f, _ in couples]))
         annonce = float(np.median([s for _, s in couples]))
-        rapport = reel / annonce
+        report = reel / annonce
         print(f"\n  incertitude annoncee par le filtre : {annonce:6.1f} mm (mediane)")
         print(f"  erreur reellement constatee        : {reel:6.1f} mm (mediane)")
-        print(f"  rapport reel / annonce : {rapport:.1f}")
-        if rapport < 0.5:
+        print(f"  report reel / annonce : {report:.1f}")
+        if report < 0.5:
             print("  [OK] le filtre est prudent : il annonce plus d'erreur qu'il")
             print("       n'en fait. Sans danger, mais il se sous-estime.")
-        elif rapport <= 2.0:
+        elif report <= 2.0:
             print("  [OK] le filtre dit la verite sur sa precision.")
-        elif rapport <= 4.0:
+        elif report <= 4.0:
             print("  [ATTENTION] le filtre se croit plus precis qu'il n'est.")
             print("       Ne pas se fier au +/- affiche tel quel.")
         else:
@@ -778,15 +778,15 @@ def bilan_filtre():
             print("       SIGMA_PIXEL (mesure-t-il bien le bruit du bassin ?)")
             print("       puis les positions des tags dans la carte.")
 
-    # -- rejets et reprises --------------------------------------------------
-    total_rejets = filtre.position.rejets + filtre.orientation.rejets
-    reprises = filtre.position.reprises + filtre.orientation.reprises
-    print(f"\n  mesures rejetees : {total_rejets}   reprises apres blocage : {reprises}")
-    if reprises > 3:
-        print("  [ATTENTION] beaucoup de reprises : le filtre se bloque puis se")
+    # -- rejections et recoveries --------------------------------------------------
+    total_rejets = filtre.position.rejections + filtre.orientation.rejections
+    recoveries = filtre.position.recoveries + filtre.orientation.recoveries
+    print(f"\n  mesures rejetees : {total_rejets}   recoveries apres blocage : {recoveries}")
+    if recoveries > 3:
+        print("  [ATTENTION] beaucoup de recoveries : le filtre se bloque puis se")
         print("       recale. Souvent le signe de tags mal places dans la carte.")
 
-    suspects = filtre.surveillance.rapport()
+    suspects = filtre.watchdog.report()
     if "aucun tag suspect" not in suspects:
         print("\n  SUPPORTS QUI ONT BOUGE")
         print(suspects)
@@ -807,7 +807,7 @@ if len(vitesses_angulaires) > 100:
     print(f"  acceleration mediane {centile(accelerations, 50):5.2f} m/s2"
           f"   95e centile {accel_95:6.2f} m/s2")
     print("-" * 66)
-    # Le bruit de modele doit couvrir ce que l'engin fait REELLEMENT sans que
+    # Le bruit de model doit couvrir ce que l'engin fait REELLEMENT sans que
     # le filtre le sache. Le 95e centile evite a la fois de sous-estimer, ce
     # qui ferait retarder le filtre, et de se caler sur un pic isole.
     print("  VOICI LES DEUX NOMBRES CHERCHES. Marche a suivre :")
@@ -819,19 +819,19 @@ if len(vitesses_angulaires) > 100:
     print("      fichier. Elles ressemblent a ceci :")
     print()
     print(f"          SIGMA_ACCELERATION = {SIGMA_ACCELERATION}")
-    print(f"          DERIVE_GYRO_DEG_S = {DERIVE_GYRO_DEG_S}")
+    print(f"          GYRO_DRIFT_DEG_S = {GYRO_DRIFT_DEG_S}")
     print()
     print("   4. Remplacer UNIQUEMENT les nombres, pour obtenir :")
     print()
     print(f"          SIGMA_ACCELERATION = {accel_95:.1f}")
-    print(f"          DERIVE_GYRO_DEG_S = {rotation_95:.0f}")
+    print(f"          GYRO_DRIFT_DEG_S = {rotation_95:.0f}")
     print()
     print("   5. Enregistrer le fichier. C'est tout — rien d'autre a modifier")
     print("      nulle part, et le rappel au demarrage disparaitra tout seul.")
     print()
     print("  ENGLISH — open kalman/kalman_filter.py in any text editor,")
     print("  find the two lines starting with SIGMA_ACCELERATION and")
-    print("  DERIVE_GYRO_DEG_S, and change ONLY the numbers to the two values")
+    print("  GYRO_DRIFT_DEG_S, and change ONLY the numbers to the two values")
     print("  shown above. Save. Nothing else to change anywhere.")
     print("=" * 66)
     print("  Valable si ce que tu viens de faire ressemble a une vraie mission.")

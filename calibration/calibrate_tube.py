@@ -11,7 +11,7 @@
 # ---------------------------------------------------------------------------
 # POURQUOI LES TROIS, ET DANS CET ORDRE
 # ---------------------------------------------------------------------------
-# Chaque montage se juge par rapport au precedent, et la chaine ne vaut que
+# Chaque montage se juge par report au precedent, et la chaine ne vaut que
 # par son premier maillon :
 #
 #   [n] CAMERA NUE, hors du tube. Aucune optics en travers : c'est l'ancre.
@@ -20,7 +20,7 @@
 #   [a] TUBE A L'AIR. Selon l'axe du tube la paroi est une lame a faces
 #       paralleles : en air elle ne devie STRICTEMENT rien, donc fx doit
 #       retomber sur la camera nue. Selon la circonference c'est un menisque,
-#       qui grossit d'environ 0.9 % : le rapport fy_tube/fy_nue MESURE le
+#       qui grossit d'environ 0.9 % : le report fy_tube/fy_nue MESURE le
 #       retrait de la pupille, qu'on ne sait pas obtenir autrement.
 #
 #       ATTENTION : le bouchon d'extremite n'est PAS dans le chemin optics.
@@ -320,7 +320,7 @@ def rayon_max(K):
 def inversion_distorsion(dist):
     """Rayon ou le polynome cesse d'etre monotone, ou None.
 
-    Au-dela de ce rayon le modele fait correspondre deux directions du monde
+    Au-dela de ce rayon le model fait correspondre deux directions du monde
     au meme pixel. Aucune lentille ne fait cela : si le point tombe DANS
     l'image, l'ajustement est mal conditionne, meme avec un bon RMS.
     """
@@ -388,7 +388,7 @@ def diagnostic(montage, K, dist, rms, vues, distance_damier=None):
         ecart_fy = 100 * (fy / attendu_fy - 1)
         print(f"\n     fy {fy:.1f}   attendu {attendu_fy:.1f}   ({ecart_fy:+.1f} %)")
         print("     Le menisque grossit d'environ 0.9 % ; l'ecart mesure le")
-        print("     retrait de la pupille par rapport a l'axe du tube.")
+        print("     retrait de la pupille par report a l'axe du tube.")
 
     else:   # tube_eau
         reference = charger_reference("tube_air")
@@ -533,7 +533,7 @@ def main():
         cam.release()
         return 1
 
-    modele = grille_3d()
+    model = grille_3d()
     points_3d, points_2d, zones, portees = [], [], [], []
     couvertes = set()
 
@@ -597,7 +597,7 @@ def main():
         if touche == ord("q"):
             break
         if touche == ord("c") and trouve:
-            points_3d.append(modele.copy())
+            points_3d.append(model.copy())
             points_2d.append(coins)
             nouvelles = zones_touchees(coins, largeur, hauteur)
             zones.append(nouvelles)

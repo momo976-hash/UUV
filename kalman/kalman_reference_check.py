@@ -10,7 +10,7 @@
 # Le document deroule un exemple chiffre : un radar 1D qui suit un avion. Il
 # imprime toutes les valeurs intermediaires — F, Q, P(1,0), K(1), x(1,1),
 # P(1,1), x(2,1), P(2,1). Ce script fait tourner CE meme exemple a travers la
-# classe KalmanLineaire du projet, celle-la meme qui filtre la position de
+# classe LinearKalman du projet, celle-la meme qui filtre la position de
 # l'engin, et compare chaque nombre a celui imprime dans le document.
 #
 # Autrement dit : ce n'est pas un filtre ecrit pour la demonstration, c'est le
@@ -18,15 +18,15 @@
 # publiee. S'il s'ecartait des equations du cours, la comparaison le dirait
 # tout de suite au lieu de le cacher derriere la geometrie des tags.
 #
-# Le script montre ensuite que le modele de l'engin est le MEME modele
-# cinematique a vitesse constante, simplement porte de 1 a 3 dimensions.
+# Le script montre ensuite que le model de l'engin est le MEME model
+# cinematique a velocity constante, simplement porte de 1 a 3 dimensions.
 import sys
 from pathlib import Path
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from kalman_filter import FiltreKalmanPosition, KalmanLineaire  # noqa: E402
+from kalman_filter import PositionKalmanFilter, LinearKalman  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ def comparer(nom, calcule):
 
 
 def exemple_du_document():
-    """L'exemple du radar, deroule avec le noyau du projet."""
+    """L'exemple du radar, deroule avec le core du projet."""
     print("=" * 74)
     print("EXEMPLE DU DOCUMENT — radar 1D suivant un avion")
     print("  Alex Becker, Kalman Filter Explained Through Examples,")
@@ -84,14 +84,14 @@ def exemple_du_document():
     z1 = np.array([11020.0, 202.0])               # 2e mesure
     R1 = np.diag([6.0 ** 2, 1.5 ** 2])            # elle est plus bruitee
 
-    # Etat : x = [portee, vitesse]. Modele CINEMATIQUE a vitesse constante.
+    # Etat : x = [portee, velocity]. Modele CINEMATIQUE a velocity constante.
     F = np.array([[1.0, dt],
                   [0.0, 1.0]])
     # Q tel qu'ecrit dans le document, section 8.2.2 :
     #     Q = sigma_a^2 [[dt^4/4, dt^3/2], [dt^3/2, dt^2]]
     Q = sigma_a ** 2 * np.array([[dt ** 4 / 4, dt ** 3 / 2],
                                  [dt ** 3 / 2, dt ** 2]])
-    H = np.eye(2)                    # le radar mesure portee ET vitesse
+    H = np.eye(2)                    # le radar mesure portee ET velocity
 
     print(f"\n  dt = {dt} s, sigma_a = {sigma_a} m/s2")
     print(f"  F = {F.tolist()}")
@@ -99,14 +99,14 @@ def exemple_du_document():
 
     # --- ITERATION 0 : initialisation puis prediction ----------------------
     print("\nITERATION 0 — initialisation par la premiere mesure")
-    filtre = KalmanLineaire(
+    filtre = LinearKalman(
         x=np.array([10000.0, 200.0]),
         P=np.diag([sigma_portee ** 2, sigma_vitesse ** 2]))
     print(f"  x(0,0) = {filtre.x.tolist()}   P(0,0) = "
           f"{np.diag(filtre.P).tolist()} (diagonale)")
 
     print("\nITERATION 0 — prediction")
-    filtre.predire(F, Q)
+    filtre.predict(F, Q)
     comparer("x(1,0)", filtre.x)
     comparer("P(1,0)", filtre.P)
 
@@ -117,7 +117,7 @@ def exemple_du_document():
     comparer("K(1)", K)
 
     P_avant = filtre.P.copy()
-    innovation, _ = filtre.corriger(z1, H, R1)
+    innovation, _ = filtre.correct(z1, H, R1)
     print(f"  innovation z - Hx = {innovation.tolist()}   "
           f"(le document donne [20, 2])")
     comparer("x(1,1)", filtre.x)
@@ -135,21 +135,21 @@ def exemple_du_document():
 
     # --- ITERATION 1 : prediction suivante ---------------------------------
     print("\nITERATION 1 — prediction")
-    filtre.predire(F, Q)
+    filtre.predict(F, Q)
     comparer("x(2,1)", filtre.x)
     comparer("P(2,1)", filtre.P)
 
 
 def modele_de_lengin():
-    """Le meme modele, porte de 1 a 3 dimensions pour l'engin."""
+    """Le meme model, porte de 1 a 3 dimensions pour l'engin."""
     print("\n" + "=" * 74)
     print("LE MEME MODELE, APPLIQUE A L'ENGIN")
     print("=" * 74)
     print("""
-  Le document raisonne sur un etat a deux composantes, [portee, vitesse],
+  Le document raisonne sur un etat a deux composantes, [portee, velocity],
   parce que son radar est unidimensionnel. L'engin se deplace dans l'eau :
-  son etat en a six, [px py pz vx vy vz]. Le modele est le meme, bloc par
-  bloc — c'est le meme modele CINEMATIQUE a vitesse constante.
+  son etat en a six, [px py pz vx vy vz]. Le model est le meme, bloc par
+  bloc — c'est le meme model CINEMATIQUE a velocity constante.
 
       document              engin
       F = [[1, dt],         F = [[I3, dt.I3],
@@ -161,11 +161,11 @@ def modele_de_lengin():
   Ces deux ecritures de Q sont la meme. Verification numerique :""")
 
     dt, sigma_a = 5.0, 0.2
-    _, G = FiltreKalmanPosition.modele(dt)
+    _, G = PositionKalmanFilter.model(dt)
     Q3 = sigma_a ** 2 * (G @ G.T)
     attendus = (("position  dt^4/4", Q3[0, 0], sigma_a ** 2 * dt ** 4 / 4),
                 ("croise    dt^3/2", Q3[0, 3], sigma_a ** 2 * dt ** 3 / 2),
-                ("vitesse   dt^2  ", Q3[3, 3], sigma_a ** 2 * dt ** 2))
+                ("velocity   dt^2  ", Q3[3, 3], sigma_a ** 2 * dt ** 2))
     tout_bon = True
     for nom, obtenu, attendu in attendus:
         ok = abs(obtenu - attendu) < 1e-12
@@ -176,7 +176,7 @@ def modele_de_lengin():
 
     print("""
   UNE SEULE DIFFERENCE, ET ELLE EST DANS H. Le radar du document mesure la
-  portee ET la vitesse, donc H = I. Les tags ne donnent qu'une position :
+  portee ET la velocity, donc H = I. Les tags ne donnent qu'une position :
 
       H = [I3  0]
 
@@ -190,11 +190,11 @@ def modele_de_lengin():
 
     1. L'ENTREE u. Le document ecrit x(n+1,n) = F x(n,n) + G u(n) et donne
        pour exemple d'entree « readings from an onboard accelerometer ».
-       C'est exactement ce que fait FiltreKalmanPosition.predire(dt, accel) :
+       C'est exactement ce que fait PositionKalmanFilter.predict(dt, accel) :
        sans accelerometre l'acceleration est un alea couvert par sigma_a,
        avec lui elle est mesuree et il ne reste que le bruit du capteur.
 
-    2. LE REJET DES MESURES ABERRANTES. Un tag vu de trop biais peut se
+    2. LE REJET DES MESURES ABERRANTES. Un tag vu de trop bias peut se
        retourner et donner une pose fausse de plusieurs decimetres. On la
        reconnait a sa distance de Mahalanobis y' S^-1 y, ou S = H P H' + R
        est deja calculee pour le gain. Le document renvoie ce sujet a son
@@ -225,7 +225,7 @@ def main():
     print("  Le filtre de position du projet n'est pas inspire du document :")
     print("  c'est le meme filtre. Il reproduit son exemple chiffre a la")
     print("  quatrieme decimale, avec la classe qui tourne reellement sur")
-    print("  l'engin (kalman_filter.KalmanLineaire).")
+    print("  l'engin (kalman_filter.LinearKalman).")
     print("=" * 74)
     return 0
 

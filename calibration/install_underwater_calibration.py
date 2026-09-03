@@ -35,10 +35,10 @@
 # ---------------------------------------------------------------------------
 # PREMIERE CORRECTION : fx = 791.3 px  (depassee, gardee pour la trace)
 # ---------------------------------------------------------------------------
-# On a d'abord cherche l'optics qui, resolue avec la matrice de Josiah,
+# On a d'abord cherche l'optics qui, resolue avec la matrix de Josiah,
 # rendrait exactement les 0.8998 x mesures au bassin. La simulation
 # (projectPoints puis solvePnP, comme dans le vrai code) donnait fx = 791.3 px,
-# et le modele optics de optics.py — qui ne connait que la geometrie du tube
+# et le model optics de optics.py — qui ne connait que la geometrie du tube
 # et l'indice de l'eau — predisait 803.6 px. Les deux se rejoignaient a 1.5 %,
 # ce qui a suffi a installer 791.34 / 615.40 pendant un temps.
 #
@@ -48,7 +48,7 @@
 # Une verification independante, faite sur le terrain avec un AUTRE algorithme
 # de mesure, a trouve ces deux valeurs justes. Elles valent 1.0595 x les
 # precedentes, le meme facteur sur les deux axes : l'anamorphose 1.2859 du
-# modele optics est donc conservee intacte, ce qui est rassurant — c'est une
+# model optics est donc conservee intacte, ce qui est rassurant — c'est une
 # propriete du tube, et elle n'avait aucune raison de bouger.
 #
 # Elles sont prises TELLES QUELLES, sans etre rejustifiees apres coup. Une
@@ -71,7 +71,7 @@
 # ---------------------------------------------------------------------------
 # Aucune mesure de distance d'un tag centre ne contraint fy : elle est dominee
 # par l'axe le plus grossi. fy ne tient donc toujours que par l'anamorphose du
-# modele (fx/fy = 1.2859), que la verification independante a conservee sans
+# model (fx/fy = 1.2859), que la verification independante a conservee sans
 # la mesurer separement.
 #
 # Un fy faux ne se voit PAS sur une mesure de distance d'un tag place au
@@ -105,7 +105,7 @@ VUES, RMS = 15, 0.7793
 # les valeurs qu'une verification independante, faite avec un autre algorithme
 # de mesure, a trouvees justes sur le terrain. Elles valent 1.0595 x les
 # anciennes (791.34 / 615.40) — le meme facteur sur les deux axes, donc
-# l'anamorphose 1.2859 du modele optics est conservee telle quelle.
+# l'anamorphose 1.2859 du model optics est conservee telle quelle.
 #
 # On les prend telles quelles, et on ne les rejustifie pas apres coup. Une
 # tentative de les rededuire des trois mesures du bassin a d'ailleurs echoue :
@@ -146,7 +146,7 @@ def main():
     print(f"  fx {K[0, 0]:7.2f}   fy {K[1, 1]:7.2f}   "
           f"cx {K[0, 2]:6.2f}   cy {K[1, 2]:6.2f}")
     if options.brute:
-        print("\n  ATTENTION : cette matrice mesure les distances 10 % trop")
+        print("\n  ATTENTION : cette matrix mesure les distances 10 % trop")
         print("  courtes. Son fy (595.86) est plus petit qu'en air (602.37),")
         print("  ce que la physique interdit. A n'installer que pour comparer.")
     else:
@@ -177,7 +177,7 @@ def main():
         print(f"  fx {ancien['K'][0, 0]:.2f}   fy {ancien['K'][1, 1]:.2f}")
         if not deja_a_jour:
             # Mettre de cote seulement si on s'apprete a la remplacer par une
-            # AUTRE matrice : sauvegarder une copie identique d'elle-meme
+            # AUTRE matrix : sauvegarder une copie identique d'elle-meme
             # n'a aucun sens et ne fait qu'accumuler des fichiers.
             sauvegarde = fichier.with_name("tube_eau_remplace.npz")
             numero = 2

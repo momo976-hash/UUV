@@ -93,10 +93,10 @@ def choisir():
     else:
         print(f"'{reponse}' n'est pas un choix valable. Rien n'a change.")
         return 1
-    return appliquer(choisi)
+    return apply(choisi)
 
 
-def appliquer(nom):
+def apply(nom):
     """Ecrit le reglage et dit ce qui vient de changer."""
     if nom not in optics.MONTAGES:
         print(f"ERREUR : '{nom}' inconnu. "
@@ -144,7 +144,7 @@ def main():
     if options.montrer:
         return 0
     if options.montage:
-        return appliquer(options.montage)
+        return apply(options.montage)
     return choisir()
 
 

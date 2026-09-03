@@ -2,7 +2,7 @@
 
 POURQUOI CE SCRIPT
 Le protocole (docs/kalman_protocol.md) demande de mesurer quatre
-nombres. Deux d'entre eux — SIGMA_ACCELERATION et DERIVE_GYRO_DEG_S —
+nombres. Deux d'entre eux — SIGMA_ACCELERATION et GYRO_DRIFT_DEG_S —
 exigent l'engin reel en mouvement dans le bassin (etape 5). Quand l'engin
 n'est pas disponible, la tentation est d'inventer une valeur « theorique »
 a partir de la fiche constructeur de la camera. C'est impossible : ces deux
@@ -17,17 +17,17 @@ repond par la mesure, pas par l'argument.
 CE QUE LE CODE DIT DEJA
 Dans kalman_filter.py, les deux parametres sont sur une branche `is None` :
 
-    FiltreKalmanPosition.predire :
+    PositionKalmanFilter.predict :
         if acceleration is None:
             incertitude = self.sigma_a      <- SIGMA_ACCELERATION
         else:
-            incertitude = self.bruit_accel  <- BRUIT_ACCEL
+            incertitude = self.accel_noise  <- ACCEL_NOISE
 
-    FiltreOrientation.predire :
+    OrientationFilter.predict :
         if omega is None:
-            self.variance += (self.derive * dt) ** 2      <- DERIVE_GYRO_DEG_S
+            self.variance += (self.drift * dt) ** 2      <- GYRO_DRIFT_DEG_S
         ...
-        self.variance += (self.bruit_gyro * dt) ** 2      <- BRUIT_GYRO_DEG_S
+        self.variance += (self.gyro_noise * dt) ** 2      <- GYRO_NOISE_DEG_S
 
 Autrement dit : des que la centrale de la D435i alimente le filtre, ces deux
 reglages ne sont plus jamais lus. Ce script le VERIFIE en faisant tourner le
@@ -35,12 +35,12 @@ filtre pour de vrai, plutot que de faire confiance a une lecture de code.
 
 CE QU'IL FAUT EN CONCLURE, ET CE QU'IL NE FAUT PAS
 A conclure : avec l'IMU branchee, l'etape 5 n'est pas un prealable. Les deux
-nombres qui gouvernent alors — BRUIT_GYRO_DEG_S et BRUIT_ACCEL — se mesurent
+nombres qui gouvernent alors — GYRO_NOISE_DEG_S et ACCEL_NOISE — se mesurent
 engin IMMOBILE, sans bassin ni deplacement (imu_realsense.py).
 
 A NE PAS conclure : que l'etape 5 est inutile. Le jour ou la centrale n'est
 pas la, tombe en panne, ou n'est pas branchee dans une manip donnee, ce sont
-SIGMA_ACCELERATION et DERIVE_GYRO_DEG_S qui reprennent la main — et la
+SIGMA_ACCELERATION et GYRO_DRIFT_DEG_S qui reprennent la main — et la
 colonne « SANS IMU » ci-dessous montre qu'ils comptent alors beaucoup.
 
     python kalman/settings_sensitivity.py
@@ -51,10 +51,10 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from kalman_filter import (FiltrePose, angle_quaternions,  # noqa: E402
-                           produit_quaternions, quaternion_depuis_rotation,
-                           SIGMA_ACCELERATION, DERIVE_GYRO_DEG_S,
-                           BRUIT_GYRO_DEG_S, BRUIT_ACCEL)
+from kalman_filter import (PoseFilter, quaternion_angle,  # noqa: E402
+                           quaternion_product, quaternion_from_rotation,
+                           SIGMA_ACCELERATION, GYRO_DRIFT_DEG_S,
+                           GYRO_NOISE_DEG_S, ACCEL_NOISE)
 
 DT = 1 / 30
 IMAGES = 600
@@ -69,32 +69,32 @@ def _engin(k):
 def rms_position(sigma_acceleration, avec_imu, graine=7):
     """RMS d'erreur de position, en mm, sur une trajectoire connue."""
     rng = np.random.default_rng(graine)
-    filtre = FiltrePose(sigma_acceleration=sigma_acceleration,
-                        derive_gyro_deg_s=DERIVE_GYRO_DEG_S)
+    filtre = PoseFilter(sigma_acceleration=sigma_acceleration,
+                        derive_gyro_deg_s=GYRO_DRIFT_DEG_S)
     p = np.zeros(3)
     v = np.array([0.25, 0.0, 0.0])
-    filtre.position.demarrer(p.copy())
-    # Sans cette ligne, orientation.demarre reste faux et FiltrePose IGNORE
+    filtre.position.start(p.copy())
+    # Sans cette ligne, orientation.started reste faux et PoseFilter IGNORE
     # l'accelerometre en silence : le test comparerait alors deux fois le
     # meme cas et conclurait a tort que sigma_acceleration compte.
-    filtre.orientation.demarrer(np.array([1.0, 0.0, 0.0, 0.0]))
+    filtre.orientation.start(np.array([1.0, 0.0, 0.0, 0.0]))
 
     erreurs = []
     for k in range(IMAGES):
         a = _engin(k)
         v = v + a * DT
         p = p + v * DT
-        gyro = rng.normal(0, np.radians(BRUIT_GYRO_DEG_S), 3) if avec_imu else None
+        gyro = rng.normal(0, np.radians(GYRO_NOISE_DEG_S), 3) if avec_imu else None
         accel = (np.array([0.0, 0.0, 9.81]) + a
-                 + rng.normal(0, BRUIT_ACCEL, 3)) if avec_imu else None
-        filtre.predire(DT, gyro=gyro, accel=accel)
+                 + rng.normal(0, ACCEL_NOISE, 3)) if avec_imu else None
+        filtre.predict(DT, gyro=gyro, accel=accel)
         if k % 3 == 0:                      # tags a 10 Hz, bruit 8 mm
-            filtre.ajouter_tag(p + rng.normal(0, 0.008, 3),
+            filtre.add_tag(p + rng.normal(0, 0.008, 3),
                                np.array([2.0, 0.0, 0.0]), 15.0)
-            filtre.appliquer()
+            filtre.apply()
         erreurs.append(np.linalg.norm(filtre.position.x[:3] - p))
     return (1000 * float(np.sqrt(np.mean(np.square(erreurs[ECHAUFFEMENT:])))),
-            filtre.position.accel_utilise)
+            filtre.position.accel_used)
 
 
 def incertitude_cap(derive_gyro_deg_s, avec_gyro, secondes=3.0):
@@ -105,12 +105,12 @@ def incertitude_cap(derive_gyro_deg_s, avec_gyro, secondes=3.0):
     lui-meme. Un filtre qui se croit sur alors qu'il ne l'est pas est
     pourtant exactement ce qui fait accepter une mesure aberrante.
     """
-    filtre = FiltrePose(sigma_acceleration=SIGMA_ACCELERATION,
+    filtre = PoseFilter(sigma_acceleration=SIGMA_ACCELERATION,
                         derive_gyro_deg_s=derive_gyro_deg_s)
-    filtre.orientation.demarrer(np.array([1.0, 0.0, 0.0, 0.0]), sigma_deg=1.0)
+    filtre.orientation.start(np.array([1.0, 0.0, 0.0, 0.0]), sigma_deg=1.0)
     omega = np.array([0.0, 0.0, np.radians(12.0)]) if avec_gyro else None
     for _ in range(int(secondes / DT)):
-        filtre.orientation.predire(DT, omega)
+        filtre.orientation.predict(DT, omega)
     return np.degrees(np.sqrt(filtre.orientation.variance))
 
 
@@ -119,8 +119,8 @@ def main():
     print("QUELS REGLAGES COMPTENT, ET DANS QUELLE CONFIGURATION")
     print("=" * 70)
     print("Engin simule doux (0.3 m/s2), tags a 10 Hz bruites a 8 mm.")
-    print(f"Reglages IMU mesures : BRUIT_GYRO_DEG_S = {BRUIT_GYRO_DEG_S}, "
-          f"BRUIT_ACCEL = {BRUIT_ACCEL}")
+    print(f"Reglages IMU mesures : GYRO_NOISE_DEG_S = {GYRO_NOISE_DEG_S}, "
+          f"ACCEL_NOISE = {ACCEL_NOISE}")
 
     print("\n" + "-" * 70)
     print("1. SIGMA_ACCELERATION — RMS de position (mm)")
@@ -144,16 +144,16 @@ def main():
     print("  court-circuite tant que l'accelerometre alimente la prediction.")
 
     print("\n" + "-" * 70)
-    print("2. DERIVE_GYRO_DEG_S — incertitude de cap apres 3 s sans tag (deg)")
+    print("2. GYRO_DRIFT_DEG_S — incertitude de cap apres 3 s sans tag (deg)")
     print("-" * 70)
-    print(f"  {'derive (deg/s)':>16} | {'AVEC GYRO':>10} | {'SANS GYRO':>10}")
+    print(f"  {'drift (deg/s)':>16} | {'AVEC GYRO':>10} | {'SANS GYRO':>10}")
     print("  " + "-" * 42)
     avec_g = []
-    for d in (1.0, DERIVE_GYRO_DEG_S, 100.0, 171.0):
+    for d in (1.0, GYRO_DRIFT_DEG_S, 100.0, 171.0):
         a = incertitude_cap(d, True)
         s = incertitude_cap(d, False)
         avec_g.append(a)
-        marque = "  <- valeur installee" if d == DERIVE_GYRO_DEG_S else ""
+        marque = "  <- valeur installee" if d == GYRO_DRIFT_DEG_S else ""
         print(f"  {d:>16} | {a:>9.3f}  | {s:>9.3f}{marque}")
     etendue_g = max(avec_g) - min(avec_g)
     print(f"\n  Colonne AVEC GYRO : etendue {etendue_g:.4f} deg.")
@@ -165,9 +165,9 @@ def main():
     print("CE QUE CELA ETABLIT")
     print("=" * 70)
     print("  - Avec la centrale de la D435i branchee, SIGMA_ACCELERATION et")
-    print("    DERIVE_GYRO_DEG_S ne sont jamais lus par le filtre. Les laisser")
+    print("    GYRO_DRIFT_DEG_S ne sont jamais lus par le filtre. Les laisser")
     print("    a leur valeur supposee n'a aucune consequence mesurable.")
-    print("  - Ce qui gouverne alors, ce sont BRUIT_GYRO_DEG_S et BRUIT_ACCEL,")
+    print("  - Ce qui gouverne alors, ce sont GYRO_NOISE_DEG_S et ACCEL_NOISE,")
     print("    qui se mesurent ENGIN IMMOBILE (imu_realsense.py) — sans bassin,")
     print("    sans deplacement, sans l'engin lui-meme.")
     print("  - L'etape 5 du protocole reste necessaire pour le jour ou la")

@@ -2,7 +2,7 @@
 #
 # On simule un UUV qui longe la paroi B en regardant la paroi A, avec la
 # vraie implantation des 10 tags et le vrai champ de vision sous l'eau. Les
-# mesures sont bruitees selon la geometrie (un tag lointain ou vu de biais
+# mesures sont bruitees selon la geometrie (un tag lointain ou vu de bias
 # est moins fiable), et on injecte deux perturbations realistes :
 #
 #   - des ABERRATIONS : l'ambiguite de retournement d'un tag plan produit
@@ -28,9 +28,9 @@ if EXPORT:
     matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from kalman_filter import (FiltrePose, covariance_position_tag,
-                           ecart_type_angle_tag, matrice_vers_quaternion,
-                           angle_quaternions)
+from kalman_filter import (PoseFilter, tag_position_covariance,
+                           tag_angle_std, matrix_to_quaternion,
+                           quaternion_angle)
 from pool_layout_3d import TAGS, LONGUEUR, LARGEUR, visibles_depuis
 
 IMAGE = Path(__file__).resolve().with_name("demo_kalman.png")
@@ -40,7 +40,7 @@ DUREE = 60.0                   # un vrai essai en bassin dure des minutes
 BULLES = (18.0, 21.0)          # rideau de bulles des propulseurs
 PROBA_ABERRATION = 0.015
 
-# Bruit de modele. Ces deux valeurs ne se reglent pas au hasard : elles
+# Bruit de model. Ces deux valeurs ne se reglent pas au hasard : elles
 # decrivent ce que l'engin est capable de faire SANS que le filtre le sache.
 # Trop petites, le filtre sous-pondere les mesures et retarde sur la realite.
 # Ici la trajectoire simulee tourne a 7.2 deg/s en mediane, 10.2 deg/s au pic.
@@ -67,7 +67,7 @@ def decalage_carte(tid, t):
 
     Un tag deplace de delta decale d'autant la position de camera qu'on en
     deduit, puisque celle-ci se calcule EN PARTANT de la position supposee
-    du tag. C'est un biais pur, et un filtre de Kalman suit les biais.
+    du tag. C'est un bias pur, et un filtre de Kalman suit les bias.
     """
     if tid == BOITE_DEPLACEE and t >= INSTANT_DEPLACEMENT:
         return -DEPLACEMENT
@@ -98,7 +98,7 @@ def trajectoire(t):
 
 def simuler(graine=7):
     generateur = np.random.default_rng(graine)
-    filtre = FiltrePose(sigma_acceleration=SIGMA_ACCELERATION,
+    filtre = PoseFilter(sigma_acceleration=SIGMA_ACCELERATION,
                         derive_gyro_deg_s=DERIVE_GYRO)
 
     instants = np.arange(0.0, DUREE, 1.0 / FREQUENCE)
@@ -110,11 +110,11 @@ def simuler(graine=7):
     for t in instants:
         position_vraie, azimut, roulis, tangage = trajectoire(t)
         R_vraie = rotation_camera(azimut, roulis, tangage)
-        q_vrai = matrice_vers_quaternion(R_vraie)
+        q_vrai = matrix_to_quaternion(R_vraie)
 
         dt = 1.0 / FREQUENCE if precedent is None else t - precedent
         precedent = t
-        filtre.predire(dt)
+        filtre.predict(dt)
 
         # --- ce que la camera voit reellement depuis cette pose -------------
         aveugle = BULLES[0] <= t < BULLES[1]
@@ -122,11 +122,11 @@ def simuler(graine=7):
 
         mesure_brute, angle_brut = None, None
         for tid, distance, incidence, _ in vus:
-            C = covariance_position_tag(position_vraie, POSITION_TAG[tid], incidence)
+            C = tag_position_covariance(position_vraie, POSITION_TAG[tid], incidence)
             position_mesuree = (position_vraie + decalage_carte(tid, t)
                                 + generateur.multivariate_normal(np.zeros(3), C))
 
-            sigma_angle = ecart_type_angle_tag(distance, incidence)
+            sigma_angle = tag_angle_std(distance, incidence)
             perturbation = generateur.normal(0.0, sigma_angle, 3)
             norme = np.linalg.norm(perturbation)
             axe = perturbation / norme if norme > 1e-12 else np.array([1.0, 0.0, 0.0])
@@ -139,24 +139,24 @@ def simuler(graine=7):
                 position_mesuree = position_mesuree + generateur.normal(0.0, 0.25, 3)
                 q_mesure = np.roll(q_mesure, 2)
 
-            filtre.ajouter_tag(position_mesuree, POSITION_TAG[tid], incidence,
+            filtre.add_tag(position_mesuree, POSITION_TAG[tid], incidence,
                                rotation_mesuree=q_mesure, distance=distance,
                                identifiant=tid)
             if mesure_brute is None:
-                mesure_brute, angle_brut = position_mesuree, angle_quaternions(q_mesure, q_vrai)
+                mesure_brute, angle_brut = position_mesuree, quaternion_angle(q_mesure, q_vrai)
 
-        rejets_avant = filtre.position.rejets
-        acceptee, nombre = filtre.appliquer()
-        rejete = filtre.position.rejets > rejets_avant
+        rejets_avant = filtre.position.rejections
+        acceptee, nombre = filtre.apply()
+        rejete = filtre.position.rejections > rejets_avant
 
         journal["t"].append(t)
         journal["vraie"].append(position_vraie)
         journal["filtree"].append(filtre.position.position)
         journal["nb_tags"].append(nombre)
-        journal["sigma"].append(filtre.position.incertitude_position)
+        journal["sigma"].append(filtre.position.position_uncertainty)
         journal["rejet"].append(rejete)
         journal["err_filtree"].append(np.linalg.norm(filtre.position.position - position_vraie))
-        journal["err_angle_filtre"].append(angle_quaternions(filtre.orientation.q, q_vrai))
+        journal["err_angle_filtre"].append(quaternion_angle(filtre.orientation.q, q_vrai))
         if mesure_brute is not None:
             journal["brute"].append(mesure_brute)
             journal["err_brute"].append(np.linalg.norm(mesure_brute - position_vraie))
@@ -168,10 +168,10 @@ def simuler(graine=7):
 
     for cle in journal:
         journal[cle] = np.array(journal[cle])
-    journal["rejets_total"] = filtre.position.rejets
-    journal["rejets_angle"] = filtre.orientation.rejets
-    journal["reprises"] = filtre.position.reprises + filtre.orientation.reprises
-    journal["surveillance"] = filtre.surveillance
+    journal["rejets_total"] = filtre.position.rejections
+    journal["rejets_angle"] = filtre.orientation.rejections
+    journal["recoveries"] = filtre.position.recoveries + filtre.orientation.recoveries
+    journal["watchdog"] = filtre.watchdog
     return journal
 
 
@@ -224,29 +224,29 @@ def resume(journal):
           f"meilleure, RMS {rms(angle_brut)/rms(angle_filtre):.1f}x")
     print("-" * 72)
     print(f"B. RIDEAU DE BULLES ({BULLES[0]:.0f}-{BULLES[1]:.0f} s, plus aucune mesure)")
-    print("   Le filtre avance a l'estime. Il derive, c'est normal et inevitable :")
-    print("   ce qui compte est qu'il derive PROPREMENT et qu'il l'annonce.")
-    print(f"   derive apres 3 s aveugles          {1000*journal['err_filtree'][pendant][-1]:7.0f} mm")
+    print("   Le filtre avance a l'estime. Il drift, c'est normal et inevitable :")
+    print("   ce qui compte est qu'il drift PROPREMENT et qu'il l'annonce.")
+    print(f"   drift apres 3 s aveugles          {1000*journal['err_filtree'][pendant][-1]:7.0f} mm")
     print(f"   incertitude annoncee (1 sigma)     {1000*journal['sigma'][pendant][-1]:7.0f} mm")
     print(f"   orientation perdue                 {journal['err_angle_filtre'][pendant][-1]:7.1f} deg")
     print("-" * 72)
     print(f"C. ROBUSTESSE")
     print(f"   aberrations rejetees : {journal['rejets_total']} en position, "
           f"{journal['rejets_angle']} en orientation")
-    print(f"   reprises apres verrouillage : {journal['reprises']}")
+    print(f"   recoveries apres verrouillage : {journal['recoveries']}")
     print("-" * 72)
     print(f"D. SURVEILLANCE DES SUPPORTS")
     print(f"   boite {BOITE_DEPLACEE} reellement poussee de "
           f"{1000*np.linalg.norm(DEPLACEMENT):.0f} mm "
           f"({1000*DEPLACEMENT[0]:+.0f}, {1000*DEPLACEMENT[1]:+.0f}, "
           f"{1000*DEPLACEMENT[2]:+.0f}) a t = {INSTANT_DEPLACEMENT:.0f} s")
-    print("   ce que la surveillance en dit :")
-    print(journal["surveillance"].rapport())
+    print("   ce que la watchdog en dit :")
+    print(journal["watchdog"].report())
     print("")
-    print("   A noter dans le tableau A : apres t = 24 s le filtre SUIT ce biais,")
-    print("   il ne peut pas le corriger. C'est pour cela que le 95e centile filtre")
+    print("   A noter dans le tableau A : apres t = 24 s le filtre SUIT ce bias,")
+    print("   il ne peut pas le correct. C'est pour cela que le 95e centile filtre")
     print("   finit par depasser le brut. Un Kalman moyenne le bruit, jamais un")
-    print("   biais : la stabilite mecanique des supports n'est pas negociable.")
+    print("   bias : la stabilite mecanique des supports n'est pas negociable.")
     print("=" * 72)
 
 
@@ -284,9 +284,9 @@ def tracer(journal):
             label="erreur filtree")
     ax.plot(t, 1000 * journal["sigma"], color="#0ea5e9", linewidth=1.0,
             linestyle="--", label="incertitude annoncee (1 sigma)")
-    rejets = journal["rejet"]
-    if rejets.any():
-        ax.plot(t[rejets], 1000 * journal["err_brute"][rejets], "x",
+    rejections = journal["rejet"]
+    if rejections.any():
+        ax.plot(t[rejections], 1000 * journal["err_brute"][rejections], "x",
                 color="#dc2626", markersize=6, label="aberrations rejetees")
     ax.set_yscale("log")
     ax.set_xlabel("temps (s)")

@@ -31,7 +31,7 @@ import optics  # noqa: E402
 CAMERA_INDEX = None          # None = detection automatique
 RESOLUTION = (640, 480)      # doit etre identique a celle de la calibration
 
-TAILLE_TAG = optics.TAILLE_TAG_GRAND   # mesure au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # mesure au pied a coulisse, pas 223 mm nominal
 FACTEUR_APPROX = 0.95        # ancienne approximation
 LISSAGE = 30                 # images moyennees pour stabiliser l'affichage
 
@@ -112,7 +112,7 @@ print(f"  calibration : {Lc}x{Hc} (fx = {K_calib[0, 0]:.1f})   capture : {L}x{H}
 if (L, H) != (Lc, Hc):
     print("  >>> ATTENTION : formats differents, la calibration n'est pas valable ici.")
 
-h = TAILLE_TAG / 2
+h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
@@ -231,8 +231,8 @@ while True:
                                 (10, 136), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
                     if d_b:
                         cv2.putText(image,
-                                    f"TAILLE_TAG deduite : {TAILLE_TAG*ref/d_b*100:.1f} cm"
-                                    f"  (declaree {TAILLE_TAG*100:.1f} cm)",
+                                    f"TAG_SIZE deduite : {TAG_SIZE*ref/d_b*100:.1f} cm"
+                                    f"  (declaree {TAG_SIZE*100:.1f} cm)",
                                     (10, 162), cv2.FONT_HERSHEY_SIMPLEX, 0.52,
                                     (255, 255, 0), 2)
             except ValueError:

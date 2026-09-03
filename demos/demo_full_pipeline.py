@@ -17,7 +17,7 @@ CAMERA_INDEX = None
 # Resolution FIGEE : doit etre identique pour la calibration et les mesures.
 RESOLUTION = (640, 480)
 
-TAILLE_TAG = 0.22389        # cote du carre noir, mesure au pied a coulisse (nominal 223 mm)
+TAG_SIZE = 0.22389        # cote du carre noir, mesure au pied a coulisse (nominal 223 mm)
 FACTEUR_FOCALE = 0.95       # correction de focale issue de la validation
 
 ECHANTILLONS_REQUIS = 25    # observations avant d'enregistrer un tag
@@ -163,7 +163,7 @@ if cam is None:
 FOCALE = L * FACTEUR_FOCALE
 K = np.array([[FOCALE, 0, L / 2], [0, FOCALE, H / 2], [0, 0, 1]], dtype=np.float64)
 dist = np.zeros(5)
-h = TAILLE_TAG / 2
+h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
@@ -198,7 +198,7 @@ while True:
                                            flags=cv2.SOLVEPNP_IPPE_SQUARE)
             if not ok2:
                 continue
-            cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAILLE_TAG / 2, 2)
+            cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAG_SIZE / 2, 2)
             R = cv2.Rodrigues(rvec)[0]
             poses[int(tag_id)] = transformation(R, tvec)
             surfaces[int(tag_id)] = cv2.contourArea(pts.astype(np.float32))

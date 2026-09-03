@@ -1,7 +1,7 @@
 # demo_distance.py — La calibration, montree plutot que racontee.
 #
 # POURQUOI CE SCRIPT
-# Dire "la camera est calibree" ne prouve rien : les chiffres d'une matrice K
+# Dire "la camera est calibree" ne prouve rien : les chiffres d'une matrix K
 # ne se verifient pas a l'oeil. Ce script rend la calibration TESTABLE par
 # quelqu'un qui n'a qu'un metre a ruban. On pose un tag a une distance connue,
 # et l'ecran affiche cote a cote ce que TROIS modeles de camera repondent a la
@@ -33,7 +33,7 @@
 # D'OU VIENT LE DESACCORD DE LA LIGNE 2 : ON NE SAIT PAS
 # Entre la calibration nue et celle du tube, cy passe de 242.9 a 258.5 (15.6
 # px, ~1.5 deg de visee) — c'est ce que la colonne "3D offset" attrape. La
-# tentation est d'y voir l'effet du tube. Le modele de ce depot ne le dit pas :
+# tentation est d'y voir l'effet du tube. Le model de ce depot ne le dit pas :
 # une paroi cylindrique vue de face est symetrique autour de l'axe optics,
 # elle change la FOCALE (voir grandissement_section dans optics.py) et ne
 # deplace pas le point principal. Deux causes plus vraisemblables, qu'on ne
@@ -53,7 +53,7 @@
 #
 # NE PAS ATTENDRE QUE L'ERREUR EXPLOSE DANS LES COINS
 # On pourrait croire que la ligne 1 s'effondre loin du centre, faute de
-# corriger la distorsion. Verifie : son erreur de distance passe de 6.0 % au
+# correct la distorsion. Verifie : son erreur de distance passe de 6.0 % au
 # centre a 3.8 % au bord — elle DIMINUE, la distorsion negligee compensant en
 # partie la focale fausse. Ne pas conclure sur une seule position du tag.
 #
@@ -61,7 +61,7 @@
 #   1. Poser le tag bien en face, a une distance mesuree au metre (1 a 2 m).
 #   2. python demo_distance.py --tag 0.223 --reference 1.50
 #   3. Lire la ligne verte contre le metre. Le reste est du commentaire.
-#   4. 's' capture l'ecran en PNG : la preuve part dans le rapport.
+#   4. 's' capture l'ecran en PNG : la preuve part dans le report.
 #
 # ON MESURE DEPUIS LA PUPILLE, PAS DEPUIS LA PAROI DU TUBE
 # Le metre part du verre de l'objectif, a ~2 cm pres. A 1.5 m cela pese 1 % :
@@ -85,7 +85,7 @@ FAMILLE = cv2.aruco.DICT_APRILTAG_36h11
 
 # Les deux tags dont on dispose : celui du bassin et le petit. Mesures au
 # pied a coulisse, voir optics.py — ne pas revenir au nominal (0.223/0.115).
-TAILLES = (optics.TAILLE_TAG_GRAND, optics.TAILLE_TAG_PETIT)
+TAILLES = (optics.LARGE_TAG_SIZE, optics.SMALL_TAG_SIZE)
 
 DOSSIER_PREUVES = Path(__file__).resolve().parent / "preuves"
 
@@ -186,7 +186,7 @@ def dessiner_panneau(toile, lignes, reference, taille_tag, vu):
              + (f"   |   tape measure: {reference:.3f} m" if reference
                 else "   |   no reference set (keys + / -)"))
     ecrire(toile, titre, (14, haut + 22), 0.5, GRIS)
-    ecrire(toile, "distance", (colonne_d, haut + 22), 0.42, GRIS)
+    ecrire(toile, "mahalanobis", (colonne_d, haut + 22), 0.42, GRIS)
     ecrire(toile, "3D offset", (colonne_e, haut + 22), 0.42, GRIS)
 
     y = haut + 34

@@ -13,11 +13,11 @@
 # images sans rien toucher et on calcule l'ecart-type reel.
 #
 # CE QUE CA VALIDE EN PLUS
-# Le modele dit que l'erreur de position d'un tag est ANISOTROPE :
+# Le model dit que l'erreur de position d'un tag est ANISOTROPE :
 #     laterale    ~ d   . sigma_px / f
 #     profondeur  ~ d^2 . sigma_px / (f . T . cos incidence)
 # En refaisant la mesure a plusieurs distances, on verifie si l'erreur croit
-# bien comme d lateralement et comme d^2 en profondeur. Si oui, le modele du
+# bien comme d lateralement et comme d^2 en profondeur. Si oui, le model du
 # filtre est valide EXPERIMENTALEMENT et plus seulement suppose.
 #
 # MODE D'EMPLOI
@@ -46,11 +46,11 @@ import optics  # noqa: E402
 
 CAMERA_INDEX = None
 RESOLUTION = optics.RESOLUTION
-TAILLE_TAG = optics.TAILLE_TAG_GRAND   # mesure au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # mesure au pied a coulisse, pas 223 mm nominal
 IMAGES_PAR_CAPTURE = 300
 FREQUENCE_SUPPOSEE = 30.0
 
-# Au-dela de cette vitesse, l'image bouge de plus d'un pixel pendant le temps
+# Au-dela de cette velocity, l'image bouge de plus d'un pixel pendant le temps
 # de pose : le flou de bouge deforme les coins et la mesure ne veut plus rien
 # dire. Repere : v_limite ~ d / (focale x temps_de_pose).
 VITESSE_MAX_CONSEILLEE = 0.15    # m/s
@@ -78,13 +78,13 @@ COLONNES = ["mode", "distance_m", "incidence_deg", "images", "vitesse_cm_s",
 
 # Le facteur 2 vient de ce que l'echelle du tag, d'ou se deduit la distance,
 # est lue sur QUATRE coins et non un seul : la moyenne divise le bruit par
-# racine de 4. Sans lui le modele surestimait la profondeur d'un facteur 2.3
+# racine de 4. Sans lui le model surestimait la profondeur d'un facteur 2.3
 # sur les mesures reelles ; avec lui l'ecart tombe sous 15 %.
-COINS_PAR_TAG = 4.0
+CORNERS_PER_TAG = 4.0
 
 
 def _poids_lissage(demi_fenetre, degre):
-    """Poids d'un lissage polynomial local (Savitzky-Golay) et son biais.
+    """Poids d'un lissage polynomial local (Savitzky-Golay) et son bias.
 
     Renvoie aussi le facteur par lequel la variance des residus sous-estime
     la vraie variance du bruit : le lissage absorbe une part du bruit.
@@ -104,7 +104,7 @@ def separer_bruit(valeurs, demi_fenetre=7, degre=2):
     retirer le mouvement reel : on l'ajuste localement par un polynome et
     on ne garde que ce qui ne s'y ajuste pas.
 
-    Renvoie (partie_lisse, bruit) avec le bruit deja corrige du biais
+    Renvoie (partie_lisse, bruit) avec le bruit deja corrige du bias
     d'absorption du lissage.
     """
     valeurs = np.asarray(valeurs, dtype=float)
@@ -161,10 +161,10 @@ def analyser(coins, positions, focale, taille_tag, dynamique=False):
         "sigma_pixel": sigma_pixel,
         "sigma_lateral_mm": 1000 * sigma_lateral,
         "sigma_profondeur_mm": 1000 * sigma_profondeur,
-        # predictions du modele, a partir du sigma_pixel qu'on vient de mesurer
+        # predictions du model, a partir du sigma_pixel qu'on vient de mesurer
         "lateral_theorique_mm": 1000 * distance * sigma_pixel / focale,
         "profondeur_theorique_mm": 1000 * distance ** 2 * sigma_pixel
-                                   / (focale * taille_tag * np.sqrt(COINS_PAR_TAG)),
+                                   / (focale * taille_tag * np.sqrt(CORNERS_PER_TAG)),
     }
 
 
@@ -206,7 +206,7 @@ def tableau(lignes):
     sigmas = lambda ens: np.array([float(l["sigma_pixel"]) for l in ens])
 
     # --- captures suspectes ------------------------------------------------
-    # Trop de bruit par rapport aux autres, ou geste trop rapide : on les
+    # Trop de bruit par report aux autres, ou geste trop rapide : on les
     # signale ET on les retire de TOUT le depouillement, mediane comprise,
     # sinon elles le faussent.
     def fiables(ensemble):
@@ -216,12 +216,12 @@ def tableau(lignes):
         bons, ecartes = [], []
         for ligne in ensemble:
             valeur = float(ligne["sigma_pixel"])
-            vitesse = float(ligne.get("vitesse_cm_s") or 0.0)
+            velocity = float(ligne.get("vitesse_cm_s") or 0.0)
             if valeur > 3 * med:
                 ecartes.append((ligne, f"{valeur:.3f} px, soit "
                                        f"{valeur/med:.0f}x la mediane"))
-            elif vitesse > 100 * VITESSE_MAX_CONSEILLEE:
-                ecartes.append((ligne, f"deplacee a {vitesse:.0f} cm/s"))
+            elif velocity > 100 * VITESSE_MAX_CONSEILLEE:
+                ecartes.append((ligne, f"deplacee a {velocity:.0f} cm/s"))
             else:
                 bons.append(ligne)
         return bons, ecartes
@@ -271,8 +271,8 @@ def tableau(lignes):
             # Ajuster une loi de puissance demande un bras de levier suffisant :
             # sur une plage trop courte, le bruit domine la pente.
             sortie.append(f"  distances de {d.min():.2f} a {d.max():.2f} m, soit un "
-                          f"rapport de {etendue:.1f}x seulement.")
-            sortie.append("  TROP ETROIT pour conclure : il faut au moins un rapport "
+                          f"report de {etendue:.1f}x seulement.")
+            sortie.append("  TROP ETROIT pour conclure : il faut au moins un report "
                           "de 3x (ex. 0.6 m a 2 m).")
             continue
         for nom, cle, cle_th, attendu in (
@@ -283,14 +283,14 @@ def tableau(lignes):
             bons = valeurs > 0
             if bons.sum() >= 3:
                 pente = float(np.polyfit(np.log(d[bons]), np.log(valeurs[bons]), 1)[0])
-                # le rapport dit si le modele vise juste EN AMPLITUDE ;
+                # le report dit si le model vise juste EN AMPLITUDE ;
                 # la pente dit s'il vise juste EN TENDANCE.
-                rapport = float(np.median(valeurs[bons] / np.maximum(theorie[bons], 1e-9)))
+                report = float(np.median(valeurs[bons] / np.maximum(theorie[bons], 1e-9)))
                 verdict = ("conforme" if abs(pente - attendu) < 0.5
-                           and 0.5 < rapport < 2.0 else "A REVOIR")
+                           and 0.5 < report < 2.0 else "A REVOIR")
                 sortie.append(f"  {nom:<11} erreur ~ d^{pente:.2f} "
-                              f"(modele d^{attendu:.0f}),  amplitude mesuree = "
-                              f"{rapport:.2f}x le modele  -> {verdict}")
+                              f"(model d^{attendu:.0f}),  amplitude mesuree = "
+                              f"{report:.2f}x le model  -> {verdict}")
     sortie.append("=" * 96)
     return "\n".join(sortie)
 
@@ -319,7 +319,7 @@ def main():
         print("ERREUR : aucune camera ouverte.")
         return
 
-    demi = TAILLE_TAG / 2
+    demi = TAG_SIZE / 2
     coins_3d = np.array([[-demi, demi, 0], [demi, demi, 0],
                          [demi, -demi, 0], [-demi, -demi, 0]], dtype=np.float64)
     dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
@@ -369,7 +369,7 @@ def main():
             if len(capture["positions"]) >= IMAGES_PAR_CAPTURE:
                 dynamique = capture["mode"] == "bouge"
                 resultat = analyser(capture["coins"], capture["positions"],
-                                    K_CALIB[0, 0], TAILLE_TAG, dynamique=dynamique)
+                                    K_CALIB[0, 0], TAG_SIZE, dynamique=dynamique)
                 resultat["incidence_deg"] = float(np.mean(capture["incidences"]))
                 resultat["mode"] = capture["mode"]
                 resultat["vitesse_cm_s"] = (100 * float(np.mean(capture["vitesses"]))
@@ -386,13 +386,13 @@ def main():
                       f"{resultat['distance_m']:.2f} m :")
                 print(f"  sigma_pixel      = {resultat['sigma_pixel']:.3f} px")
                 print(f"  bruit lateral    = {resultat['sigma_lateral_mm']:.2f} mm "
-                      f"(modele : {resultat['lateral_theorique_mm']:.2f} mm)")
+                      f"(model : {resultat['lateral_theorique_mm']:.2f} mm)")
                 print(f"  bruit profondeur = {resultat['sigma_profondeur_mm']:.2f} mm "
-                      f"(modele : {resultat['profondeur_theorique_mm']:.2f} mm)")
+                      f"(model : {resultat['profondeur_theorique_mm']:.2f} mm)")
                 if capture["vitesses"]:
                     rapide = float(np.mean(capture["vitesses"]))
                     if rapide > VITESSE_MAX_CONSEILLEE:
-                        print(f"  !! vitesse moyenne {rapide*100:.0f} cm/s, au-dessus "
+                        print(f"  !! velocity moyenne {rapide*100:.0f} cm/s, au-dessus "
                               f"des {VITESSE_MAX_CONSEILLEE*100:.0f} cm/s conseilles.")
                         print("     Le flou de bouge gonfle la mesure : capture a refaire "
                               "plus lentement.")
@@ -409,9 +409,9 @@ def main():
                           (0, 0, 255), -1)
             if capture["vitesses"]:
                 recentes = capture["vitesses"][-10:]
-                vitesse = float(np.mean(recentes))
-                trop = vitesse > VITESSE_MAX_CONSEILLEE
-                cv2.putText(image, f"vitesse {vitesse*100:5.1f} cm/s   "
+                velocity = float(np.mean(recentes))
+                trop = velocity > VITESSE_MAX_CONSEILLEE
+                cv2.putText(image, f"velocity {velocity*100:5.1f} cm/s   "
                                    f"{'>>> TROP VITE <<<' if trop else 'ok'}",
                             (10, 82), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                             (0, 0, 255) if trop else (0, 220, 0), 2)

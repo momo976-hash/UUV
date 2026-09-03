@@ -29,7 +29,7 @@
 #   de l'axe, le menisque agit.
 #
 # Sous l'eau le systeme est donc ANAMORPHIQUE : les deux axes de l'image ne
-# grossissent pas du meme facteur. Ce n'est pas un defaut a corriger, c'est la
+# grossissent pas du meme facteur. Ce n'est pas un defaut a correct, c'est la
 # geometrie du tube ; mais cela interdit de resumer l'optics a un seul nombre.
 #
 # LE DECENTREMENT N'EST PAS UNE FATALITE
@@ -50,7 +50,7 @@
 #     (voir `sensibilite_glissement`).
 #
 # UTILISATION
-#   python optics.py            le rapport complet du montage
+#   python optics.py            le report complet du montage
 #   from optics import ...      dans les autres scripts
 import os
 import sys
@@ -70,8 +70,8 @@ DIST_NUE_AIR = np.array([0.013835, 0.733706, -0.002333, 0.001136, -2.707687],
                         dtype=np.float64)
 
 # Bruit de detection d'un coin de tag, mesure par measure_tag_noise.py. Sert
-# ici d'etalon : inutile de corriger un defaut optics plus petit que lui.
-BRUIT_COIN_PX = 0.215
+# ici d'etalon : inutile de correct un defaut optics plus petit que lui.
+CORNER_NOISE_PX = 0.215
 
 # Encombrement de la D435i. Sa LARGEUR porte les trois objectifs alignes ;
 # l'axe optics sort perpendiculairement, selon la PROFONDEUR.
@@ -80,8 +80,8 @@ CAMERA_HAUTEUR = 0.025
 CAMERA_PROFONDEUR = 0.025
 
 # Retrait de la pupille d'entree derriere la face avant du boitier.
-# Valeur ajustee par la calibration tube_air du 11/08 : le rapport
-# fy_tube / fy_nue donne le decentrement reel, qui sert a predire les
+# Valeur ajustee par la calibration tube_air du 11/08 : le report
+# fy_tube / fy_nue donne le decentrement reel, qui sert a predict les
 # focales sous l'eau. Voir `decentrement_depuis_calibration`.
 PUPILLE_DERRIERE_FACE = -0.0029
 
@@ -106,9 +106,9 @@ TUBE_PROFONDEUR_MAX = 130     # metres d'eau
 # le grand de +0.40 %. Ce n'est donc pas une echelle d'imprimante, qui les
 # aurait decales du meme cote : c'est propre a chaque impression. Utiliser le
 # nominal (0.223 / 0.115) plutot que ces valeurs revient a une erreur de
-# mesure de tag qu'on connaissait deja et qu'on choisit de ne pas corriger.
-TAILLE_TAG_GRAND = 0.22389    # nominal 223.0 mm
-TAILLE_TAG_PETIT = 0.11732    # nominal 117.5 mm
+# mesure de tag qu'on connaissait deja et qu'on choisit de ne pas correct.
+LARGE_TAG_SIZE = 0.22389    # nominal 223.0 mm
+SMALL_TAG_SIZE = 0.11732    # nominal 117.5 mm
 
 # --- comment la camera est posee dedans -------------------------------------
 # "radiale" : couchee le long du tube, regard a travers la paroi cylindrique.
@@ -338,7 +338,7 @@ def source(montage=None):
 
 
 def charger(montage=None, silencieux=False):
-    """La matrice et les distorsions d'un montage donne.
+    """La matrix et les distorsions d'un montage donne.
 
     Tant qu'un montage n'a pas ete calibre, on retombe sur la camera nue en le
     disant. C'est defendable en AIR : la lame plane ne devie rien selon l'axe
@@ -400,24 +400,24 @@ def controler_image(image, montage=None):
     if bleu < 1.0:
         return None
 
-    rapport = rouge / bleu
+    report = rouge / bleu
     sous_leau = montage_est_immerge(_actif(montage))
-    if rapport < _SEUIL_EAU and not sous_leau:
+    if report < _SEUIL_EAU and not sous_leau:
         _deja_alerte = True
-        return (f"l'image est tres bleue (rouge/bleu = {rapport:.2f}) alors que "
+        return (f"l'image est tres bleue (rouge/bleu = {report:.2f}) alors que "
                 f"le montage declare est '{_actif(montage)}', qui est un "
                 f"montage a l'air.\n"
                 f"    Si la camera est dans l'eau, les distances seront "
                 f"trop courtes d'environ 25 %.\n"
-                f"    Pour corriger : python calibration/set_mounting.py")
-    if rapport > _SEUIL_AIR and sous_leau:
+                f"    Pour correct : python calibration/set_mounting.py")
+    if report > _SEUIL_AIR and sous_leau:
         _deja_alerte = True
         return (f"l'image n'a pas la teinte de l'eau (rouge/bleu = "
-                f"{rapport:.2f}) alors que le montage declare est "
+                f"{report:.2f}) alors que le montage declare est "
                 f"'{_actif(montage)}'.\n"
                 f"    Si la camera est a l'air, les distances seront trop "
                 f"longues d'environ 33 %.\n"
-                f"    Pour corriger : python calibration/set_mounting.py")
+                f"    Pour correct : python calibration/set_mounting.py")
     return None
 
 
@@ -438,21 +438,21 @@ def montage_est_immerge(montage=None):
 # -15.9 mm a 7 sigma. Les deux chiffres comptent autant l'un que l'autre :
 #
 #   - la pente vaut 1 : la focale fx = 791.34 est juste, il n'y a plus rien a
-#     corriger de ce cote. Les %-d'erreur qui diminuent avec la distance ne
+#     correct de ce cote. Les %-d'erreur qui diminuent avec la distance ne
 #     venaient pas d'une focale un peu fausse.
 #   - le decalage est constant en METRES, pas en pourcentage. Aucune focale ne
 #     peut produire cela : d = fx.S/s est une pure proportionnalite, elle
 #     passe forcement par zero.
 #
-# Le modele a un seul parametre (pente forcee a 1, decalage seul) donne un
-# chi2 de 0.18 pour 3 degres de liberte, contre 48.7 pour le modele en pure
+# Le model a un seul parametre (pente forcee a 1, decalage seul) donne un
+# chi2 de 0.18 pour 3 degres de liberte, contre 48.7 pour le model en pure
 # echelle. Ce n'est pas une preference, c'est un ecart de deux ordres de
 # grandeur.
 #
 # CE QUE C'EST PHYSIQUEMENT. Une camera derriere un hublot courbe n'a PAS de
 # centre de projection unique : chaque rayon est refracte par la paroi, et les
 # prolongements des rayons emergents ne se coupent pas tous au meme point. Le
-# modele stenope, lui, exige un point unique ; la calibration en choisit donc
+# model stenope, lui, exige un point unique ; la calibration en choisit donc
 # un, au mieux, et il tombe a cote. Tout se passe comme si l'oeil de la camera
 # etait 16 mm plus loin qu'il ne l'est — le meme ecart quelle que soit la
 # distance visee, exactement ce qu'on mesure.
@@ -469,7 +469,7 @@ def montage_est_immerge(montage=None):
 # que 16 mm soit encore la bonne valeur a cette focale-la.
 #
 # On le GARDE tel quel malgre tout, parce que c'est la seule valeur qui ait ete
-# reellement mesuree (4 distances, 7 sigma). La corriger au juge reviendrait a
+# reellement mesuree (4 distances, 7 sigma). La correct au juge reviendrait a
 # inventer un nombre : c'est exactement comme cela qu'un decalage de 77 mm,
 # tire d'un ajustement sur des mesures qui ne venaient meme pas de cette
 # calibration, s'est retrouve installe un moment.
@@ -479,7 +479,7 @@ def montage_est_immerge(montage=None):
 DECALAGE_HUBLOT = {
     "tube_eau": 0.0159,      # mesure au bassin a fx 791.34, 4 distances, 7 sigma
     "tube_air": 0.0,         # jamais mesure
-    "nue_air": 0.0,          # pas de hublot : rien a corriger
+    "nue_air": 0.0,          # pas de hublot : rien a correct
 }
 
 
@@ -540,7 +540,7 @@ def rayon_exterieur(pire_cas=True):
 # Convention : l'axe du tube est a 0, et le regard part vers les x positifs.
 # Une pupille plaquee au fond est donc a un x NEGATIF, derriere l'axe.
 def decentrement_pupille(jeu_arriere=None):
-    """Position de la pupille par rapport a l'axe du tube, en metres.
+    """Position de la pupille par report a l'axe du tube, en metres.
 
     Negatif = en retrait de l'axe (cas normal : le boitier bute au fond).
     Positif = en avant de l'axe, vers la paroi regardee.
@@ -612,7 +612,7 @@ def _refracter(direction, normale, eta):
 def sortie_cylindre(angle_deg, decentrement=None, indice_exterieur=INDICE_EAU):
     """Sous quel angle un rayon ressort de la paroi, dans le plan de section.
 
-    Le rayon part de la pupille, decalee de `decentrement` par rapport a l'axe
+    Le rayon part de la pupille, decalee de `decentrement` par report a l'axe
     du tube, et traverse les deux surfaces cylindriques. Renvoie l'angle de
     sortie en degres, ou None en cas de reflexion totale.
 
@@ -680,7 +680,7 @@ def grandissement_section(decentrement=None, indice_exterieur=INDICE_EAU,
 
     On ajuste au sens des moindres carres le seul parametre qu'une calibration
     puisse regler — la focale — sur le trace de rayon exact, et on renvoie le
-    rapport a la focale nue. 1.0 = pupille sur l'axe, le cylindre est
+    report a la focale nue. 1.0 = pupille sur l'axe, le cylindre est
     optiquement absent.
     """
     K = K_NUE_AIR if K is None else K
@@ -700,7 +700,7 @@ def residu_section(decentrement=None, indice_exterieur=INDICE_EAU, K=None):
     """Ce que le menisque laisse APRES que la focale ait absorbe ce qu'elle peut.
 
     C'est la vraie erreur du montage : la part de la deviation qu'aucune
-    calibration ne peut ranger dans un parametre. A comparer a BRUIT_COIN_PX.
+    calibration ne peut ranger dans un parametre. A comparer a CORNER_NOISE_PX.
     """
     K = K_NUE_AIR if K is None else K
     fy = float(K[1, 1])
@@ -734,7 +734,7 @@ def decentrement_depuis_calibration(K_mesure, K_reference=None,
     C'est tout l'interet de calibrer D'ABORD DANS L'AIR. En air, la lame plane
     ne touche pas a fx : si fx s'ecarte de la camera nue, c'est un probleme de
     montage, pas d'optics. En revanche fy passe par le menisque, et le
-    rapport fy_tube / fy_nue donne directement l'ecart de la pupille a l'axe —
+    report fy_tube / fy_nue donne directement l'ecart de la pupille a l'axe —
     sans demonter quoi que ce soit, et sans devoir croire la valeur supposee
     de PUPILLE_DERRIERE_FACE.
     """
@@ -819,13 +819,13 @@ def portee_eau(portee_air, montage=None):
 
 
 def rayon_image(angle_eau_deg, f=None):
-    """Ou tombe vraiment un rayon venu de l'eau, et ou le modele le croit.
+    """Ou tombe vraiment un rayon venu de l'eau, et ou le model le croit.
 
     Vaut pour la direction ou la paroi se comporte en lame plane : l'axe du
     tube en montage radial, les deux directions en montage axial.
     """
     # 'tube_air' est ecrit en dur A DESSEIN, et ne suit pas MONTAGE_ACTIF :
-    # cette fonction PART d'une focale en air pour lui appliquer la refraction.
+    # cette fonction PART d'une focale en air pour lui apply la refraction.
     # Lui donner une focale deja mesuree sous l'eau compterait l'eau deux fois.
     f = focale("tube_air") if f is None else f
     angle_air = np.degrees(np.arcsin(np.clip(
@@ -836,12 +836,12 @@ def rayon_image(angle_eau_deg, f=None):
 
 
 def ecart_lame_plane(f=None, angles=(5, 10, 15, 20, 25)):
-    """De combien le modele paraxial se trompe, angle par angle."""
+    """De combien le model paraxial se trompe, angle par angle."""
     return [(a, *rayon_image(a, f)) for a in angles]
 
 
 def angle_modele_fiable(f=None, tolerance_px=1.0):
-    """Jusqu'a quel angle le modele « focale x 1.33 » reste sous la tolerance."""
+    """Jusqu'a quel angle le model « focale x 1.33 » reste sous la tolerance."""
     precedent = 0.0
     for angle in np.arange(0.5, 45.0, 0.5):
         exact, paraxial = rayon_image(float(angle), f)
@@ -908,17 +908,17 @@ def verifier_montage():
     soucis.append(
         f"Anamorphose sous l'eau : facteur {anamorphose():.2f} entre les deux "
         "axes de l'image. La distorsion n'a plus de symetrie de revolution, "
-        "et le modele plumb_bob d'OpenCV la decrira mal — attendre des "
+        "et le model plumb_bob d'OpenCV la decrira mal — attendre des "
         "residus de calibration plus eleves qu'en air.")
 
     soucis.append(
-        f"Le modele « focale x {INDICE_EAU} » ne tient qu'a moins de "
+        f"Le model « focale x {INDICE_EAU} » ne tient qu'a moins de "
         f"{angle_modele_fiable():.0f} deg de l'axe (a 1 px pres), et seulement "
         "selon l'axe du tube. Au-dela il faut une calibration faite SOUS L'EAU.")
     return soucis
 
 
-def rapport():
+def report():
     """Un etat des lieux lisible du montage."""
     h, v, d = demi_champs()
     f = focale("nue_air")
@@ -1016,7 +1016,7 @@ def rapport():
         lignes += [
             f"\n  Le montage actuel est a {1000*abs(ecart):.1f} mm de l'axe : "
             f"residu {residu_section():.2f} px,",
-            f"  a comparer au bruit de detection mesure de {BRUIT_COIN_PX:.3f} px.",
+            f"  a comparer au bruit de detection mesure de {CORNER_NOISE_PX:.3f} px.",
             "  -> le centrage n'a pas besoin d'etre parfait ; la calibration suffit.",
             "",
             f"  EN REVANCHE la camera ne doit plus bouger apres calibration :",
@@ -1034,20 +1034,20 @@ def rapport():
             f"{fy_nue*grandissement_section(indice_exterieur=INDICE_AIR):.1f} px "
             f"({100*(grandissement_section(indice_exterieur=INDICE_AIR)-1):+.2f} %) "
             "si la pupille est bien ou",
-            "    on la croit. C'est ce rapport-la qui MESURE le decentrement reel.",
+            "    on la croit. C'est ce report-la qui MESURE le decentrement reel.",
         ]
 
     lignes += ["", "CE QUE COUTE LA LAME PLANE (le long du tube)",
-               "  Le modele courant multiplie la focale par l'indice de l'eau.",
-               "  Voici ou tombe vraiment le rayon, et ou ce modele le croit :",
-               f"\n  {'angle dans l eau':>18} {'exact':>10} {'modele':>10} {'ecart':>9}"]
+               "  Le model courant multiplie la focale par l'indice de l'eau.",
+               "  Voici ou tombe vraiment le rayon, et ou ce model le croit :",
+               f"\n  {'angle dans l eau':>18} {'exact':>10} {'model':>10} {'ecart':>9}"]
     for angle, exact, paraxial in ecart_lame_plane():
         lignes.append(f"  {angle:>15} deg {exact:>8.1f} px {paraxial:>8.1f} px "
                       f"{exact-paraxial:>+7.1f} px")
-    lignes.append(f"\n  Le modele reste a 1 px pres jusqu'a "
+    lignes.append(f"\n  Le model reste a 1 px pres jusqu'a "
                   f"{angle_modele_fiable():.0f} deg de l'axe seulement, et le bruit "
                   "de detection")
-    lignes.append(f"  mesure vaut {BRUIT_COIN_PX:.3f} px. "
+    lignes.append(f"  mesure vaut {CORNER_NOISE_PX:.3f} px. "
                   "Seule une calibration en eau corrige cela.")
 
     soucis = verifier_montage()
@@ -1075,4 +1075,4 @@ def rapport():
 
 
 if __name__ == "__main__":
-    print(rapport())
+    print(report())

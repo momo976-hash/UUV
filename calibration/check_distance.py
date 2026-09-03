@@ -20,7 +20,7 @@
 #
 #     python check_distance.py --reel 1.500 --focale 838.45,652.10
 #
-# La matrice n'est changee qu'en memoire, le .npz n'est pas touche. C'est ce
+# La matrix n'est changee qu'en memoire, le .npz n'est pas touche. C'est ce
 # qu'il faut pour departager plusieurs focales candidates sur le terrain : on
 # les essaie l'une apres l'autre sur la meme scene, et on n'installe que celle
 # qui gagne. Avant, tester une valeur obligeait a reecrire le .npz — donc a
@@ -29,7 +29,7 @@
 # laissee en place par oubli.
 #
 # Avec une seule valeur (--focale 838.45) l'anamorphose de la calibration est
-# conservee et fy suit : le rapport fx/fy est une propriete du TUBE, pas un
+# conservee et fy suit : le report fx/fy est une propriete du TUBE, pas un
 # parametre libre, et le changer par megarde en testant fx serait une erreur
 # silencieuse.
 #
@@ -60,7 +60,7 @@
 # ---------------------------------------------------------------------------
 # Ce script et le pipeline de Josiah (apriltag_ros, sur l'image rectifiee par
 # calibrator_node) mesurent le MEME tag, aux MEMES distances vraies, avec la
-# MEME matrice K — et divergent d'un facteur constant de 1.047 (verifie a
+# MEME matrix K — et divergent d'un facteur constant de 1.047 (verifie a
 # 33 sigma, voir l'historique du 02/09). Josiah obtient les bonnes distances ;
 # ce script en deduit "fx devrait valoir 801", ce qui est FAUX : fx est
 # identique des deux cotes, donc l'ecart ne peut venir que de d = fx.S/s, et
@@ -72,7 +72,7 @@
 #
 # Josiah garde 838.45 / 652.10. Ce script sert a EPROUVER une focale
 # candidate (--focale) et a comparer des COTES APPARENTS (colonne cote_px de
-# l'historique) entre les deux chaines — pas a corriger fx tout seul tant que
+# l'historique) entre les deux chaines — pas a correct fx tout seul tant que
 # ce facteur 1.047 n'est pas explique.
 #
 # ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@
 # ---------------------------------------------------------------------------
 # Il valide fx, pas fy. La distance vient surtout de la taille apparente du
 # tag, dominee par l'axe le plus grossi. Pour separer les deux axes il
-# faudrait un tag vu de biais, ce qui ajoute une inconnue au lieu d'en
+# faudrait un tag vu de bias, ce qui ajoute une inconnue au lieu d'en
 # retirer. On valide donc l'echelle globale, ce qui est ce qui compte pour la
 # localisation.
 import argparse
@@ -117,11 +117,11 @@ RESOLUTION = (640, 480)
 # qui les aurait decales du meme cote : c'est propre a chaque impression.
 # Aucun des deux ne se devine, il faut les mesurer.
 #
-# Dupliques ici plutot qu'importes d'optics.py (TAILLE_TAG_GRAND,
-# TAILLE_TAG_PETIT) : ce script part souvent seul sur le PC du bassin, sans
+# Dupliques ici plutot qu'importes d'optics.py (LARGE_TAG_SIZE,
+# SMALL_TAG_SIZE) : ce script part souvent seul sur le PC du bassin, sans
 # le reste du depot. Les deux couples doivent rester egaux ; changer l'un
 # sans l'autre laisserait les deux chaines de mesure diverger en silence.
-TAILLES_CONNUES = (0.22389, 0.11732)
+KNOWN_TAG_SIZES = (0.22389, 0.11732)
 ICI = Path(__file__).resolve().parent
 
 
@@ -337,9 +337,9 @@ def main():
         description="Verifie une calibration sur une distance connue, sans fenetre.")
     analyseur.add_argument("--reel", type=float, required=True,
                            help="distance VRAIE du tag, en metres, mesuree au metre")
-    analyseur.add_argument("--tag", type=float, default=TAILLES_CONNUES[0],
+    analyseur.add_argument("--tag", type=float, default=KNOWN_TAG_SIZES[0],
                            help=f"cote du tag en metres (defaut %(default)s ; "
-                                f"l'autre tag fait {TAILLES_CONNUES[1]})")
+                                f"l'autre tag fait {KNOWN_TAG_SIZES[1]})")
     analyseur.add_argument("--montage", default=montage_de_la_machine(),
                            help="calibration a tester (defaut %(default)s, lu "
                                 "dans montage_local.txt)")
@@ -387,7 +387,7 @@ def main():
     # faut penser a la remettre. On a deja mesure une apres-midi entiere avec
     # une calibration d'essai laissee en place par oubli.
     #
-    # Le .npz n'est PAS touche : la matrice n'est modifiee qu'en memoire.
+    # Le .npz n'est PAS touche : la matrix n'est modifiee qu'en memoire.
     if options.focale:
         try:
             morceaux = [float(v) for v in options.focale.replace(" ", "").split(",")]
@@ -565,8 +565,8 @@ def main():
     print("\n" + "=" * 66)
     if abs(ecart) <= 3:
         print("VERDICT : la calibration donne la BONNE distance.")
-        print("  fx est juste. Le desaccord avec le modele optics vient donc")
-        print("  du modele, pas de la calibration : on garde ces chiffres.")
+        print("  fx est juste. Le desaccord avec le model optics vient donc")
+        print("  du model, pas de la calibration : on garde ces chiffres.")
     elif abs(ecart) <= 8:
         print("VERDICT : ecart modere, a confirmer.")
         print("  Refais la mesure a une AUTRE distance. Si l'ecart en pourcent")
@@ -587,7 +587,7 @@ def main():
         print("  le cas le 02/09 : NE CHANGE PAS fx sur la seule foi de ce")
         print("  script tant que cet ecart n'est pas explique (voir en-tete).")
     print("=" * 66)
-    print("\n  Tag bien EN FACE de la camera ? Vu de biais, la distance mesuree")
+    print("\n  Tag bien EN FACE de la camera ? Vu de bias, la distance mesuree")
     print("  reste juste (solvePnP gere l'inclinaison) mais elle est plus")
     print("  bruitee. En cas de doute, refais-la de face.")
 
@@ -767,11 +767,11 @@ def main():
         else:
             print(f"\n  [DECALAGE FIXE, REEL a {abs(decalage)/sigma_decalage:.1f} sigma] "
                   f"{1000*decalage:+.1f} mm.")
-            print("  AUCUN reglage de focale ne peut corriger cela : changer fx")
+            print("  AUCUN reglage de focale ne peut correct cela : changer fx")
             print("  ne change que la pente, jamais cette ordonnee a l'origine.")
             print("  C'est la signature d'un deplacement APPARENT — une camera")
             print("  derriere un hublot courbe n'a pas de centre de projection")
-            print("  unique, et le modele stenope place son oeil au mauvais")
+            print("  unique, et le model stenope place son oeil au mauvais")
             print("  endroit, du meme ecart a toutes les distances.")
             ecart_pente = abs(pente - 1.0)
             if np.isfinite(sig_pente := float(np.sqrt(covariance[0, 0]))) \
@@ -787,7 +787,7 @@ def main():
                 print(f"      d_corrigee = (d_mesuree - ({decalage:+.4f})) "
                       f"/ {pente:.4f}")
             if abs(decalage) < 0.005:
-                print(f"\n  (reel, mais {1000*abs(decalage):.0f} mm : a corriger "
+                print(f"\n  (reel, mais {1000*abs(decalage):.0f} mm : a correct "
                       f"seulement si cette precision compte)")
         print("-" * 66)
     elif len(lignes) > 0:

@@ -14,7 +14,7 @@ CAMERA_INDEX = None
 # Resolution FIGEE : doit etre identique pour la calibration et les mesures.
 RESOLUTION = (640, 480)
 
-TAILLE_TAG = optics.TAILLE_TAG_GRAND   # mesure au pied a coulisse, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # mesure au pied a coulisse, pas 223 mm nominal
 
 
 # --- Calibration reelle de la camera (damier 5x7, 22 vues, RMS 0.169 px) ---
@@ -84,7 +84,7 @@ if cam is None:
     raise SystemExit
 
 K, dist = charger_calibration(L, H)
-h = TAILLE_TAG / 2
+h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
@@ -112,12 +112,12 @@ while True:
             if not ok2:
                 continue
 
-            cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAILLE_TAG / 2, 2)
+            cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAG_SIZE / 2, 2)
 
             # POSITION du tag dans le repere camera (metres)
             x, y, z = tvec.flatten()
 
-            # ORIENTATION : matrice de rotation -> angles d'Euler (degres)
+            # ORIENTATION : matrix de rotation -> angles d'Euler (degres)
             R, _ = cv2.Rodrigues(rvec)
             roll, pitch, yaw = cv2.RQDecomp3x3(R)[0]
 

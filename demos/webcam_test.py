@@ -4,7 +4,7 @@
 import cv2
 import numpy as np
 
-TAILLE_TAG = 0.10  # cote du tag en metres (mesure ton tag imprime et change ici)
+TAG_SIZE = 0.10  # cote du tag en metres (mesure ton tag imprime et change ici)
 
 # --- Webcam ---
 cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # CAP_DSHOW : evite l'erreur MSMF sous Windows
@@ -18,7 +18,7 @@ K = np.array([[L, 0, L / 2], [0, L, H / 2], [0, 0, 1]], dtype=np.float64)
 dist = np.zeros(5)
 
 # --- Coins 3D du tag (ordre attendu par IPPE_SQUARE : haut-G, haut-D, bas-D, bas-G) ---
-h = TAILLE_TAG / 2
+h = TAG_SIZE / 2
 coins_3d = np.array(
     [[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64
 )
@@ -44,7 +44,7 @@ while True:
                 coins_3d, pts, K, dist, flags=cv2.SOLVEPNP_IPPE_SQUARE
             )
             if ok2:
-                cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAILLE_TAG / 2, 2)
+                cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAG_SIZE / 2, 2)
                 d = float(np.linalg.norm(tvec))
                 cx, cy = pts.mean(axis=0).astype(int)
                 cv2.putText(

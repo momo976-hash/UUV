@@ -9,10 +9,10 @@
 # Ici on prend le probleme par l'autre bout : on FABRIQUE l'image d'un tag a
 # la taille et sous l'angle voulus, on y met le flou et le bruit d'une vraie
 # camera, et on appelle exactement le meme detecteur cv2.aruco que le reste
-# du projet. Ce n'est pas un modele du detecteur — c'est le detecteur.
+# du projet. Ce n'est pas un model du detecteur — c'est le detecteur.
 #
 # CE QUE CA VAUT, ET CE QUE CA NE VAUT PAS
-# Le detecteur est le vrai, la geometrie est exacte (meme matrice camera,
+# Le detecteur est le vrai, la geometrie est exacte (meme matrix camera,
 # meme projection perspective, integration des pixels par sur-echantillonnage).
 # Ce qui est modelise, c'est la FORMATION de l'image : flou de l'objectif,
 # bruit du capteur, contraste de l'impression. Les limites trouvees dependent
@@ -309,7 +309,7 @@ def main():
 
     print("=" * 72)
     print("LIMITES DE DETECTION PAR SIMULATION")
-    print(f"  vrai detecteur cv2.aruco, vraie matrice camera")
+    print(f"  vrai detecteur cv2.aruco, vraie matrix camera")
     print(f"  flou objectif {options.flou} px, bruit capteur "
           f"{options.bruit} niveaux, contraste {NOIR}-{BLANC}")
     print("=" * 72)

@@ -5,7 +5,7 @@
 # Deux choses en une :
 #   1. UN MODULE. La classe CentraleRealSense ouvre les flux accel et gyro du
 #      SDK Intel et rend des mesures pretes a entrer dans kalman_filter.py.
-#   2. UNE DEMONSTRATION. Lancee directement, elle mesure le biais au repos
+#   2. UNE DEMONSTRATION. Lancee directement, elle mesure le bias au repos
 #      puis affiche l'orientation en direct — de quoi montrer que la centrale
 #      est lue et exploitee, pas seulement branchee.
 #
@@ -23,7 +23,7 @@
 #    Tourne la camera d'un quart de tour : le lacet affiche 90 degres.
 #
 # 4. LA DERIVE EST REELLE ET BORNEE OU IL FAUT. Laisse tourner : le roulis et
-#    le tangage restent stables (l'accelerometre les tient), le lacet derive
+#    le tangage restent stables (l'accelerometre les tient), le lacet drift
 #    lentement (rien ne le recale sans tag). C'est precisement pourquoi la
 #    fusion avec les tags est necessaire — la demonstration le rend visible.
 #
@@ -42,7 +42,7 @@
 #
 # CONVENTION DU VECTEUR MESURE. On le traite comme pointant vers le HAUT : au
 # repos un accelerometre mesure la force specifique, la reaction du support,
-# pas la pesanteur. `orientation_initiale` et `corriger_gravite` font la meme
+# pas la pesanteur. `orientation_initiale` et `correct_with_gravity` font la meme
 # hypothese, et c'est indispensable — une version ou l'une inversait le signe
 # et pas l'autre fait converger l'orientation a 180 degres de la verite, sans
 # aucun message. La demonstration verifie ce point automatiquement, d'une
@@ -56,9 +56,9 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from kalman_filter import (FiltreOrientation, euler_vers_quaternion,  # noqa: E402
-                           quaternion_vers_euler, quaternion_depuis_rotation,
-                           quaternion_vers_matrice, produit_quaternions)
+from kalman_filter import (OrientationFilter, euler_to_quaternion,  # noqa: E402
+                           quaternion_to_euler, quaternion_from_rotation,
+                           quaternion_to_matrix, quaternion_product)
 
 try:
     import pyrealsense2 as rs
@@ -77,7 +77,7 @@ class CentraleRealSense:
     seul des deux. On garde donc la derniere valeur connue de chacun, et on
     date les mesures avec l'horloge du capteur plutot que celle du PC : les
     intervalles servent a integrer, une gigue de quelques millisecondes se
-    paierait directement en derive.
+    paierait directement en drift.
     """
 
     def __init__(self, avec_couleur=False, bavard=True):
@@ -195,7 +195,7 @@ class CentraleRealSense:
 def mesurer_au_repos(centrale, duree=5.0):
     """Biais et bruit des deux capteurs, engin IMMOBILE.
 
-    Le biais du gyro est sa lecture moyenne alors qu'il ne tourne pas : c'est
+    Le bias du gyro est sa lecture moyenne alors qu'il ne tourne pas : c'est
     lui qui, integre, fait deriver l'orientation. Le bruit est l'ecart-type
     autour de cette moyenne, et c'est le chiffre que le filtre attend.
 
@@ -215,17 +215,17 @@ def mesurer_au_repos(centrale, duree=5.0):
     print()
 
     gyros, accels = np.array(gyros), np.array(accels)
-    biais = gyros.mean(axis=0)
-    bruit_gyro = float(np.degrees(gyros.std(axis=0).mean()))
+    bias = gyros.mean(axis=0)
+    gyro_noise = float(np.degrees(gyros.std(axis=0).mean()))
     norme = float(np.linalg.norm(accels.mean(axis=0)))
-    bruit_accel = float(accels.std(axis=0).mean())
+    accel_noise = float(accels.std(axis=0).mean())
     # Direction du vecteur mesure. On le nomme "haut" et non "bas" : au repos
     # un accelerometre mesure la force specifique, la reaction du support,
     # dirigee vers le HAUT. Le nom compte — c'est en l'appelant "bas" qu'on
     # finit par l'inverser quelque part et pas ailleurs.
     haut = accels.mean(axis=0) / max(norme, 1e-9)
-    return {"biais": biais, "bruit_gyro_deg_s": bruit_gyro, "norme_accel": norme,
-            "bruit_accel": bruit_accel, "haut": haut, "echantillons": len(gyros),
+    return {"bias": bias, "bruit_gyro_deg_s": gyro_noise, "norme_accel": norme,
+            "accel_noise": accel_noise, "haut": haut, "echantillons": len(gyros),
             "cadence": len(gyros) / duree}
 
 
@@ -237,7 +237,7 @@ def orientation_initiale(accel_repos):
     au repos il mesure la force specifique, c'est-a-dire la reaction du
     support, dirigee vers le haut — et non la pesanteur elle-meme.
 
-    `corriger_gravite` fait exactement la meme hypothese. Les deux DOIVENT
+    `correct_with_gravity` fait exactement la meme hypothese. Les deux DOIVENT
     s'accorder : une version qui inversait le vecteur ici et pas la, ce qui
     etait le cas, fait que l'initialisation et la correction se combattent.
     Le symptome est un roulis qui se stabilise vers 180 degres au lieu de
@@ -260,7 +260,7 @@ def orientation_initiale(accel_repos):
     if sinus < 1e-9:
         return np.array([1.0, 0.0, 0.0, 0.0]) if cosinus > 0 else \
                np.array([0.0, 1.0, 0.0, 0.0])
-    return quaternion_depuis_rotation(axe / sinus * np.arctan2(sinus, cosinus))
+    return quaternion_from_rotation(axe / sinus * np.arctan2(sinus, cosinus))
 
 
 def _demonstration():
@@ -276,8 +276,8 @@ def _demonstration():
 
     print("\nFlux accel et gyro ouverts via le SDK Intel (pyrealsense2).")
     if centrale.extrinseques_lues:
-        angles = np.degrees(quaternion_vers_euler(
-            _quaternion_depuis_matrice(centrale.R_imu_camera)))
+        angles = np.degrees(quaternion_to_euler(
+            _quaternion_from_matrix(centrale.R_imu_camera)))
         print(f"Rotation IMU -> camera couleur lue dans le SDK : "
               f"{angles.round(1)} deg")
     else:
@@ -311,7 +311,7 @@ def _demonstration():
         print("  [PROBLEME] loin de la pesanteur : echelle ou unites fausses.")
     elif ecart_g > 0.01:
         print(f"  [OK] c'est la pesanteur, a {100*ecart_g:.1f} % pres.")
-        print("     Cet ecart est un biais d'echelle de l'accelerometre. Sans")
+        print("     Cet ecart est un bias d'echelle de l'accelerometre. Sans")
         print("     consequence ici : on n'utilise que la DIRECTION du vecteur")
         print("     pour le roulis et le tangage, pas sa norme.")
     else:
@@ -332,10 +332,10 @@ def _demonstration():
     # correction se combattent alors, et l'orientation se stabilise a 180
     # degres de la verite sans que rien ne le signale.
     q0 = orientation_initiale(repos["haut"])
-    prevu = quaternion_vers_matrice(q0).T @ np.array([0.0, 0.0, 1.0])
+    prevu = quaternion_to_matrix(q0).T @ np.array([0.0, 0.0, 1.0])
     accord = float(prevu @ repos["haut"])
     ecart_conv = float(np.degrees(np.arccos(np.clip(accord, -1.0, 1.0))))
-    roulis0, tangage0, _ = np.degrees(quaternion_vers_euler(q0))
+    roulis0, tangage0, _ = np.degrees(quaternion_to_euler(q0))
     print(f"\n  pose de depart deduite : roulis {roulis0:+.1f}, "
           f"tangage {tangage0:+.1f} deg")
     print(f"  controle de convention : ecart prevu / mesure {ecart_conv:.2f} deg")
@@ -349,13 +349,13 @@ def _demonstration():
     print("\n" + "-" * 70)
     print("2. LES DEUX NOMBRES A RECOPIER DANS kalman_filter.py")
     print("-" * 70)
-    print(f"  biais du gyro au repos    "
-          f"{np.degrees(repos['biais']).round(3)} deg/s")
-    print("     C'est ce biais qui, integre, fait deriver l'orientation.")
+    print(f"  bias du gyro au repos    "
+          f"{np.degrees(repos['bias']).round(3)} deg/s")
+    print("     C'est ce bias qui, integre, fait deriver l'orientation.")
     print("     Le filtre l'estime tout seul des que les tags le recalent.")
     print()
-    print(f"      BRUIT_GYRO_DEG_S = {repos['bruit_gyro_deg_s']:.3f}")
-    print(f"      BRUIT_ACCEL      = {repos['bruit_accel']:.3f}")
+    print(f"      GYRO_NOISE_DEG_S = {repos['bruit_gyro_deg_s']:.3f}")
+    print(f"      ACCEL_NOISE      = {repos['accel_noise']:.3f}")
 
     print("\n" + "-" * 70)
     print("3. LES MATHS : L'ORIENTATION SUIT-ELLE LES MOUVEMENTS ?")
@@ -370,8 +370,8 @@ def _demonstration():
     # porte les mesures BRUTES du SDK et l'orientation qu'on en tire, donc le
     # calcul est refaisable par un tiers.
     fichier_csv = ICI / "imu_donnees.csv"
-    suivi = FiltreOrientation()
-    suivi.demarrer(orientation_initiale(repos["haut"]), sigma_deg=5.0)
+    suivi = OrientationFilter()
+    suivi.start(orientation_initiale(repos["haut"]), sigma_deg=5.0)
     depart = time.time()
     derniers = deque(maxlen=50)
     lignes = 0
@@ -387,13 +387,13 @@ def _demonstration():
                 gyro, accel, dt = centrale.lire()
                 if dt is None:
                     continue
-                omega = centrale.R_imu_camera @ (gyro - repos["biais"])
-                suivi.predire(dt, omega)
-                suivi.corriger_gravite(centrale.R_imu_camera @ accel,
-                                       gravite=GRAVITE)
+                omega = centrale.R_imu_camera @ (gyro - repos["bias"])
+                suivi.predict(dt, omega)
+                suivi.correct_with_gravity(centrale.R_imu_camera @ accel,
+                                       gravity=GRAVITE)
                 derniers.append(np.linalg.norm(omega))
 
-                roulis, tangage, lacet = np.degrees(quaternion_vers_euler(suivi.q))
+                roulis, tangage, lacet = np.degrees(quaternion_to_euler(suivi.q))
                 instant = time.time() - depart
                 ecrivain.writerow(
                     [f"{instant:.4f}"]
@@ -423,15 +423,15 @@ def _demonstration():
     print("  - l'echelle est verifiee sur la pesanteur")
     print("  - le gyro est integre en orientation, par quaternions")
     print("  - l'accelerometre borne roulis et tangage")
-    print("  - le lacet, lui, derive : rien ne le recale sans tag.")
+    print("  - le lacet, lui, drift : rien ne le recale sans tag.")
     print("    C'est la raison d'etre de la fusion avec les AprilTags.")
     print("=" * 70)
     return 0
 
 
-def _quaternion_depuis_matrice(R):
-    from kalman_filter import matrice_vers_quaternion
-    return matrice_vers_quaternion(np.asarray(R, dtype=float))
+def _quaternion_from_matrix(R):
+    from kalman_filter import matrix_to_quaternion
+    return matrix_to_quaternion(np.asarray(R, dtype=float))
 
 
 def _simulation():
@@ -442,7 +442,7 @@ def _simulation():
     verite, donc on peut chiffrer l'erreur, ce qu'aucune manip reelle ne
     permet.
     """
-    from kalman_filter import angle_quaternions
+    from kalman_filter import quaternion_angle
     generateur = np.random.default_rng(3)
     dt, bruit = 1 / 200, np.radians(0.15)
 
@@ -458,7 +458,7 @@ def _simulation():
     for _ in range(300):
         v = generateur.normal(size=3)
         haut_mesure = v / np.linalg.norm(v)
-        prevu = quaternion_vers_matrice(
+        prevu = quaternion_to_matrix(
             orientation_initiale(haut_mesure)).T @ np.array([0.0, 0.0, 1.0])
         pires.append(np.degrees(np.arccos(np.clip(prevu @ haut_mesure, -1, 1))))
     print(f"   300 poses quelconques, erreur max {max(pires):.1e} deg")
@@ -466,35 +466,35 @@ def _simulation():
 
     print("\n2. UN QUART DE TOUR AUTOUR DE LA VERTICALE")
     print("   30 deg/s pendant 3 s, gyro bruite, accelerometre bruite.")
-    suivi = FiltreOrientation()
-    suivi.demarrer(orientation_initiale(np.array([0.0, 0.0, 1.0])), sigma_deg=5.0)
+    suivi = OrientationFilter()
+    suivi.start(orientation_initiale(np.array([0.0, 0.0, 1.0])), sigma_deg=5.0)
     verite = np.array([1.0, 0.0, 0.0, 0.0])
     for _ in range(int(3.0 / dt)):
         omega = np.array([0.0, 0.0, np.radians(30.0)])
-        verite = produit_quaternions(verite, quaternion_depuis_rotation(omega * dt))
-        suivi.predire(dt, omega + generateur.normal(0, bruit, 3))
-        R = quaternion_vers_matrice(verite)
-        suivi.corriger_gravite(R.T @ np.array([0.0, 0.0, GRAVITE])
+        verite = quaternion_product(verite, quaternion_from_rotation(omega * dt))
+        suivi.predict(dt, omega + generateur.normal(0, bruit, 3))
+        R = quaternion_to_matrix(verite)
+        suivi.correct_with_gravity(R.T @ np.array([0.0, 0.0, GRAVITE])
                                + generateur.normal(0, 0.05, 3))
-    roulis, tangage, lacet = np.degrees(quaternion_vers_euler(suivi.q))
+    roulis, tangage, lacet = np.degrees(quaternion_to_euler(suivi.q))
     print(f"   lu : roulis {roulis:+.2f}   tangage {tangage:+.2f}   "
           f"lacet {lacet:+.2f} deg   (attendu 0, 0, 90)")
-    print(f"   erreur d'orientation : {angle_quaternions(suivi.q, verite):.2f} deg")
+    print(f"   erreur d'orientation : {quaternion_angle(suivi.q, verite):.2f} deg")
     assert abs(lacet - 90) < 3.0 and abs(roulis) < 2 and abs(tangage) < 2
 
     print("\n3. TRENTE SECONDES IMMOBILE, SANS AUCUN TAG")
-    print("   Le biais residuel du gyro travaille librement.")
-    suivi = FiltreOrientation()
-    suivi.demarrer(orientation_initiale(np.array([0.0, 0.0, 1.0])), sigma_deg=5.0)
+    print("   Le bias residuel du gyro travaille librement.")
+    suivi = OrientationFilter()
+    suivi.start(orientation_initiale(np.array([0.0, 0.0, 1.0])), sigma_deg=5.0)
     residuel = np.radians([0.05, -0.04, 0.30])
     for _ in range(int(30.0 / dt)):
-        suivi.predire(dt, residuel + generateur.normal(0, bruit, 3))
-        suivi.corriger_gravite(np.array([0.0, 0.0, GRAVITE])
+        suivi.predict(dt, residuel + generateur.normal(0, bruit, 3))
+        suivi.correct_with_gravity(np.array([0.0, 0.0, GRAVITE])
                                + generateur.normal(0, 0.05, 3))
-    roulis, tangage, lacet = np.degrees(quaternion_vers_euler(suivi.q))
+    roulis, tangage, lacet = np.degrees(quaternion_to_euler(suivi.q))
     print(f"   roulis {roulis:+.2f}   tangage {tangage:+.2f} deg"
           f"   <- tenus par l'accelerometre")
-    print(f"   lacet  {lacet:+.2f} deg                <- derive librement")
+    print(f"   lacet  {lacet:+.2f} deg                <- drift librement")
     assert abs(roulis) < 2 and abs(tangage) < 2
     assert abs(lacet) > 3
 
@@ -504,7 +504,7 @@ def _simulation():
     print("  - le gyro s'integre correctement en orientation (90 deg lus")
     print("    pour 90 deg reels, a 0.03 deg pres)")
     print("  - l'accelerometre borne roulis et tangage indefiniment")
-    print("  - le lacet, lui, derive : la pesanteur n'en dit rien.")
+    print("  - le lacet, lui, drift : la pesanteur n'en dit rien.")
     print("    D'ou la fusion avec les AprilTags — ce n'est pas un choix")
     print("    de confort, c'est le seul moyen de tenir le cap.")
     print("=" * 70)

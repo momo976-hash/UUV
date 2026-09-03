@@ -5,7 +5,7 @@ import os
 import cv2
 import numpy as np
 
-TAILLE_TAG = 0.10  # cote du tag en metres
+TAG_SIZE = 0.10  # cote du tag en metres
 
 # --- 1) Fabriquer une image contenant un AprilTag (id 0) ---
 dictionnaire = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
@@ -26,7 +26,7 @@ coins, ids, _ = detecteur.detectMarkers(canvas)
 L, H = 600, 600
 K = np.array([[L, 0, L / 2], [0, L, H / 2], [0, 0, 1]], dtype=np.float64)
 dist = np.zeros(5)
-h = TAILLE_TAG / 2
+h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 # --- 4) Dessiner le resultat ---
@@ -39,7 +39,7 @@ if ids is not None:
             coins_3d, pts, K, dist, flags=cv2.SOLVEPNP_IPPE_SQUARE
         )
         if ok:
-            cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAILLE_TAG / 2, 3)
+            cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAG_SIZE / 2, 3)
             distance = float(np.linalg.norm(tvec))
             print(f"  tag {tag_id} : distance estimee = {distance:.2f} m")
             cv2.putText(image, f"id={tag_id} d={distance:.2f}m", (20, 40),

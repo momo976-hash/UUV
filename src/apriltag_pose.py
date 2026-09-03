@@ -4,7 +4,7 @@ Localisation par AprilTag avec une caméra Intel RealSense
 ==========================================================
 
 Tâche 1 du projet UUV : mesurer et afficher EN DIRECT la position et
-l'orientation de la caméra par rapport à des marqueurs AprilTag.
+l'orientation de la caméra par report à des marqueurs AprilTag.
 
 Ce script couvre les étapes 1 -> 4 de la feuille de route :
   Etape 1 : afficher le flux caméra

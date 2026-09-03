@@ -73,7 +73,7 @@ def demande_1_imu():
     ok, sortie = _lancer("imu_realsense.py", "--simulation")
     for ligne in _extraire(sortie, "erreur max", "lu : roulis",
                            "erreur d'orientation", "tenus par l'accelerometre",
-                           "derive librement"):
+                           "drift librement"):
         print(f"      {ligne.strip()}")
     print()
     print("  CE QUE CELA ETABLIT, ET LA RESERVE A DIRE")
@@ -83,11 +83,11 @@ def demande_1_imu():
     print()
     print("    La POSITION, elle, ne peut PAS venir de l'IMU seule, et c'est")
     print("    une propriete du capteur, pas un defaut du code : un")
-    print("    accelerometre MEMS a un biais que la double integration")
+    print("    accelerometre MEMS a un bias que la double integration")
     print("    transforme en erreur quadratique — 0.05 m/s2 font 2.5 cm apres")
     print("    1 s, mais 1 m apres 10 s. L'IMU sert donc a TRAVERSER une perte")
     print("    de tags de quelques secondes ; les tags restent la seule source")
-    print("    sans derive. C'est exactement ce que fait le filtre de la")
+    print("    sans drift. C'est exactement ce que fait le filtre de la")
     print("    demande 2, et c'est pourquoi les deux demandes n'en font qu'une.")
     return ok
 
@@ -98,19 +98,19 @@ def demande_2_kalman():
     print("DEMANDE 2 — LE FILTRE, « based on a kinematic model »")
     print("=" * 74)
     print("  CE QUI A ETE FAIT")
-    print("    Le modele est cinematique a VITESSE CONSTANTE. Il est ecrit en")
-    print("    clair dans kalman_filter.py (methode `modele`) :")
+    print("    Le model est cinematique a VITESSE CONSTANTE. Il est ecrit en")
+    print("    clair dans kalman_filter.py (methode `model`) :")
     print()
-    print("        etat   x = [position(3), vitesse(3)]")
-    print("        F = [[I, dt.I],      la position avance de vitesse x dt")
-    print("             [0,    I]]      la vitesse est supposee constante")
+    print("        etat   x = [position(3), velocity(3)]")
+    print("        F = [[I, dt.I],      la position avance de velocity x dt")
+    print("             [0,    I]]      la velocity est supposee constante")
     print("        Q = sigma_a^2 . G G'   avec G = [dt^2/2 . I ; dt . I]")
     print("        H = [I, 0]           les tags donnent la position, pas la")
-    print("                             vitesse")
+    print("                             velocity")
     print()
     print("  VERIFICATION 1 — c'est bien LE filtre du document de reference")
     print("  (Alex Becker, « Kalman Filter Explained Through Examples »,")
-    print("  kalmanfilter.net, modele cinematique a vitesse constante) :")
+    print("  kalmanfilter.net, model cinematique a velocity constante) :")
     ok1, sortie = _lancer("kalman_reference_check.py")
     for ligne in _extraire(sortie, "LES 9 VALEURS"):
         print(f"      {ligne.strip()}")
@@ -130,7 +130,7 @@ def demande_2_kalman():
     print("    aberrantes, et traverse une perte de tags de 1.5 s en pleine")
     print("    acceleration avec 9 mm d'erreur au lieu de 377 mm sans l'IMU.")
     print("    C'est la ou les deux demandes se rejoignent : l'IMU nourrit le")
-    print("    modele cinematique, les tags l'empechent de deriver.")
+    print("    model cinematique, les tags l'empechent de deriver.")
     print()
     print("  POUR LE VOIR PLUTOT QUE LE LIRE — une figure, sans camera ni eau")
     print("  (demande matplotlib : python -m pip install matplotlib) :")
@@ -140,8 +140,8 @@ def demande_2_kalman():
     print("    retournement des tags, rideau de bulles de 3 s qui masque tout,")
     print("    et un support de tag pousse de 22 mm en cours de route.")
     print("    Le chiffre le plus parlant y est celui qu'on n'attend pas : le")
-    print("    filtre SUIT le support deplace au lieu de le corriger. Un Kalman")
-    print("    moyenne le bruit, jamais un biais — d'ou la surveillance des")
+    print("    filtre SUIT le support deplace au lieu de le correct. Un Kalman")
+    print("    moyenne le bruit, jamais un bias — d'ou la watchdog des")
     print("    supports, qui detecte le deplacement a 1 mm pres.")
     return ok1 and ok2
 
