@@ -11,7 +11,7 @@
 # ===========================================================================
 from pathlib import Path
 import sys
-# webcam_live.py — Lecture d'AprilTags en direct : POSITION (x,y,z) + ORIENTATION.
+
 # Automatically finds a working camera, detects the AprilTags, and shows for
 # each tag its position (metres) and its orientation (degrees).
 import cv2
@@ -25,7 +25,7 @@ CAMERA_INDEX = None
 # FIXED resolution: must be identical for the calibration and the measurements.
 RESOLUTION = (640, 480)
 
-TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au calipers, pas 223 mm nominal
+TAG_SIZE = optics.LARGE_TAG_SIZE   # caliper-measured, not the nominal 223 mm
 
 
 # --- The camera's real calibration (5x7 board, 22 views, RMS 0.169 px) ---
@@ -44,7 +44,7 @@ K_CALIB, DIST_CALIB = optics.load(MOUNTING)
 CALIB_WIDTH = 640            # resolution used at calibration time
 
 
-def charger_calibration(width, height):
+def load_calibration(width, height):
     """Returns (K, dist). Adapts K if the camera runs at another resolution."""
     K, d, Lc = K_CALIB.copy(), DIST_CALIB.copy(), CALIB_WIDTH
     try:
@@ -52,14 +52,14 @@ def charger_calibration(width, height):
         K, d, Lc = f["K"].astype(np.float64), f["dist"].ravel(), int(f["width"])
         print("Calibration loaded from calibration_camera.npz")
     except Exception:
-        print("Calibration integree au script used")
-    if width != Lc:                      # mise a l'echelle si resolution differente
+        print("Using the calibration built into the script")
+    if width != Lc:                      # rescale if the resolution differs
         K = K.copy()
         K[:2] *= width / Lc
     return K, d
 
 
-def ouvrir_camera():
+def open_camera():
     """Opens the camera, ALWAYS forcing the same resolution.
 
     Important: a RealSense's field of view depends on the format requested
@@ -79,9 +79,9 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
+                    print(f"Camera used: index={index}, backend={name}, {ww}x{hh}")
                     if (ww, hh) != RESOLUTION:
-                        print(f"  WARNING : resolution obtenue {ww}x{hh} au lieu de "
+                        print(f"  WARNING: got {ww}x{hh} instead of "
                               f"{RESOLUTION[0]}x{RESOLUTION[1]}. The calibration "
                               f"will only be valid if it was made in that same "
                               f"format.")
@@ -90,18 +90,18 @@ def ouvrir_camera():
     return None, 0, 0
 
 
-cam, L, H = ouvrir_camera()
+cam, L, H = open_camera()
 if cam is None:
     print("ERROR: no camera opened (indices 0 to 3).")
     raise SystemExit
 
-K, dist = charger_calibration(L, H)
+K, dist = load_calibration(L, H)
 h = TAG_SIZE / 2
-coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
+corners_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
 params = cv2.aruco.DetectorParameters()
-params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX  # corners sub-pixel
+params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX  # sub-pixel corners
 detector = cv2.aruco.ArucoDetector(dictionary, params)
 
 print("Live. Show a tag. Press 'q' to quit.")
@@ -110,16 +110,16 @@ while True:
     ok, image = cam.read()
     if not ok:
         continue
-    gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    corners, ids, _ = detector.detectMarkers(gris)
+    corners, ids, _ = detector.detectMarkers(grey)
     if ids is not None:
         cv2.aruco.drawDetectedMarkers(image, corners, ids)
         text_y = 30   # starting row for the info panel at the top left
         for c, tag_id in zip(corners, ids.flatten()):
             pts = c.reshape(4, 2).astype(np.float64)
             ok2, rvec, tvec = cv2.solvePnP(
-                coins_3d, pts, K, dist, flags=cv2.SOLVEPNP_IPPE_SQUARE
+                corners_3d, pts, K, dist, flags=cv2.SOLVEPNP_IPPE_SQUARE
             )
             if not ok2:
                 continue
@@ -129,11 +129,11 @@ while True:
             # The tag's POSITION in the camera frame (metres)
             x, y, z = tvec.flatten()
 
-            # ORIENTATION : matrix de rotation -> angles d'Euler (degres)
+            # ORIENTATION: rotation matrix -> Euler angles (degrees)
             R, _ = cv2.Rodrigues(rvec)
             roll, pitch, yaw = cv2.RQDecomp3x3(R)[0]
 
-            # Panneau d'infos (haut-gauche)
+            # Info panel (top left)
             cv2.putText(image, f"id {tag_id}: pos x={x:+.2f} y={y:+.2f} z={z:+.2f} m",
                         (10, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
             cv2.putText(image, f"        rot r={roll:+.0f} p={pitch:+.0f} y={yaw:+.0f} deg",
