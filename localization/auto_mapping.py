@@ -1,14 +1,14 @@
 # auto_mapping.py — Build the tag map AUTOMATICALLY, no tape measure.
 #
-# Principe (comme le "Step 2" de Thein) :
+# The principle (the same as Thein's "Step 2"):
 #   - Le first tag seen devient l'ORIGINE (l'ancre) : T_monde_ancre = identity.
-#   - Quand la camera voit une paire (A deja enregistre, B new), on calcule
-#     la position de B a partir de A, sans connaitre la position de la camera :
+#   - When the camera sees a pair (A already recorded, B new), B's position
+#     is computed from A, without knowing the camera's position:
 #         T_monde_B = T_monde_A @ inverse(T_camera_A) @ T_camera_B
-#   - En te deplacant et en montrant des paires qui se chevauchent, la tag_map se
+#   - By moving around and showing overlapping pairs, the map builds
 #     remplit toute seule. Aucun tape measure.
 #
-# Keys:  's' = sauver la tag_map dans carte_enregistree.py   |   'q' = quitter
+# KEYS:  's' = save the map to saved_map.py   |   'q' = quit
 from collections import deque
 
 import cv2
@@ -17,10 +17,10 @@ import numpy as np
 TAG_SIZE = 0.22389     # cote du carre noir, measurement au calipers (nominal 223 mm)
 FACTEUR_FOCALE = 0.95
 CARTE_PX = 500
-ECHELLE = 150            # pixels par metre ; reglable en direct avec '+' et '-'
-LONGUEUR_TRACE = 300     # count de positions gardees pour la trajectoire
+SCALE = 150              # pixels per metre; adjustable live with '+' and '-'
+TRAIL_LENGTH = 300       # number of positions kept for the trajectory
 
-trajectoire = deque(maxlen=LONGUEUR_TRACE)
+trail = deque(maxlen=TRAIL_LENGTH)
 
 
 def transformation(R, t):
@@ -39,16 +39,16 @@ def inverse(T):
 
 
 def sauver_carte(tag_map):
-    """Ecrit la tag_map au format utilisable par localisation_orientation.py."""
+    """Writes the map in the form orientation_localization.py can use."""
     rows = ["CARTE_DES_TAGS = {"]
     for tid, T in sorted(tag_map.items()):
         x, y, z = T[:3, 3]
         _, _, yaw = cv2.RQDecomp3x3(T[:3, :3])[0]
         rows.append(f"    {tid}: ({x:.3f}, {y:.3f}, {z:.3f}, {yaw:.1f}),")
     rows.append("}")
-    with open("carte_enregistree.py", "w") as f:
+    with open("saved_map.py", "w") as f:
         f.write("\n".join(rows) + "\n")
-    print("Carte sauvegardee dans carte_enregistree.py :")
+    print("Carte sauvegardee dans saved_map.py :")
     print("\n".join(rows))
 
 
@@ -57,25 +57,25 @@ def dessiner_carte(cam_xyz):
     ox, oy = CARTE_PX // 2, CARTE_PX // 2
 
     def to_px(X, Z):
-        return int(ox + X * ECHELLE), int(oy - Z * ECHELLE)
+        return int(ox + X * SCALE), int(oy - Z * SCALE)
 
     cv2.line(m, (ox, 0), (ox, CARTE_PX), (70, 70, 70), 1)
     cv2.line(m, (0, oy), (CARTE_PX, oy), (70, 70, 70), 1)
 
-    # TRAJECTOIRE : les old positions, de plus en plus sombres
-    pts = [to_px(p[0], p[2]) for p in trajectoire]
+    # TRAJECTORY: the older positions, progressively darker
+    pts = [to_px(p[0], p[2]) for p in trail]
     for i in range(1, len(pts)):
         intensite = int(60 + 195 * i / len(pts))   # old = sombre, recent = clair
         cv2.line(m, pts[i - 1], pts[i], (0, intensite, intensite // 2), 2)
 
-    # Position actuelle de la camera
+    # The camera's current position
     if cam_xyz is not None:
         px, py = to_px(cam_xyz[0], cam_xyz[2])
         cv2.circle(m, (px, py), 7, (0, 255, 0), -1)
         cv2.putText(m, "CAM", (px + 9, py - 6),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
 
-    cv2.putText(m, f"echelle: {ECHELLE} px/m  ('+'/'-' zoom, 'c' effacer trace)",
+    cv2.putText(m, f"echelle: {SCALE} px/m  ('+'/'-' zoom, 'c' effacer trace)",
                 (10, CARTE_PX - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (140, 140, 140), 1)
     return m
 
@@ -109,8 +109,8 @@ coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.f
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
 detector = cv2.aruco.ArucoDetector(dictionary, cv2.aruco.DetectorParameters())
 
-tag_map = {}   # id -> T_monde_tag (4x4). Se remplit tout seul.
-print("Montre des tags. Le 1er devient l'origin. Montre des PAIRES pour enchainer.")
+tag_map = {}   # id -> T_world_tag (4x4). Fills itself in.
+print("Show tags. The 1st becomes the origin. Show PAIRS to chain them.")
 print("'s' = sauver la tag_map   |   'q' = quitter")
 
 while True:
@@ -120,7 +120,7 @@ while True:
     gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     corners, ids, _ = detector.detectMarkers(gris)
 
-    # 1) Pose de chaque tag visible dans le frame camera
+    # 1) Pose of each visible tag in the camera frame
     poses_camera = {}   # id -> T_camera_tag
     if ids is not None:
         cv2.aruco.drawDetectedMarkers(image, corners, ids)
@@ -139,8 +139,8 @@ while True:
         tag_map[ancre] = np.eye(4)           # origin du frame
         print(f"ANCRE (origin) = tag {ancre}")
 
-    # 3) Enregistrer les nouveaux tags via une paire avec un tag deja known
-    #    (on repete tant qu'on peut enchainer dans cette image)
+    # 3) Record the new tags through a pair with an already-known tag
+    #    (repeated as long as chaining is possible within this image)
     change = True
     while change:
         change = False
@@ -155,7 +155,7 @@ while True:
                     change = True
                     break
 
-    # 4) Localiser la camera avec tous les tags known visible
+    # 4) Locate the camera using every known visible tag
     positions = []
     for tid, T_cam_tag in poses_camera.items():
         if tid in tag_map:
@@ -163,14 +163,14 @@ while True:
             positions.append(T_monde_cam[:3, 3])
     cam_xyz = np.mean(positions, axis=0) if positions else None
     if cam_xyz is not None:
-        trajectoire.append(cam_xyz)   # memorise le passage pour tracer la trajectoire
+        trail.append(cam_xyz)   # remember the pass, to draw the trajectory
 
     # 5) Affichage
     cv2.putText(image, f"Tags enregistres : {sorted(tag_map)}", (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
     if cam_xyz is not None:
         X, Y, Z = cam_xyz
-        cv2.putText(image, f"CAMERA : X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m", (10, 55),
+        cv2.putText(image, f"CAMERA: X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m", (10, 55),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
     cv2.putText(image, "'s'=sauver  '+/-'=zoom tag_map  'c'=effacer trace  'q'=quitter",
                 (10, H - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
@@ -183,11 +183,11 @@ while True:
     if key == ord("s") and tag_map:
         sauver_carte(tag_map)
     if key in (ord("+"), ord("=")):        # zoom avant
-        ECHELLE = min(int(ECHELLE * 1.3), 2000)
+        SCALE = min(int(SCALE * 1.3), 2000)
     if key in (ord("-"), ord("_")):        # zoom arriere
-        ECHELLE = max(int(ECHELLE / 1.3), 5)
-    if key == ord("c"):                    # effacer la trajectoire
-        trajectoire.clear()
+        SCALE = max(int(SCALE / 1.3), 5)
+    if key == ord("c"):                    # effacer la trail
+        trail.clear()
 
 cam.release()
 cv2.destroyAllWindows()

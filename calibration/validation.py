@@ -1,6 +1,6 @@
 # validation.py — Minimal AprilTag pose read-out, for a quick check.
-# Affiche une distance STABILISEE (mean des dernieres measurements) et l'enregistre
-# dans validation.csv quand on appuie sur 's'. Comparer ensuite au tape measure.
+# Shows a STABILISED distance (the mean of the last measurements) and records
+# it in validation.csv when 's' is pressed. Then compare with a tape measure.
 import csv
 import os
 from collections import deque
@@ -8,8 +8,8 @@ from collections import deque
 import cv2
 import numpy as np
 
-# >>> METS ICI LA VRAIE TAILLE DU CARRE NOIR DE TON TAG, EN METRES <<<
-TAG_SIZE = 0.10  # ex. 0.16 pour un tag de 16 cm
+# >>> PUT YOUR TAG'S REAL BLACK-SQUARE SIZE HERE, IN METRES <<<
+TAG_SIZE = 0.10  # e.g. 0.16 for a 16 cm tag
 
 
 def ouvrir_camera():
@@ -40,7 +40,7 @@ coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.f
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
 detector = cv2.aruco.ArucoDetector(dictionary, cv2.aruco.DetectorParameters())
 
-history = deque(maxlen=30)   # pour lisser la distance
+history = deque(maxlen=30)   # to smooth the distance
 path = os.path.abspath("validation.csv")
 if not os.path.exists(path):
     with open(path, "w", newline="") as f:
@@ -48,10 +48,10 @@ if not os.path.exists(path):
 counter = 0
 
 print("=" * 55)
-print("VALIDATION. Place le tag, garde-le stable et bien de face.")
+print("VALIDATION. Place the tag, keep it still and squarely facing you.")
 print("  's' = enregistrer la measurement stabilisee")
 print("  'q' = quitter")
-print(f"Les measurements sont enregistrees dans : {path}")
+print(f"The measurements are recorded in: {path}")
 print("=" * 55)
 
 while True:

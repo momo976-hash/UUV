@@ -1,17 +1,19 @@
 # restore_air_calibration.py — Put the in-air calibration back.
 #
 # WHY THIS SCRIPT EXISTS EXISTE
-# Lancer `calibrate.py` SANS l'option --mounting ecrit sous le name par
-# default, `tube_air`, et ecrase donc la calibration in air. Le folder
+# Running `calibrate.py` WITHOUT the --mounting option writes under the
+# default name, `tube_air`, and so overwrites the in-air calibration. The
+# folder
 # montages/ etant dans .gitignore, git n'en garde aucune copie.
 #
-# Les values ci-dessous sont celles de la calibration du 12/08/2026 :
-# 31 vues, RMS 0.4445 px. Elles sont aussi consignees dans l'onglet
-# 5_Nos_chiffres de docs/fonction_calibration.xlsx et dans l'en-tete de
-# demo_distance.py — c'est de la que ce script les tire.
+# The values below are those of the 12/08/2026 calibration: 31 views, RMS
+# 0.4445 px. They are also recorded in the 5_Nos_chiffres tab of
+# docs/calibration_function.xlsx and in demo_distance.py's header — which is
+# where this script takes them from.
 #
-# Cette reference in air n'est pas un confort : c'est elle qui permet de dire
-# si une calibration underwater est credible. Sans elle, on ne peut plus
+# This in-air reference is not a comfort: it is what makes it possible to
+# say whether an underwater calibration is credible. Without it, there is no
+# longer any way to
 # comparer fx a sa value in air, ni mesurer l'anamorphic ratio apparue.
 #
 #   python calibration/restaurer_tube_air.py
@@ -32,14 +34,14 @@ path = optics.MOUNTINGS_FOLDER / "tube_air.npz"
 path.parent.mkdir(parents=True, exist_ok=True)
 
 if path.exists():
-    # Ne jamais ecraser en silence : le path present est peut-etre la
-    # calibration underwater rangee par error sous ce name, et c'est le seul
-    # exemplaire qui en existe. On le met de cote avant d'ecrire.
+    # Never overwrite silently: the file present may be the underwater
+    # calibration filed under this name by mistake, and it may be the only
+    # copy that exists. It is moved aside before writing.
     old = np.load(path)
-    K_ancien = old["K"]
-    print(f"Un path existe deja : fx {K_ancien[0,0]:.2f}  fy {K_ancien[1,1]:.2f}")
-    if np.allclose(K_ancien, K, atol=1e-3):
-        print("C'est deja la calibration du 12/08. Rien a faire.")
+    K_old = old["K"]
+    print(f"A file already exists: fx {K_old[0,0]:.2f}  fy {K_old[1,1]:.2f}")
+    if np.allclose(K_old, K, atol=1e-3):
+        print("That is already the 12/08 calibration. Nothing to do.")
         raise SystemExit
     backup = path.with_name("tube_air_remplace.npz")
     numero = 2
@@ -47,11 +49,11 @@ if path.exists():
         backup = path.with_name(f"tube_air_remplace_{numero}.npz")
         numero += 1
     np.savez(backup, **{cle: old[cle] for cle in old.files})
-    print(f"Mis de cote dans : {backup.name}")
-    print("  (si c'etait ta calibration underwater, elle est la, pas perdue)")
+    print(f"Moved aside to: {backup.name}")
+    print("  (if that was your underwater calibration, it is there, not lost)")
 
 np.savez(path, K=K, dist=DIST)
-print(f"\nCalibration du 12/08 restauree dans : {path}")
+print(f"\n12/08 calibration restored in: {path}")
 print(f"  fx {K[0,0]:.2f}   fy {K[1,1]:.2f}   cx {K[0,2]:.2f}   cy {K[1,2]:.2f}")
 print("  31 vues, RMS 0.4445 px")
 print("\nVerifie avec :  python calibration/optics.py")

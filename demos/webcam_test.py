@@ -1,10 +1,10 @@
 # webcam_test.py — Minimal webcam + AprilTag test.
 # Utilise le detector AprilTag integre a OpenCV (cv2.aruco) : aucune librairie
-# a compiler, fonctionne meme avec Python 3.14.
+# to compile, and works even on Python 3.14.
 import cv2
 import numpy as np
 
-TAG_SIZE = 0.10  # cote du tag en metres (measurement ton tag imprime et change ici)
+TAG_SIZE = 0.10  # tag side in metres (measure your printed tag and change this)
 
 # --- Webcam ---
 cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # CAP_DSHOW : evite l'error MSMF sous Windows
@@ -12,12 +12,12 @@ if not cam.isOpened():
     print("ERROR: impossible d'ouvrir la webcam.")
     raise SystemExit
 
-# --- Parametres approx de la camera (suffisant pour un test) ---
+# --- Rough camera parameters (good enough for a test) ---
 L, H = 640, 480
 K = np.array([[L, 0, L / 2], [0, L, H / 2], [0, 0, 1]], dtype=np.float64)
 dist = np.zeros(5)
 
-# --- Coins 3D du tag (ordre attendu par IPPE_SQUARE : haut-G, haut-D, bas-D, bas-G) ---
+# --- The tag's 3D corners (order IPPE_SQUARE expects: TL, TR, BR, BL) ---
 h = TAG_SIZE / 2
 coins_3d = np.array(
     [[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64
@@ -27,7 +27,7 @@ coins_3d = np.array(
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
 detector = cv2.aruco.ArucoDetector(dictionary, cv2.aruco.DetectorParameters())
 
-print("Webcam ouverte. Appuie sur 'q' pour quitter.")
+print("Webcam open. Press 'q' to quit.")
 
 while True:
     ok, image = cam.read()

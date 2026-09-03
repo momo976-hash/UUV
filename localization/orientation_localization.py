@@ -1,20 +1,20 @@
 # orientation_localization.py — Position and orientation from one tag.
-# Localisation de la camera/UUV dans la piscine, avec des tags ORIENTES
-# DIFFEREMMENT (sur des murs differents). Chaque tag a une position (x,y,z)
-# ET un cap "yaw" = rotation autour de la verticale.
+# Locating the camera/UUV in the pool, with tags ORIENTED DIFFERENTLY (on
+# different walls). Each tag has a position (x, y, z) AND a "yaw" heading =
+# a rotation about the vertical.
 #
 # Transformations homogenes :
 #   T_piscine_camera = T_piscine_tag @ inverse(T_camera_tag)
-# ou T_piscine_tag inclut maintenant la ROTATION du tag (plus seulement sa position).
+# where T_pool_tag now includes the tag's ROTATION, not only its position.
 import cv2
 import numpy as np
 
 TAG_SIZE = 0.10
 FACTEUR_FOCALE = 0.95
 
-# CARTE DES TAGS : ID -> (x, y, z, yaw_deg)
-#   x, y, z   = position du centre du tag dans la piscine (metres)
-#   yaw_deg   = cap du tag autour de la verticale (degres)
+# TAG MAP: id -> (x, y, z, yaw_deg)
+#   x, y, z   = position of the tag's centre in the pool (metres)
+#   yaw_deg   = the tag's heading about the vertical (degrees)
 #               mur du fond=0, gauche=90, droite=-90, face=180
 CARTE_DES_TAGS = {
     3: (0.15, 0.40, 0.0,   0.0),   # ex. mur du fond
@@ -24,14 +24,14 @@ CARTE_DES_TAGS = {
 
 
 def rotation_y(deg):
-    """Rotation autour de l'axis vertical Y (le 'cap' du tag)."""
+    """Rotation about the vertical Y axis (the tag's 'heading')."""
     a = np.radians(deg)
     c, s = np.cos(a), np.sin(a)
     return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]], dtype=np.float64)
 
 
 def transformation(R, t):
-    """Matrice homogene 4x4 a partir d'une rotation R (3x3) et translation t (3,)."""
+    """A 4x4 homogeneous matrix from a rotation R (3x3) and translation t (3,)."""
     T = np.eye(4)
     T[:3, :3] = R
     T[:3, 3] = np.asarray(t, dtype=np.float64).flatten()
@@ -76,7 +76,7 @@ coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.f
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
 detector = cv2.aruco.ArucoDetector(dictionary, cv2.aruco.DetectorParameters())
 
-print("En direct. Montre un tag known de la tag_map. 'q' pour quitter.")
+print("Live. Show a tag known to the map. 'q' to quit.")
 
 while True:
     ok, image = cam.read()
@@ -103,15 +103,15 @@ while True:
             R_cam, _ = cv2.Rodrigues(rvec)
             T_camera_tag = transformation(R_cam, tvec)
 
-            # Tag dans la piscine : position + ORIENTATION (yaw)
+            # The tag in the pool: position + ORIENTATION (yaw)
             x, y, z, yaw = CARTE_DES_TAGS[tag_id]
             T_piscine_tag = transformation(rotation_y(yaw), (x, y, z))
 
-            # Camera dans la piscine
+            # The camera in the pool
             T_piscine_camera = T_piscine_tag @ inverse(T_camera_tag)
             positions_camera.append(T_piscine_camera[:3, 3])
 
-            # ORIENTATION de la camera dans la piscine (partie rotation de la matrix)
+            # The camera's ORIENTATION in the pool (the matrix's rotation part)
             R_cam_piscine = T_piscine_camera[:3, :3]
             roll, pitch, yaw = cv2.RQDecomp3x3(R_cam_piscine)[0]
             orientations_camera.append((roll, pitch, yaw))
@@ -119,14 +119,14 @@ while True:
     if positions_camera:
         X, Y, Z = np.mean(positions_camera, axis=0)
         roll, pitch, yaw = np.mean(orientations_camera, axis=0)
-        cv2.putText(image, f"CAMERA pos : X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m",
+        cv2.putText(image, f"CAMERA pos: X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m",
                     (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
         cv2.putText(image, f"CAMERA rot : roll={roll:+.0f} pitch={pitch:+.0f} yaw={yaw:+.0f} deg",
                     (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
         cv2.putText(image, f"({len(positions_camera)} tag(s) known(s))",
                     (10, 88), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1)
     else:
-        cv2.putText(image, "Aucun tag de la tag_map visible", (10, 40),
+        cv2.putText(image, "No tag from the map is visible", (10, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
     cv2.imshow("Localisation piscine + orientation (q pour quitter)", image)
