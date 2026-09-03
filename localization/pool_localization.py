@@ -23,7 +23,7 @@
 import cv2
 import numpy as np
 
-TAG_SIZE = 0.10          # cote reel du carre noir, en metres
+TAG_SIZE = 0.10          # real side of the black square, in metres
 FOCAL_FACTOR = 0.95        # focal-length correction found at validation
 
 # ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ TAG_MAP = {
 }
 
 
-def ouvrir_camera():
+def open_camera():
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     for index in range(4):
         for backend, name in backends:
@@ -48,22 +48,22 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     h, w = img.shape[:2]
-                    print(f"Camera trouvee : index={index}, backend={name}, {w}x{h}")
+                    print(f"Camera found: index={index}, backend={name}, {w}x{h}")
                     return cap, w, h
             cap.release()
     return None, 0, 0
 
 
-cam, L, H = ouvrir_camera()
+cam, L, H = open_camera()
 if cam is None:
     print("ERROR: no camera opened.")
     raise SystemExit
 
-FOCALE = L * FOCAL_FACTOR
-K = np.array([[FOCALE, 0, L / 2], [0, FOCALE, H / 2], [0, 0, 1]], dtype=np.float64)
+FOCAL_LENGTH = L * FOCAL_FACTOR
+K = np.array([[FOCAL_LENGTH, 0, L / 2], [0, FOCAL_LENGTH, H / 2], [0, 0, 1]], dtype=np.float64)
 dist = np.zeros(5)
 h = TAG_SIZE / 2
-coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
+corners_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
 detector = cv2.aruco.ArucoDetector(dictionary, cv2.aruco.DetectorParameters())
@@ -74,8 +74,8 @@ while True:
     ok, image = cam.read()
     if not ok:
         continue
-    gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    corners, ids, _ = detector.detectMarkers(gris)
+    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    corners, ids, _ = detector.detectMarkers(grey)
 
     camera_positions = []   # one camera-position estimate per known tag
 
@@ -86,7 +86,7 @@ while True:
                 continue  # tag detected but absent from the map -> ignored
 
             pts = c.reshape(4, 2).astype(np.float64)
-            ok2, rvec, tvec = cv2.solvePnP(coins_3d, pts, K, dist,
+            ok2, rvec, tvec = cv2.solvePnP(corners_3d, pts, K, dist,
                                            flags=cv2.SOLVEPNP_IPPE_SQUARE)
             if not ok2:
                 continue
@@ -94,13 +94,13 @@ while True:
 
             # The camera's position in the TAG's frame: -R^T . t
             R, _ = cv2.Rodrigues(rvec)
-            cam_dans_tag = -R.T @ tvec
+            cam_in_tag = -R.T @ tvec
 
-            # Repere tag aligne avec frame piscine (version simple) :
-            # position camera piscine = position du tag + camera_dans_tag
-            tag_piscine = np.array(TAG_MAP[tag_id], dtype=np.float64).reshape(3, 1)
-            cam_piscine = tag_piscine + cam_dans_tag
-            camera_positions.append(cam_piscine.flatten())
+            # Tag frame aligned with the pool frame (the simple version):
+            # camera position in pool = tag position + cam_in_tag
+            tag_in_pool = np.array(TAG_MAP[tag_id], dtype=np.float64).reshape(3, 1)
+            cam_in_pool = tag_in_pool + cam_in_tag
+            camera_positions.append(cam_in_pool.flatten())
 
     # Mean of the estimates (if several known tags are visible)
     if camera_positions:
