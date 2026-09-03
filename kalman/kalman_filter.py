@@ -1047,6 +1047,11 @@ class OrientationFilter:
 
 # ===========================================================================
 # Tag watchdog: detecting a box that has moved
+# The exact wording of "nothing to report" is a constant rather than a
+# literal: world_frame_check.py tests for it to decide whether to print the
+# section at all, and a silent translation of one of the two would have made
+# it print an empty heading on every run.
+NO_SUSPECT_TAG = "  no suspect tag"
 # ===========================================================================
 class TagWatchdog:
     """Track, tag by tag, the running mean of the gap between the position
@@ -1186,17 +1191,17 @@ class TagWatchdog:
     def report(self):
         rows = []
         for identifiant, (norme, vector) in sorted(self.suspects().items()):
-            rows.append(f"  tag {identifiant} : box displaced by {norme*1000:.0f} mm "
+            rows.append(f"  tag {identifiant}: box displaced by {norme*1000:.0f} mm "
                           f"({vector[0]*1000:+.0f}, {vector[1]*1000:+.0f}, "
-                          f"{vector[2]*1000:+.0f}) mm  [confirme par plusieurs voisins]")
+                          f"{vector[2]*1000:+.0f}) mm  [confirmed by several neighbours]")
         for (i, j), norme in sorted(self.suspicious_pairs().items()):
-            rows.append(f"  paire {i}-{j} : desaccord de {norme*1000:.0f} mm, "
+            rows.append(f"  pair {i}-{j}: {norme*1000:.0f} mm of disagreement, "
                           "neither of the two is formally at fault")
         principal = self.main_suspect()
         if principal is not None:
             rows.append(f"  -> tag {principal} appears in every disagreeing "
                           "pair: that is the box to check first")
-        return "\n".join(rows) if rows else "  aucun tag suspect"
+        return "\n".join(rows) if rows else NO_SUSPECT_TAG
 
 
 # ===========================================================================
