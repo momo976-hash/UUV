@@ -91,202 +91,203 @@ try:
 except ImportError:
     rs = None
 
-GRAVITE = 9.81
-ICI = Path(__file__).resolve().parent
+GRAVITY = 9.81
+HERE = Path(__file__).resolve().parent
 
 
-class CentraleRealSense:
-    """Flux accel + gyro de la D435i, plus la rotation vers la camera colour.
+class RealSenseImu:
+    """The D435i's accel + gyro streams, plus the rotation to the colour camera.
 
-    Les deux capteurs n'arrivent PAS au meme rythme (l'accelerometre vers
-    60-250 Hz, le gyroscope vers 200-400 Hz) et chaque image ne porte qu'un
-    seul des deux. We keep donc la derniere value connue de chacun, et on
-    date les measurements avec l'horloge du capteur plutot que celle du PC : les
-    intervalles servent a integrer, une gigue de quelques millisecondes se
-    paierait directement en drift.
+    The two sensors do NOT arrive at the same rate (the accelerometer around
+    60-250 Hz, the gyroscope around 200-400 Hz) and each frame carries only
+    one of the two. So the last known value of each is kept, and the
+    measurements are timestamped with the sensor's clock rather than the PC's:
+    the intervals are what the integration uses, and a few milliseconds of
+    jitter would be paid for directly in drift.
     """
 
-    def __init__(self, avec_couleur=False, bavard=True):
+    def __init__(self, with_colour=False, verbose=True):
         if rs is None:
             raise RuntimeError(
-                "pyrealsense2 n'est pas installe.\n"
+                "pyrealsense2 is not installed.\n"
                 "  pip install pyrealsense2\n"
-                "C'est la bibliotheque du SDK Intel qui donne acces a l'IMU.")
+                "That is the Intel SDK library which gives access to the IMU.")
 
-        offerts = self._profils_offerts()
-        if rs.stream.gyro not in offerts or rs.stream.accel not in offerts:
+        offered = self._offered_profiles()
+        if rs.stream.gyro not in offered or rs.stream.accel not in offered:
             raise RuntimeError(
-                "l'appareil branche n'offre pas accel + gyro.\n"
-                "Lance 'python list_realsense.py' pour voir ce qu'il a.")
-        if bavard:
-            for flux, name in ((rs.stream.accel, "accel"), (rs.stream.gyro, "gyro")):
-                cadences = sorted({fps for _, fps in offerts[flux]})
-                print(f"  {name:5} : cadences offertes {cadences} Hz")
+                "the device plugged in does not offer accel + gyro.\n"
+                "Run 'python tools/list_realsense.py' to see what it has.")
+        if verbose:
+            for stream, name in ((rs.stream.accel, "accel"), (rs.stream.gyro, "gyro")):
+                rates = sorted({fps for _, fps in offered[stream]})
+                print(f"  {name:5}: rates offered {rates} Hz")
 
-        # On request EXACTEMENT ce que l'appareil annonce, au lieu de supposer
-        # un format et une rate. Coder ces values en dur donne l'error
-        # "Couldn't resolve requests" des que le SDK ou le micrologiciel
-        # change ses profils — et le message ne dit pas lequel manque.
-        def _config_mouvement():
+        # EXACTLY what the device advertises is asked for, instead of
+        # assuming a format and a rate. Hard-coding those values gives the
+        # error "Couldn't resolve requests" as soon as the SDK or the firmware
+        # changes its profiles — and the message does not say which is missing.
+        def _motion_config():
             config = rs.config()
-            for flux in (rs.stream.accel, rs.stream.gyro):
-                format_, fps = max(offerts[flux], key=lambda couple: couple[1])
-                config.enable_stream(flux, format_, fps)
+            for stream in (rs.stream.accel, rs.stream.gyro):
+                format_, fps = max(offered[stream], key=lambda pair: pair[1])
+                config.enable_stream(stream, format_, fps)
             return config
 
-        # ETAPE 1 — extrinseques IMU -> camera colour, puis on referme.
+        # STEP 1 — IMU -> colour camera extrinsics, then close it again.
         #
-        # POURQUOI NE PAS GARDER LA COULEUR OUVERTE. Le pipeline synchronise
-        # tous ses flux sur le plus lent : avec la colour a 30 Hz,
-        # wait_for_frames ne rend plus que ~27 jeux par seconde, alors que le
-        # gyro en product 200 a 400. On perd 86 % des measurements, et l'integration
-        # assumed alors omega constant sur 37 ms au lieu de 5 — a 100 deg/s
-        # cela fait 3.7 deg d'error par pas. La colour ne sert qu'a lire une
-        # rotation constante : on la prend, puis on s'en debarrasse.
+        # WHY NOT KEEP THE COLOUR STREAM OPEN. The pipeline synchronises all
+        # its streams on the slowest: with the colour at 30 Hz,
+        # wait_for_frames returns only ~27 sets per second, where the gyro
+        # produces 200 to 400. That loses 86 % of the measurements, and the
+        # integration then assumes omega constant over 37 ms instead of 5 — at
+        # 100 deg/s that is 3.7 deg of error per step. The colour stream is
+        # only needed to read one constant rotation: take it, then drop it.
         self.R_imu_camera = np.eye(3)
-        self.extrinseques_lues = False
-        if avec_couleur:
+        self.extrinsics_read = False
+        if with_colour:
             try:
-                config = _config_mouvement()
+                config = _motion_config()
                 config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
                 pipeline = rs.pipeline()
-                profil = pipeline.start(config)
-                extr = (profil.get_stream(rs.stream.gyro)
-                        .get_extrinsics_to(profil.get_stream(rs.stream.color)))
-                # Le SDK range la rotation en COLONNES ; numpy lit en rows.
+                profile = pipeline.start(config)
+                extr = (profile.get_stream(rs.stream.gyro)
+                        .get_extrinsics_to(profile.get_stream(rs.stream.color)))
+                # The SDK stores the rotation in COLUMNS; numpy reads rows.
                 self.R_imu_camera = np.array(extr.rotation).reshape(3, 3).T
-                self.extrinseques_lues = True
+                self.extrinsics_read = True
                 pipeline.stop()
-            except Exception as souci:
-                if bavard:
-                    print(f"  extrinseques non lues ({souci}) — identity used")
+            except Exception as problem:
+                if verbose:
+                    print(f"  extrinsics not read ({problem}) — identity used")
 
-        # ETAPE 2 — IMU seule, a pleine rate.
+        # STEP 2 — the IMU alone, at full rate.
         self.pipeline = rs.pipeline()
         try:
-            self.profil = self.pipeline.start(_config_mouvement())
-        except Exception as souci:
-            raise RuntimeError(f"impossible d'ouvrir accel + gyro : {souci}")
+            self.profile = self.pipeline.start(_motion_config())
+        except Exception as problem:
+            raise RuntimeError(f"cannot open accel + gyro: {problem}")
 
         self._gyro = np.zeros(3)
         self._accel = np.zeros(3)
         self._t_gyro = None
 
     @staticmethod
-    def _profils_offerts():
-        """Ce que le Motion Module annonce vraiment : {flux: [(format, fps)]}."""
-        offerts = {}
-        for appareil in rs.context().query_devices():
-            for capteur in appareil.sensors:
-                for profil in capteur.get_stream_profiles():
-                    flux = profil.stream_type()
-                    if flux in (rs.stream.accel, rs.stream.gyro):
-                        offerts.setdefault(flux, []).append(
-                            (profil.format(), profil.fps()))
-            if offerts:
-                break            # first appareil qui en a
-        return offerts
+    def _offered_profiles():
+        """What the Motion Module really advertises: {stream: [(format, fps)]}."""
+        offered = {}
+        for device in rs.context().query_devices():
+            for sensor in device.sensors:
+                for profile in sensor.get_stream_profiles():
+                    stream = profile.stream_type()
+                    if stream in (rs.stream.accel, rs.stream.gyro):
+                        offered.setdefault(stream, []).append(
+                            (profile.format(), profile.fps()))
+            if offered:
+                break            # the first device that has them
+        return offered
 
-    def lire(self, timeout_ms=5000):
-        """Rend (gyro, accel, dt) ou None. dt est l'interval depuis la
-        derniere measurement de gyro, en seconds, ou None a la premiere."""
+    def read(self, timeout_ms=5000):
+        """Returns (gyro, accel, dt). dt is the interval since the last gyro
+        measurement, in seconds, or None on the first one."""
         frames = self.pipeline.wait_for_frames(timeout_ms)
         dt = None
         for image in frames:
             if not image.is_motion_frame():
                 continue
             motion = image.as_motion_frame()
-            donnees = motion.get_motion_data()
-            value = np.array([donnees.x, donnees.y, donnees.z], dtype=float)
-            flux = motion.get_profile().stream_type()
-            if flux == rs.stream.gyro:
+            data = motion.get_motion_data()
+            value = np.array([data.x, data.y, data.z], dtype=float)
+            stream = motion.get_profile().stream_type()
+            if stream == rs.stream.gyro:
                 timestamp = motion.get_timestamp() / 1000.0    # ms -> s
                 if self._t_gyro is not None:
                     gap = timestamp - self._t_gyro
-                    # Une image sautee ou une horloge qui recule donnerait un
-                    # dt aberrant : on l'ignore plutot que d'integrer n'importe
-                    # quoi. Bornes larges, elles n'ecartent que l'absurde.
+                    # A dropped frame or a clock going backwards would give
+                    # a nonsensical dt: it is ignored rather than integrating
+                    # anything at all. The bounds are wide — they reject only
+                    # the absurd.
                     if 1e-5 < gap < 0.5:
                         dt = gap
                 self._t_gyro = timestamp
                 self._gyro = value
-            elif flux == rs.stream.accel:
+            elif stream == rs.stream.accel:
                 self._accel = value
         return self._gyro.copy(), self._accel.copy(), dt
 
-    def arreter(self):
+    def stop(self):
         self.pipeline.stop()
 
 
-def mesurer_au_repos(imu, duration=5.0):
-    """Biais et noise des deux capteurs, vehicle IMMOBILE.
+def measure_at_rest(imu, duration=5.0):
+    """Bias and noise of both sensors, vehicle MOTIONLESS.
 
-    Le bias du gyro est sa lecture mean alors qu'il ne tourne pas : c'est
-    lui qui, integre, fait deriver l'orientation. Le noise est l'gap-type
-    autour de cette mean, et c'est le chiffre que le filter attend.
+    The gyro's bias is its mean reading while it is not turning: it is what,
+    integrated, makes the orientation drift. The noise is the standard
+    deviation about that mean, and it is the number the filter expects.
 
-    La norme de l'accelerometre doit valoir 9.81 : c'est le check d'echelle
-    le plus simple qui soit, et il attrape une unite fausse (g au lieu de
-    m/s2) ou un facteur d'echelle errone.
+    The accelerometer's norm must be 9.81: that is the simplest scale check
+    there is, and it catches a wrong unit (g instead of m/s2) or a wrong scale
+    factor.
     """
-    print(f"\nMESURE AU REPOS — ne key a rien pendant {duration:.0f} s...")
+    print(f"\nMEASURING AT REST — do not touch anything for {duration:.0f} s...")
     gyros, accels = [], []
     start = time.time()
     while time.time() - start < duration:
-        gyro, accel, _ = imu.lire()
+        gyro, accel, _ = imu.read()
         gyros.append(gyro)
         accels.append(accel)
-        reste = duration - (time.time() - start)
-        print(f"\r  {reste:4.1f} s   {len(gyros)} samples", end="", flush=True)
+        left = duration - (time.time() - start)
+        print(f"\r  {left:4.1f} s   {len(gyros)} samples", end="", flush=True)
     print()
 
     gyros, accels = np.array(gyros), np.array(accels)
     bias = gyros.mean(axis=0)
     gyro_noise = float(np.degrees(gyros.std(axis=0).mean()))
-    norme = float(np.linalg.norm(accels.mean(axis=0)))
+    norm = float(np.linalg.norm(accels.mean(axis=0)))
     accel_noise = float(accels.std(axis=0).mean())
-    # Direction du vector measurement. On le nomme "haut" et non "bas" : au rest
-    # un accelerometre measurement la force specifique, la reaction du support,
-    # dirigee vers le HAUT. Le name compte — c'est en l'appelant "bas" qu'on
-    # finit par l'inverser quelque part et pas ailleurs.
-    haut = accels.mean(axis=0) / max(norme, 1e-9)
-    return {"bias": bias, "bruit_gyro_deg_s": gyro_noise, "norme_accel": norme,
-            "accel_noise": accel_noise, "haut": haut, "samples": len(gyros),
+    # Direction of the measured vector. It is called "up" and not "down": at
+    # rest an accelerometer measures the specific force, the support's
+    # reaction, directed UPWARDS. The name matters — it is by calling it
+    # "down" that one ends up flipping it in one place and not another.
+    up = accels.mean(axis=0) / max(norm, 1e-9)
+    return {"bias": bias, "gyro_noise_deg_s": gyro_noise, "accel_norm": norm,
+            "accel_noise": accel_noise, "up": up, "samples": len(gyros),
             "rate": len(gyros) / duration}
 
 
-def orientation_initiale(accel_repos):
-    """Orientation de depart deduite de l'accelerometre AU REPOS.
+def initial_orientation(accel_at_rest):
+    """Starting orientation deduced from the accelerometer AT REST.
 
-    CONVENTION, ET C'EST LE POINT DELICAT. On traite le vector measurement comme
-    pointant vers le HAUT. C'est la convention physique de l'accelerometre :
-    au rest il measurement la force specifique, that is la reaction du
-    support, dirigee vers le haut — et non la gravity elle-meme.
+    THE CONVENTION, AND THIS IS THE DELICATE POINT. The measured vector is
+    treated as pointing UPWARDS. That is the accelerometer's physical
+    convention: at rest it measures the specific force, that is the support's
+    reaction, directed upwards — and not gravity itself.
 
-    `correct_with_gravity` fait exactement la meme hypothese. Les deux DOIVENT
-    s'accorder : une version qui inversait le vector ici et pas la, ce qui
-    etait le cas, fait que l'initialisation et la correction se combattent.
-    Le symptome est un roll qui se stabilise vers 180 degres au lieu de
-    zero — quiet, et facile a prendre pour un probleme d'axes.
+    `correct_with_gravity` makes exactly the same assumption. The two MUST
+    agree: a version that flipped the vector here and not there — which is
+    what happened — makes the initialisation and the correction fight each
+    other. The symptom is a roll that settles around 180 degrees instead of
+    zero — quiet, and easy to mistake for an axis problem.
 
-    Si un capteur rendait la convention opposee, le check automatique de
-    la demonstration le dirait : juste apres l'initialisation, roll et
-    pitch doivent lire zero, puisqu'on part precisement de cette pose.
+    If a sensor returned the opposite convention, the demonstration's
+    automatic check would say so: just after initialisation, roll and pitch
+    must read zero, since that is precisely the pose we start from.
 
-    We take la rotation la plus courte qui amene le haut measurement sur la
-    verticale du world. Le yaw reste arbitraire — la gravity n'en dit
-    rien — et c'est justement ce que les tags apporteront.
+    The shortest rotation bringing the measured up onto the world vertical is
+    taken. The yaw stays arbitrary — gravity says nothing about it — and that
+    is exactly what the tags will supply.
     """
-    haut_monde = np.array([0.0, 0.0, 1.0])
-    haut_mesure = np.asarray(accel_repos, dtype=float)
-    haut_mesure = haut_mesure / max(np.linalg.norm(haut_mesure), 1e-9)
-    axis = np.cross(haut_mesure, haut_monde)
+    world_up = np.array([0.0, 0.0, 1.0])
+    measured_up = np.asarray(accel_at_rest, dtype=float)
+    measured_up = measured_up / max(np.linalg.norm(measured_up), 1e-9)
+    axis = np.cross(measured_up, world_up)
     sine = float(np.linalg.norm(axis))
-    cosinus = float(np.clip(haut_mesure @ haut_monde, -1.0, 1.0))
+    cosine = float(np.clip(measured_up @ world_up, -1.0, 1.0))
     if sine < 1e-9:
-        return np.array([1.0, 0.0, 0.0, 0.0]) if cosinus > 0 else \
+        return np.array([1.0, 0.0, 0.0, 0.0]) if cosine > 0 else \
                np.array([0.0, 1.0, 0.0, 0.0])
-    return quaternion_from_rotation(axis / sine * np.arctan2(sine, cosinus))
+    return quaternion_from_rotation(axis / sine * np.arctan2(sine, cosine))
 
 
 def _demonstration():
@@ -295,13 +296,13 @@ def _demonstration():
     print("=" * 70)
 
     try:
-        imu = CentraleRealSense(avec_couleur=True)
-    except Exception as souci:
-        print(f"\nERROR: {souci}")
+        imu = RealSenseImu(with_colour=True)
+    except Exception as problem:
+        print(f"\nERROR: {problem}")
         return 1
 
     print("\naccel and gyro streams opened through the Intel SDK (pyrealsense2).")
-    if imu.extrinseques_lues:
+    if imu.extrinsics_read:
         angles = np.degrees(quaternion_to_euler(
             _quaternion_from_matrix(imu.R_imu_camera)))
         print(f"IMU -> colour camera rotation read from the SDK: "
@@ -310,62 +311,64 @@ def _demonstration():
         print("WARNING: IMU -> camera extrinsics could not be read, identity "
               "used.")
 
-    rest = mesurer_au_repos(imu)
+    rest = measure_at_rest(imu)
 
     print("\n" + "-" * 70)
     print("1. ARE THE MEASUREMENTS SOUND?")
     print("-" * 70)
     print(f"  samples              {rest['samples']}"
-          f"   soit {rest['rate']:.0f} Hz")
-    cadence_gyro = max(fps for _, fps in
-                       CentraleRealSense._profils_offerts()[rs.stream.gyro])
-    if rest["rate"] < 0.5 * cadence_gyro:
-        # Symptome known : un flux video ouvert en meme time force le
-        # pipeline a se synchroniser sur lui, et les measurements de mouvement
-        # sont jetees entre deux frames.
-        print(f"  [PROBLEM] the gyro runs at {cadence_gyro} Hz mais on n'en "
-              f"lit que {rest['rate']:.0f}.")
+          f"   i.e. {rest['rate']:.0f} Hz")
+    gyro_rate = max(fps for _, fps in
+                       RealSenseImu._offered_profiles()[rs.stream.gyro])
+    if rest["rate"] < 0.5 * gyro_rate:
+        # A known symptom: a video stream opened at the same time forces the
+        # pipeline to synchronise on it, and the motion measurements are
+        # thrown away between two frames.
+        print(f"  [PROBLEM] the gyro runs at {gyro_rate} Hz but only "
+              f"{rest['rate']:.0f} are being read.")
         print("     Integration then assumes omega constant over intervals that are")
         print("     too long, and the rotation is under-estimated.")
     else:
-        print(f"  [OK] on lit bien la rate du capteur ({cadence_gyro} Hz).")
+        print(f"  [OK] the sensor's rate really is being read "
+              f"({gyro_rate} Hz).")
 
-    print(f"  accelerometer norm  {rest['norme_accel']:.3f} m/s2   "
-          f"(should be {GRAVITE})")
-    ecart_g = abs(rest["norme_accel"] / GRAVITE - 1)
-    if ecart_g > 0.05:
+    print(f"  accelerometer norm  {rest['accel_norm']:.3f} m/s2   "
+          f"(should be {GRAVITY})")
+    g_gap = abs(rest["accel_norm"] / GRAVITY - 1)
+    if g_gap > 0.05:
         print("  [PROBLEM] far from gravity: wrong scale or wrong units.")
-    elif ecart_g > 0.01:
-        print(f"  [OK] c'est la gravity, a {100*ecart_g:.1f} % pres.")
+    elif g_gap > 0.01:
+        print(f"  [OK] this is gravity, to within {100*g_gap:.1f} %.")
         print("     That gap is a scale bias of the accelerometer. It has no")
         print("     consequence here: only the DIRECTION of the vector is used")
         print("     for roll and pitch, never its norm.")
     else:
         print("  [OK] this is gravity: the scale is right.")
 
-    print(f"  measured direction        {rest['haut'].round(3)}")
+    print(f"  measured direction        {rest['up'].round(3)}")
     print("     (not assumed: the mounting may be posed any way up)")
 
-    # -- la convention de signe de l'accelerometre est-elle la bonne ? ------
-    # On NE peut PAS check que roll et pitch valent zero : le mounting a
-    # parfaitement le droit d'etre pose sur le cote, et ils vaudraient alors
-    # 90 a juste titre. Le check doit donc etre independant de la pose.
+    # -- is the accelerometer's sign convention the right one? --------------
+    # We CANNOT check that roll and pitch are zero: the mounting is perfectly
+    # entitled to be lying on its side, and they would then read 90 quite
+    # rightly. So the check has to be independent of the pose.
     #
-    # Ce qui doit tenir quelle que soit la pose : l'orientation initialisee
-    # PREVOIT une direction pour le haut, et cette prevision doit coincider
-    # avec le vector measurement. Si les deux sont opposes, le capteur rend la
-    # gravity la ou on attend la force specifique — initialisation et
-    # correction se combattent alors, et l'orientation se stabilise a 180
-    # degres de la truth sans que rien ne le signale.
-    q0 = orientation_initiale(rest["haut"])
-    prevu = quaternion_to_matrix(q0).T @ np.array([0.0, 0.0, 1.0])
-    accord = float(prevu @ rest["haut"])
-    ecart_conv = float(np.degrees(np.arccos(np.clip(accord, -1.0, 1.0))))
-    roulis0, tangage0, _ = np.degrees(quaternion_to_euler(q0))
-    print(f"\n  deduced starting pose: roll {roulis0:+.1f}, "
-          f"pitch {tangage0:+.1f} deg")
-    print(f"  check de convention : gap prevu / measurement {ecart_conv:.2f} deg")
-    if ecart_conv > 5.0:
+    # What must hold whatever the pose: the initialised orientation PREDICTS a
+    # direction for up, and that prediction must coincide with the measured
+    # vector. If the two are opposite, the sensor returns gravity where the
+    # specific force is expected — initialisation and correction then fight
+    # each other, and the orientation settles 180 degrees from the truth with
+    # nothing flagging it.
+    q0 = initial_orientation(rest["up"])
+    predicted = quaternion_to_matrix(q0).T @ np.array([0.0, 0.0, 1.0])
+    agreement = float(predicted @ rest["up"])
+    convention_gap = float(np.degrees(np.arccos(np.clip(agreement, -1.0, 1.0))))
+    roll0, pitch0, _ = np.degrees(quaternion_to_euler(q0))
+    print(f"\n  deduced starting pose: roll {roll0:+.1f}, "
+          f"pitch {pitch0:+.1f} deg")
+    print(f"  convention check: predicted / measured gap "
+          f"{convention_gap:.2f} deg")
+    if convention_gap > 5.0:
         print("  [PROBLEM] should be zero whatever the pose.")
         print("     Close to 180: the measured vector points DOWN rather than")
         print("     up. Its sign must be flipped when read.")
@@ -380,7 +383,7 @@ def _demonstration():
     print("     This is the bias that, integrated, makes the orientation drift.")
     print("     The filter estimates it on its own once the tags re-anchor it.")
     print()
-    print(f"      GYRO_NOISE_DEG_S = {rest['bruit_gyro_deg_s']:.3f}")
+    print(f"      GYRO_NOISE_DEG_S = {rest['gyro_noise_deg_s']:.3f}")
     print(f"      ACCEL_NOISE      = {rest['accel_noise']:.3f}")
 
     print("\n" + "-" * 70)
@@ -390,55 +393,55 @@ def _demonstration():
     print("  Put it back down FLAT (horizontal on a table, not tilted in your hand):")
     print("  roll and pitch must return towards zero.  Ctrl+C to stop.\n")
 
-    # Les measurements sont ENREGISTREES, pas seulement affichees. C'est ce qui
-    # rend l'extraction montrable : un path qu'on ouvre et qu'on relit,
-    # plutot que des chiffres qui defilent et disparaissent. Chaque row
-    # porte les measurements BRUTES du SDK et l'orientation qu'on en tire, donc le
-    # calcul est refaisable par un tiers.
-    fichier_csv = ICI / "imu_donnees.csv"
-    suivi = OrientationFilter()
-    suivi.start(orientation_initiale(rest["haut"]), sigma_deg=5.0)
-    depart = time.time()
-    derniers = deque(maxlen=50)
+    # The measurements are RECORDED, not merely displayed. That is what makes
+    # the extraction demonstrable: a file one opens and reads back, rather
+    # than numbers scrolling past and disappearing. Each row carries the RAW
+    # SDK measurements and the orientation derived from them, so the
+    # computation can be redone by a third party.
+    csv_file = HERE / "imu_data.csv"
+    tracker = OrientationFilter()
+    tracker.start(initial_orientation(rest["up"]), sigma_deg=5.0)
+    start_time = time.time()
+    recent = deque(maxlen=50)
     rows = 0
-    with open(fichier_csv, "w", newline="") as output:
-        ecrivain = csv.writer(output)
-        ecrivain.writerow(["t_s",
+    with open(csv_file, "w", newline="") as output:
+        writer = csv.writer(output)
+        writer.writerow(["t_s",
                            "gyro_x_rad_s", "gyro_y_rad_s", "gyro_z_rad_s",
                            "accel_x_m_s2", "accel_y_m_s2", "accel_z_m_s2",
-                           "roulis_deg", "tangage_deg", "lacet_deg",
+                           "roll_deg", "pitch_deg", "yaw_deg",
                            "qw", "qx", "qy", "qz"])
         try:
             while True:
-                gyro, accel, dt = imu.lire()
+                gyro, accel, dt = imu.read()
                 if dt is None:
                     continue
                 omega = imu.R_imu_camera @ (gyro - rest["bias"])
-                suivi.predict(dt, omega)
-                suivi.correct_with_gravity(imu.R_imu_camera @ accel,
-                                       gravity=GRAVITE)
-                derniers.append(np.linalg.norm(omega))
+                tracker.predict(dt, omega)
+                tracker.correct_with_gravity(imu.R_imu_camera @ accel,
+                                       gravity=GRAVITY)
+                recent.append(np.linalg.norm(omega))
 
-                roll, pitch, yaw = np.degrees(quaternion_to_euler(suivi.q))
-                timestamp = time.time() - depart
-                ecrivain.writerow(
+                roll, pitch, yaw = np.degrees(quaternion_to_euler(tracker.q))
+                timestamp = time.time() - start_time
+                writer.writerow(
                     [f"{timestamp:.4f}"]
                     + [f"{v:.6f}" for v in gyro]
                     + [f"{v:.6f}" for v in accel]
                     + [f"{roll:.3f}", f"{pitch:.3f}", f"{yaw:.3f}"]
-                    + [f"{v:.6f}" for v in suivi.q])
+                    + [f"{v:.6f}" for v in tracker.q])
                 rows += 1
 
                 print(f"\r  roll {roll:+7.1f}   pitch {pitch:+7.1f}   "
                       f"yaw {yaw:+7.1f} deg    "
-                      f"|omega| {np.degrees(np.mean(derniers)):5.1f} deg/s   "
+                      f"|omega| {np.degrees(np.mean(recent)):5.1f} deg/s   "
                       f"({timestamp:4.0f} s, {rows} rows)", end="", flush=True)
         except KeyboardInterrupt:
             print("\n")
         finally:
-            imu.arreter()
+            imu.stop()
 
-    print(f"  {rows} measurements enregistrees dans : {fichier_csv}")
+    print(f"  {rows} measurements recorded in: {csv_file}")
     print("     columns: time, raw gyro (rad/s), raw accel (m/s2),")
     print("     then the computed orientation, as angles and as a quaternion.")
 
@@ -461,12 +464,11 @@ def _quaternion_from_matrix(R):
 
 
 def _simulation():
-    """Les memes maths, sur une imu SIMULEE : marche sans camera.
+    """The same maths, on a SIMULATED IMU: works with no camera.
 
-    Sert a deux choses : montrer que le traitement est juste meme quand le
-    materiel n'est pas la, et donner un result verifiable — on connait la
-    truth, donc on peut chiffrer l'error, ce qu'aucune manip reelle ne
-    permet.
+    It serves two purposes: showing that the processing is right even when the
+    hardware is not there, and giving a checkable result — the truth being
+    known, the error can be quantified, which no real run allows.
     """
     from kalman_filter import quaternion_angle
     rng = np.random.default_rng(3)
@@ -480,44 +482,44 @@ def _simulation():
     print("\n1. ORIENTATION FROM THE ACCELEROMETER ALONE")
     print("   The up direction PREDICTED by the orientation must match the up")
     print("   direction MEASURED, for any pose of the mounting.")
-    pires = []
+    worst = []
     for _ in range(300):
         v = rng.normal(size=3)
-        haut_mesure = v / np.linalg.norm(v)
-        prevu = quaternion_to_matrix(
-            orientation_initiale(haut_mesure)).T @ np.array([0.0, 0.0, 1.0])
-        pires.append(np.degrees(np.arccos(np.clip(prevu @ haut_mesure, -1, 1))))
-    print(f"   300 arbitrary poses, max error {max(pires):.1e} deg")
-    assert max(pires) < 1e-4      # noise d'arccos, pas d'error de calcul
+        measured_up = v / np.linalg.norm(v)
+        predicted = quaternion_to_matrix(
+            initial_orientation(measured_up)).T @ np.array([0.0, 0.0, 1.0])
+        worst.append(np.degrees(np.arccos(np.clip(predicted @ measured_up, -1, 1))))
+    print(f"   300 arbitrary poses, max error {max(worst):.1e} deg")
+    assert max(worst) < 1e-4      # arccos noise, not a computation error
 
     print("\n2. A QUARTER TURN ABOUT THE VERTICAL")
     print("   30 deg/s for 3 s, noisy gyro, noisy accelerometer.")
-    suivi = OrientationFilter()
-    suivi.start(orientation_initiale(np.array([0.0, 0.0, 1.0])), sigma_deg=5.0)
+    tracker = OrientationFilter()
+    tracker.start(initial_orientation(np.array([0.0, 0.0, 1.0])), sigma_deg=5.0)
     truth = np.array([1.0, 0.0, 0.0, 0.0])
     for _ in range(int(3.0 / dt)):
         omega = np.array([0.0, 0.0, np.radians(30.0)])
         truth = quaternion_product(truth, quaternion_from_rotation(omega * dt))
-        suivi.predict(dt, omega + rng.normal(0, noise, 3))
+        tracker.predict(dt, omega + rng.normal(0, noise, 3))
         R = quaternion_to_matrix(truth)
-        suivi.correct_with_gravity(R.T @ np.array([0.0, 0.0, GRAVITE])
+        tracker.correct_with_gravity(R.T @ np.array([0.0, 0.0, GRAVITY])
                                + rng.normal(0, 0.05, 3))
-    roll, pitch, yaw = np.degrees(quaternion_to_euler(suivi.q))
+    roll, pitch, yaw = np.degrees(quaternion_to_euler(tracker.q))
     print(f"   read: roll {roll:+.2f}   pitch {pitch:+.2f}   "
           f"yaw {yaw:+.2f} deg   (expected 0, 0, 90)")
-    print(f"   orientation error: {quaternion_angle(suivi.q, truth):.2f} deg")
+    print(f"   orientation error: {quaternion_angle(tracker.q, truth):.2f} deg")
     assert abs(yaw - 90) < 3.0 and abs(roll) < 2 and abs(pitch) < 2
 
     print("\n3. THIRTY SECONDS AT REST, WITH NO TAG AT ALL")
     print("   The gyro's residual bias works freely.")
-    suivi = OrientationFilter()
-    suivi.start(orientation_initiale(np.array([0.0, 0.0, 1.0])), sigma_deg=5.0)
-    residuel = np.radians([0.05, -0.04, 0.30])
+    tracker = OrientationFilter()
+    tracker.start(initial_orientation(np.array([0.0, 0.0, 1.0])), sigma_deg=5.0)
+    residual = np.radians([0.05, -0.04, 0.30])
     for _ in range(int(30.0 / dt)):
-        suivi.predict(dt, residuel + rng.normal(0, noise, 3))
-        suivi.correct_with_gravity(np.array([0.0, 0.0, GRAVITE])
+        tracker.predict(dt, residual + rng.normal(0, noise, 3))
+        tracker.correct_with_gravity(np.array([0.0, 0.0, GRAVITY])
                                + rng.normal(0, 0.05, 3))
-    roll, pitch, yaw = np.degrees(quaternion_to_euler(suivi.q))
+    roll, pitch, yaw = np.degrees(quaternion_to_euler(tracker.q))
     print(f"   roll {roll:+.2f}   pitch {pitch:+.2f} deg"
           f"   <- held by the accelerometer")
     print(f"   yaw  {yaw:+.2f} deg                <- drifts freely")
