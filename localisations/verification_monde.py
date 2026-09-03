@@ -483,7 +483,10 @@ while True:
         # brute passee en reference est celle du meilleur tag visible, la meme
         # que la position brute affichee a l'ecran.
         if fenetres is not None:
-            fenetres.ajouter(maintenant - debut_session, filtre, cam_p)
+            fenetres.ajouter(
+                maintenant - debut_session, filtre, cam_p,
+                tags=[(i, float(np.linalg.norm(poses[i][:3, 3])),
+                       incidence_du_tag(poses[i])) for i in connus_vus])
             fenetres.rafraichir()
         if filtre.position.demarre:
             cam_p_filtre = filtre.position.position

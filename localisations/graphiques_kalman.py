@@ -10,12 +10,13 @@
 
 POURQUOI CE MODULE
 Le document de reference du projet — Alex Becker, « Kalman Filter Explained
-Through Examples » — explique le filtre par quatre figures. Le depot savait
-deja les produire en SIMULATION (demos/demo_kalman.py), ce qui prouve que
-les maths sont justes mais ne montre rien du systeme reel. Ici les memes
-figures sont tracees sur ce que la camera mesure a l'instant meme.
+Through Examples », kalmanfilter.net — explique le filtre par une poignee de
+figures. Le depot savait deja les produire en SIMULATION
+(demos/demo_kalman.py), ce qui prouve que les maths sont justes mais ne
+montre rien du systeme reel. Ici les memes figures sont tracees sur ce que la
+camera mesure a l'instant meme.
 
-LES QUATRE FIGURES, ET CE QUE CHACUNE PROUVE
+LES SIX FIGURES, ET CE QUE CHACUNE PROUVE
 
   1. MISE A JOUR BAYESIENNE — a priori, vraisemblance, a posteriori
      Les trois gaussiennes de la figure centrale du document. L'a priori est
@@ -41,6 +42,21 @@ LES QUATRE FIGURES, ET CE QUE CHACUNE PROUVE
      K = 1 : il jette sa prediction et croit la mesure sur parole.
      Entre les deux, c'est l'arbitrage. Il doit se stabiliser apres quelques
      secondes ; s'il reste colle a 1, le filtre ne filtre rien.
+
+  5. QUALITE DE CHAQUE TAG — l'equivalent du « SNR » du document
+     Le document illustre la qualite d'une mesure par un echo radar fort ou
+     faible dans le bruit. Ici la mesure ne vient pas d'un echo mais d'un
+     tag, et sa qualite se lit sur la GEOMETRIE : sigma lateral croit comme
+     la distance, sigma en PROFONDEUR comme son CARRE, et se degrade encore
+     quand le tag est vu de biais. Les points noirs sont les tags reellement
+     visibles a cet instant. C'est la justification chiffree du filtre : un
+     seul tag, loin ou de biais, ne suffit pas.
+
+  6. TEST D'ABERRATION — le « Outlier Treatment » du document
+     Chaque mesure est comparee a ce que le filtre attendait ; l'ecart
+     normalise suit une loi du chi2 a 3 degres de liberte. Au-dela du seuil
+     la mesure est rejetee. C'est ainsi qu'un retournement de tag est attrape
+     avant d'empoisonner l'estimee.
 
 CE QU'IL FAUT REGARDER, ET CE QU'IL NE FAUT PAS CROIRE
 Aucune de ces figures ne dit si la position est JUSTE — il n'y a pas de
@@ -99,14 +115,19 @@ class FenetresKalman:
         self.t_mesure = deque(maxlen=MEMOIRE)
         self.rejets_t = deque(maxlen=MEMOIRE)
         self.rejets_v = deque(maxlen=MEMOIRE)
+        self.maha = deque(maxlen=MEMOIRE)
+        self.t_maha = deque(maxlen=MEMOIRE)
+        self.seuil_maha = None
+        self.tags_vus = []          # [(id, distance_m, incidence_deg)] courant
         self.dernier = None
 
         plt.ion()
-        self.figure, grille = plt.subplots(2, 2, figsize=(13, 7.5))
+        self.figure, grille = plt.subplots(2, 3, figsize=(17, 8))
         self.figure.canvas.manager.set_window_title(titre)
         self.figure.suptitle(f"{titre} — axe {AXES[self.axe]} — {sous_titre}",
                              fontsize=12, fontweight="bold")
-        (self.ax_bayes, self.ax_suivi), (self.ax_sigma, self.ax_gain) = grille
+        ((self.ax_bayes, self.ax_suivi, self.ax_qualite),
+         (self.ax_sigma, self.ax_gain, self.ax_maha)) = grille
 
         self.ax_bayes.set_title("1. Mise a jour bayesienne (instant courant)")
         self.ax_bayes.set_xlabel(f"position {AXES[self.axe]} (m)")
@@ -125,14 +146,28 @@ class FenetresKalman:
         self.ax_gain.set_ylabel("K (0 = ignore la mesure, 1 = la croit)")
         self.ax_gain.set_ylim(-0.05, 1.05)
 
+        self.ax_qualite.set_title("5. Qualite de chaque tag (le « SNR » du cours)")
+        self.ax_qualite.set_xlabel("distance du tag (m)")
+        self.ax_qualite.set_ylabel("sigma de la mesure (mm)")
+
+        self.ax_maha.set_title("6. Test d'aberration")
+        self.ax_maha.set_xlabel("temps (s)")
+        self.ax_maha.set_ylabel("distance de Mahalanobis^2")
+
         self.figure.tight_layout()
         self.figure.canvas.draw()
         plt.show(block=False)
 
     # -- collecte -----------------------------------------------------------
-    def ajouter(self, instant, filtre_pose, mesure_brute=None):
-        """Enregistre l'etat du filtre a cet instant. A appeler chaque image."""
+    def ajouter(self, instant, filtre_pose, mesure_brute=None, tags=None):
+        """Enregistre l'etat du filtre a cet instant. A appeler chaque image.
+
+        tags : [(identifiant, distance_m, incidence_deg)] des tags visibles,
+        pour le panneau 5. Facultatif : sans lui ce panneau reste vide.
+        """
         position = filtre_pose.position
+        if tags is not None:
+            self.tags_vus = list(tags)
         if not position.demarre:
             return
         self.t.append(instant)
@@ -152,6 +187,9 @@ class FenetresKalman:
             self.dernier = calcul
             self.gain.append(float(calcul["K"][self.axe, self.axe]))
             self.t_gain.append(instant)
+            self.maha.append(float(calcul["distance"]))
+            self.t_maha.append(instant)
+            self.seuil_maha = float(calcul["seuil"])
             if not calcul.get("acceptee", True):
                 self.rejets_t.append(instant)
                 self.rejets_v.append(float(calcul["z"][self.axe]))
@@ -169,6 +207,8 @@ class FenetresKalman:
             self._tracer_suivi()
             self._tracer_sigma()
             self._tracer_gain()
+            self._tracer_qualite()
+            self._tracer_maha()
             self.figure.canvas.draw_idle()
             self.figure.canvas.flush_events()
         except Exception:
@@ -261,6 +301,84 @@ class FenetresKalman:
                               "-", color="purple", lw=1.8)
         self.ax_gain.grid(alpha=0.3)
 
+    def _tracer_qualite(self):
+        """Panneau 5 — l'equivalent, pour ce systeme, du « SNR » du cours.
+
+        Le document illustre la qualite d'une mesure par un echo radar fort ou
+        faible dans le bruit. Ici la mesure ne vient pas d'un echo mais d'un
+        tag, et sa qualite se lit sur la GEOMETRIE : un tag loin ou vu de biais
+        renseigne mal. C'est ce que calcule covariance_position_tag, et les
+        deux courbes tracees sont ses deux termes :
+
+            sigma lateral    = d . sigma_px / f            croit comme d
+            sigma profondeur = d^2 . sigma_px / (f.T.cos(i).2)   croit comme d^2
+
+        D'ou le fait, contre-intuitif, que la profondeur se degrade BEAUCOUP
+        plus vite que le laterale : a 3 m elle est deja des dizaines de fois
+        pire. C'est la raison d'etre du filtre — un seul tag ne suffit pas.
+        """
+        self.ax_qualite.clear()
+        self.ax_qualite.set_title("5. Qualite de chaque tag (le « SNR » du cours)")
+        self.ax_qualite.set_xlabel("distance du tag (m)")
+        self.ax_qualite.set_ylabel("sigma de la mesure (mm)")
+        try:
+            from filtre_kalman import (FOCALE_EAU, TAILLE_TAG, SIGMA_PIXEL,
+                                       COINS_PAR_TAG)
+        except Exception:
+            return
+        distances = np.linspace(0.3, 4.0, 120)
+        lateral = 1000 * distances * SIGMA_PIXEL / FOCALE_EAU
+        self.ax_qualite.plot(distances, lateral, "-", color="seagreen", lw=2,
+                             label="lateral (croit en d)")
+        for incidence, style in ((0.0, "-"), (45.0, "--")):
+            cos_i = max(np.cos(np.radians(incidence)), 0.20)
+            profondeur = (1000 * distances ** 2 * SIGMA_PIXEL
+                          / (FOCALE_EAU * TAILLE_TAG * cos_i
+                             * np.sqrt(COINS_PAR_TAG)))
+            self.ax_qualite.plot(distances, profondeur, style, color="indianred",
+                                 lw=2, label=f"profondeur, biais {incidence:.0f} deg")
+        # Les tags REELLEMENT vus a cet instant, poses sur ces courbes.
+        for identifiant, distance, incidence in self.tags_vus:
+            cos_i = max(np.cos(np.radians(incidence)), 0.20)
+            sigma = (1000 * distance ** 2 * SIGMA_PIXEL
+                     / (FOCALE_EAU * TAILLE_TAG * cos_i * np.sqrt(COINS_PAR_TAG)))
+            self.ax_qualite.plot([distance], [sigma], "o", color="black", ms=8,
+                                 zorder=5)
+            self.ax_qualite.annotate(f" tag {identifiant}", (distance, sigma),
+                                     fontsize=8, va="bottom")
+        self.ax_qualite.set_yscale("log")
+        self.ax_qualite.legend(fontsize=7, loc="upper left")
+        self.ax_qualite.grid(alpha=0.3, which="both")
+
+    def _tracer_maha(self):
+        """Panneau 6 — le « Outlier Treatment » du cours, en direct.
+
+        Chaque mesure est comparee a ce que le filtre attendait. L'ecart,
+        normalise par l'incertitude des deux (distance de Mahalanobis), suit
+        une loi du chi2 a 3 degres de liberte : au-dela du seuil, la mesure est
+        trop improbable pour etre vraie et se fait rejeter. C'est ainsi qu'un
+        retournement de tag est attrape avant d'empoisonner l'estimee.
+        """
+        self.ax_maha.clear()
+        self.ax_maha.set_title("6. Test d'aberration")
+        self.ax_maha.set_xlabel("temps (s)")
+        self.ax_maha.set_ylabel("distance de Mahalanobis^2")
+        if len(self.maha):
+            t = np.fromiter(self.t_maha, float)
+            d = np.fromiter(self.maha, float)
+            self.ax_maha.plot(t, d, ".-", color="darkorange", lw=1, ms=4,
+                              label="ecart mesure / prediction")
+            if self.seuil_maha:
+                self.ax_maha.axhline(self.seuil_maha, color="crimson", ls="--",
+                                     lw=1.5, label=f"seuil ({self.seuil_maha:.1f})")
+                depasse = d > self.seuil_maha
+                if depasse.any():
+                    self.ax_maha.plot(t[depasse], d[depasse], "x",
+                                      color="crimson", ms=8, label="rejetee")
+            self.ax_maha.set_yscale("symlog")
+            self.ax_maha.legend(fontsize=7, loc="upper left")
+        self.ax_maha.grid(alpha=0.3)
+
     # -- fin ----------------------------------------------------------------
     def enregistrer(self, chemin):
         """Sauve la figure courante, pour la joindre a un rapport."""
@@ -320,7 +438,8 @@ def _demonstration():
                 mesure = mesure + np.array([0.4, 0.0, 0.0])
             filtre.ajouter_tag(mesure, tag, 15.0)
             filtre.appliquer()
-        fenetres.ajouter(k * dt, filtre, mesure)
+        fenetres.ajouter(k * dt, filtre, mesure,
+                         tags=[(0, float(np.linalg.norm(tag - p)), 15.0)])
         fenetres.rafraichir()
     fenetres.rafraichir(force=True)
 
