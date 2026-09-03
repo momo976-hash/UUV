@@ -59,7 +59,7 @@ import optics  # noqa: E402
 
 CAMERA_INDEX = None
 
-MONTAGE = optics.MONTAGE_ACTIF
+MONTAGE = optics.ACTIVE_MOUNTING
 # L'optics vient de optics.py : camera, tube, hublot, milieu. Le mounting
 # n'est ecrit dans aucun path de code : optics.py le lit dans
 # calibration/montage_local.txt, propre a CETTE machine, et le demande une
@@ -69,7 +69,7 @@ MONTAGE = optics.MONTAGE_ACTIF
 #     UUV_MONTAGE=nue_air python ce_script.py
 # Tant qu'il n'est pas calibre, optics.py retombe sur la camera nue en le
 # disant.
-K_CALIB, DIST_CALIB = optics.charger(MONTAGE)
+K_CALIB, DIST_CALIB = optics.load(MONTAGE)
 RESOLUTION = optics.RESOLUTION
 
 # measurement au pied a coulisse (optics.py) : les tags du bassin s'ecartent du
@@ -93,7 +93,7 @@ CIBLE_PIXELS = 15
 # les choses — a travers un hublot plat elle grossit l'image de 1.33. Dans ce
 # mounting-ci la camera est COUCHEE dans le tube : un seul des deux axes voit
 # une lame plane, l'autre traverse un menisque qui retrecit. Et pour decoder
-# un tag, c'est l'axis le moins grossi qui commande. `optics.focale_eau`
+# un tag, c'est l'axis le moins grossi qui commande. `optics.water_focal_length`
 # renvoie donc celui-la, et le pire cas du bassin est plus severe que ne le
 # laisserait croire le facteur 1.33.
 BASSIN = (3.80, 1.67, 1.00)
@@ -107,7 +107,7 @@ def pixels_pire_cas():
     jamais. Il suffit d'avoir verifie la detection jusqu'en dessous.
     """
     diagonale = float(np.linalg.norm(BASSIN))
-    return optics.focale_eau(MONTAGE) * REAL_TAG_SIZE / diagonale, diagonale
+    return optics.water_focal_length(MONTAGE) * REAL_TAG_SIZE / diagonale, diagonale
 
 
 CSV = Path(__file__).resolve().with_name("limites_tag.csv")
@@ -247,7 +247,7 @@ def besoin_du_bassin(atteint, recul):
     rows.append(f"  Sa diagonale fait {diagonale:.2f} m. A cette distance — le pire cas —")
     rows.append(f"  un tag de {100*REAL_TAG_SIZE:.1f} cm paraitra {pire:.0f} px "
                   f"sous l'water, dans l'axis")
-    rows.append(f"  le moins grossi par le tube (focal_length {optics.focale_eau(MONTAGE):.0f} px "
+    rows.append(f"  le moins grossi par le tube (focal_length {optics.water_focal_length(MONTAGE):.0f} px "
                   f"contre {max(optics.focales_eau(MONTAGE)):.0f} dans l'autre).")
     rows.append("  C'est le plus petit que le bassin produise.")
 

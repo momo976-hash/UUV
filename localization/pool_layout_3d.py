@@ -73,7 +73,7 @@ COULEUR_PAROI = {
 # hublot, et le TUBE, qui peut rogner le champ avant meme que l'water s'en mele.
 # Le champ kept ci-dessous est donc le plus petit des deux.
 LARGEUR_PX, HAUTEUR_PX = optics.RESOLUTION
-_demi_h_air, _demi_v_air, _demi_d_air = optics.demi_champs()
+_demi_h_air, _demi_v_air, _demi_d_air = optics.half_fields_of_view()
 
 # Le champ n'est pas reduit pareil dans les deux directions. Camera couchee
 # dans le tube, l'axis HORIZONTAL de l'image suit l'axis du tube et traverse une
@@ -91,7 +91,7 @@ DEMI_FOV_V = np.radians(optics.demi_champ_eau(_demi_v_air, "section"))
 # meme s'il est large dans l'autre. Sous l'water et dans ce mounting, la moins
 # grossie est la VERTICALE — donc immerger ne fait pas gagner de portee, au
 # contraire du raccourci « x 1.33 » qui ne vaut que pour un hublot plat.
-WATER_FOCAL_LENGTH = optics.focale_eau()
+WATER_FOCAL_LENGTH = optics.water_focal_length()
 
 # Vignettage : le tube est un tuyau, et la camera regarde par un bout.
 _VIGNETTAGE = optics.vignettage()

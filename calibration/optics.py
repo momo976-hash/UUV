@@ -1,57 +1,82 @@
-# optics.py — Tout ce que la lumiere traverse avant d'atteindre le capteur.
+# optics.py — Everything the light crosses before reaching the sensor.
 #
-# POURQUOI CE FICHIER
-# Les constantes optiques etaient recopiees dans une douzaine de scripts : la
-# focal_length 604.1876, le facteur 1.33 de l'water, le champ de 43.4 deg. Des qu'on
-# met la camera dans un tube, tout cela change d'un coup. Un seul endroit fait
-# foi desormais, et les scripts viennent y puiser.
+# ===========================================================================
+# HOW TO USE IT
+# ===========================================================================
+#     python calibration/optics.py     full report on the current mounting
+#     from optics import ...           in every other script
 #
-# LE MONTAGE REEL (photos du 11/08)
-# Tube Blue Robotics BR-100230-151 : acrylique coule, 150 mm de long, diameter
-# interieur 49.5 mm. La D435i measurement 90 x 25 x 25 mm : ses 90 mm ne passent pas
-# dans les 49.5 du diameter, mais tres bien dans les 150 de length. Elle est
-# donc COUCHEE le long du tube, ses trois objectifs alignes SELON L'AXE du
-# tube, et elle regarde par la PAROI CYLINDRIQUE. Un support imprime la cale
-# contre un cote. C'est ORIENTATION = "radiale".
+# This file is the SINGLE SOURCE OF TRUTH for every optical constant of the
+# project: camera, tube, window, medium, tag sizes. Nothing else hard-codes a
+# focal length or a tag size — they all read them from here.
 #
-# CE QUE CELA CHANGE, ET C'EST CONTRE-INTUITIF
-# Un cylindre ne se comporte pas pareil dans ses deux directions.
+# The mounting (bare camera in air / in the tube in air / in the tube
+# underwater) is NOT written in any code file. It is a property of the
+# MACHINE, not of the repository: the office laptop and the pool PC do not
+# have the same camera in the same medium. It is set once per machine with
 #
-#   Le long de l'AXE du tube — l'axis HORIZONTAL de l'image, puisque la camera
-#   est couchee. Dans ce plan la paroi se reduit a deux plans paralleles : une
-#   lame a faces paralleles. Sans effet en air, mais sous l'water c'est un hublot
-#   plat, avec son facteur 1.33.
+#     python calibration/set_mounting.py
 #
-#   Dans le plan de SECTION (circonferentiel) — l'axis VERTICAL de l'image. La
-#   paroi reste courbe : c'est un menisque. Un radius parti exactement de l'AXE
-#   du tube frappe les deux surfaces perpendiculairement et ne devie pas du
-#   tout, en air comme sous l'water — c'est le principe du hublot en dome. Hors
-#   de l'axis, le menisque agit.
+# and stored in calibration/local_mounting.txt, which is deliberately not
+# versioned so that a git pull can never change the other machine's setting.
 #
-# Sous l'water le systeme est donc ANAMORPHIQUE : les deux axes de l'image ne
-# grossissent pas du meme facteur. Ce n'est pas un default a correct, c'est la
-# geometrie du tube ; mais cela interdit de resumer l'optics a un seul count.
+# ===========================================================================
+# WHY THIS FILE EXISTS
+# ===========================================================================
+# The optical constants used to be copied into a dozen scripts: the 604.1876
+# focal length, water's 1.33 factor, the 43.4 deg field of view. The moment
+# the camera goes into a tube, all of that changes at once. One place now
+# holds the truth, and the scripts read it from there.
 #
-# LE DECENTREMENT N'EST PAS UNE FATALITE
-# La pupil de la D435i ne peut pas etre sur l'axis par hasard : le boitier
-# fait 25 mm de depth pour un radius interieur de 24.75, et la pupil est
-# encore quelques millimetres en retrait de la face avant. Pose au fond du
-# tube, elle se retrouve ~5 mm DERRIERE l'axis.
+# ===========================================================================
+# THE ACTUAL MOUNTING (photographs of 11/08)
+# ===========================================================================
+# Blue Robotics BR-100230-151 tube: cast acrylic, 150 mm long, 49.5 mm inner
+# diameter. The D435i measures 90 x 25 x 25 mm: its 90 mm do not fit across
+# the 49.5 mm diameter, but fit easily along the 150 mm of length. So it lies
+# DOWN along the tube, its three lenses aligned WITH THE TUBE AXIS, and it
+# looks out through the CYLINDRICAL WALL. A printed bracket wedges it against
+# one side. That is ORIENTATION = "radial".
 #
-# La bonne new, calculee plus bas par `residu_section` : cet gap se
-# traduit presque entierement par un CHANGEMENT DE FOCALE, pas par une
-# distorsion. Ce que la calibration ne rattrape pas reste sous 0.5 px, sous le
-# noise de detection measurement (0.215 px). Autrement dit :
+# ===========================================================================
+# WHAT THAT CHANGES, AND IT IS COUNTER-INTUITIVE
+# ===========================================================================
+# A cylinder does not behave the same way in its two directions.
 #
-#   - il n'est PAS necessaire de centrer la pupil au dixieme de millimetre ;
-#   - il est en revanche IMPERATIF de calibrer dans la configuration finale,
-#     et que la camera ne bouge plus ensuite dans son support. Un glissement
-#     de 1 mm apres calibration, c'est ~1 % d'error sur toutes les distances
-#     (voir `sensibilite_glissement`).
+#   Along the TUBE AXIS — the image's HORIZONTAL axis, since the camera lies
+#   down. In that plane the wall reduces to two parallel planes: a
+#   plane-parallel slab. No effect in air, but underwater it is a flat
+#   viewport, with its 1.33 factor.
 #
-# UTILISATION
-#   python optics.py            le report complet du mounting
-#   from optics import ...      dans les autres scripts
+#   In the CROSS-SECTION plane (circumferential) — the image's VERTICAL axis.
+#   There the wall stays curved: it is a meniscus. A ray leaving exactly from
+#   the TUBE AXIS strikes both surfaces perpendicularly and is not deflected
+#   at all, in air as in water — that is the dome-port principle. Off the
+#   axis, the meniscus acts.
+#
+# Underwater the system is therefore ANAMORPHIC: the two image axes are not
+# magnified by the same factor. This is not a defect to be corrected, it is
+# the geometry of the tube; but it does forbid summarising the optics with a
+# single number.
+#
+# ===========================================================================
+# BEING OFF-AXIS IS NOT FATAL
+# ===========================================================================
+# The D435i's pupil cannot sit on the axis by chance: the body is 25 mm deep
+# for a 24.75 mm inner radius, and the pupil sits a few more millimetres
+# behind the front face. Resting on the bottom of the tube, it ends up ~5 mm
+# BEHIND the axis.
+#
+# The good news, computed below by `residu_section`: that offset translates
+# almost entirely into a CHANGE OF FOCAL LENGTH, not into distortion. What
+# the calibration does not absorb stays under 0.5 px, below the measured
+# detection noise (0.215 px). In other words:
+#
+#   - the pupil does NOT need centring to a tenth of a millimetre;
+#   - it is on the other hand IMPERATIVE to calibrate in the final
+#     configuration, and for the camera not to move in its bracket
+#     afterwards. One millimetre of slip after calibration is ~1 % of error
+#     on every distance (see `sensibilite_glissement`).
 import os
 import sys
 from pathlib import Path
@@ -60,178 +85,218 @@ import numpy as np
 
 RESOLUTION = (640, 480)
 
-# --- la camera nue, measured au damier ---------------------------------------
-K_NUE_AIR = np.array([
+# --- the bare camera, measured on a checkerboard ---------------------------
+K_BARE_AIR = np.array([
     [604.1876, 0.0000, 326.1973],
     [0.0000, 602.3668, 242.8850],
     [0.0000, 0.0000, 1.0000],
 ], dtype=np.float64)
-DIST_NUE_AIR = np.array([0.013835, 0.733706, -0.002333, 0.001136, -2.707687],
-                        dtype=np.float64)
+DIST_BARE_AIR = np.array([0.013835, 0.733706, -0.002333, 0.001136, -2.707687],
+                         dtype=np.float64)
 
-# Bruit de detection d'un corner de tag, measurement par measure_tag_noise.py. Sert
-# ici d'etalon : inutile de correct un default optics plus petit que lui.
+# Detection noise on a tag corner, measured by measure_tag_noise.py. Used here
+# as a yardstick: there is no point correcting an optical defect smaller than
+# the noise that hides it.
 CORNER_NOISE_PX = 0.215
 
-# Encombrement de la D435i. Sa LARGEUR porte les trois objectifs alignes ;
-# l'axis optics sort perpendiculairement, selon la PROFONDEUR.
-CAMERA_LARGEUR = 0.090
-CAMERA_HAUTEUR = 0.025
-CAMERA_PROFONDEUR = 0.025
+# Overall size of the D435i. Its WIDTH carries the three aligned lenses; the
+# optical axis leaves perpendicular to it, along the DEPTH.
+CAMERA_WIDTH = 0.090
+CAMERA_HEIGHT = 0.025
+CAMERA_DEPTH = 0.025
 
-# Retrait de la pupil d'input derriere la face avant du boitier.
-# Valeur ajustee par la calibration tube_air du 11/08 : le report
-# fy_tube / fy_nue donne le decentrement reel, qui sert a predict les
-# focales sous l'water. Voir `decentrement_depuis_calibration`.
-PUPILLE_DERRIERE_FACE = -0.0029
+# How far the entrance pupil sits behind the front face of the body.
+# Value adjusted by the tube_air calibration of 11/08: the fy_tube / fy_bare
+# ratio gives the real off-axis offset, which is what predicts the underwater
+# focal lengths. See `decentrement_depuis_calibration`.
+PUPIL_BEHIND_FACE = -0.0029
 
-# --- le tube : Blue Robotics BR-100230-151, acrylique coule -----------------
-TUBE_NOM = 'BR-100230-151, 2" cast acrylic, 150 mm'
-TUBE_DI = 0.0495
-TUBE_DI_TOLERANCE = 0.0015
-TUBE_DE = 0.0580
-TUBE_DE_TOLERANCE = 0.0010
-TUBE_LONGUEUR = 0.150
-TUBE_MASSE = 0.115            # kg
-TUBE_PROFONDEUR_MAX = 130     # metres d'water
+# --- the tube: Blue Robotics BR-100230-151, cast acrylic -------------------
+TUBE_NAME = 'BR-100230-151, 2" cast acrylic, 150 mm'
+TUBE_INNER_DIAMETER = 0.0495
+TUBE_INNER_DIAMETER_TOLERANCE = 0.0015
+TUBE_OUTER_DIAMETER = 0.0580
+TUBE_OUTER_DIAMETER_TOLERANCE = 0.0010
+TUBE_LENGTH = 0.150
+TUBE_MASS = 0.115            # kg
+TUBE_MAX_DEPTH = 130         # metres of water
 
-# --- les deux tags du bassin, cote du carre NOIR, en metres -----------------
-# Mesures au pied a coulisse, pas lus sur la fiche d'impression : une
-# imprimante ne restitue pas exactement l'echelle demandee. La distance sort
-# de d = fx.S/s, ou S est ce cote : 1 % d'error de measurement du tag redonne 1 %
-# d'error a TOUTES les distances, sans exception, donc ces deux numbers se
-# mesurent et ne s'estiment pas.
+# --- the two pool tags, side of the BLACK square, in metres ----------------
+# Caliper-measured, not read off the print sheet: a printer does not reproduce
+# the requested scale exactly. Distance comes from d = fx.S/s, where S is that
+# side: 1 % of error in measuring the tag gives back 1 % of error at EVERY
+# distance, without exception. So these two numbers are measured, never
+# estimated.
 #
-# Les deux s'ecartent du nominal dans des sens OPPOSES — le petit de -0.15 %,
-# le grand de +0.40 %. Ce n'est donc pas une echelle d'imprimante, qui les
-# aurait decales du meme cote : c'est propre a chaque impression. Utiliser le
-# nominal (0.223 / 0.115) plutot que ces values revient a une error de
-# measurement de tag qu'on connaissait deja et qu'on choisit de ne pas correct.
+# The two depart from nominal in OPPOSITE directions — the small one by
+# -0.15 %, the large one by +0.40 %. So it is not a printer scale factor,
+# which would have shifted both the same way: it is specific to each print
+# run. Using the nominal values (0.223 / 0.115) instead of these amounts to a
+# tag-measurement error we already knew about and chose not to correct.
 LARGE_TAG_SIZE = 0.22389    # nominal 223.0 mm
 SMALL_TAG_SIZE = 0.11732    # nominal 117.5 mm
 
-# --- comment la camera est posee dedans -------------------------------------
-# "radiale" : couchee le long du tube, regard a travers la paroi cylindrique.
-#             C'est le seul mounting qui rentre dans un tube de 49.5 mm, et
-#             c'est celui des photos.
-# "axiale"  : regard par un bouchon plat en bout de tube. Demande que la
-#             width de la camera tienne dans le diameter — pas le cas ici.
-ORIENTATION = "radiale"
+# --- how the camera sits inside --------------------------------------------
+# "radial": lying along the tube, looking out through the cylindrical wall.
+#           The only mounting that fits a 49.5 mm tube, and the one in the
+#           photographs.
+# "axial":  looking out through a flat end cap. Requires the camera's width to
+#           fit within the diameter — not the case here.
+ORIENTATION = "radial"
 
-# Ce que le support imprime laisse entre le DOS de la camera et la paroi, du
-# cote oppose au regard. C'est la seule chose que la mecanique check, et
-# elle se measurement au pied a coulisse. 0 = camera plaquee au fond.
-JEU_ARRIERE = 0.000
+# What the printed bracket leaves between the BACK of the camera and the wall,
+# on the side opposite the view. It is the only thing the mechanics control,
+# and it is measured with calipers. 0 = camera flat against the bottom.
+BACK_CLEARANCE = 0.000
 
-# Montage axial seulement : recul de la pupil derriere le bouchon.
-RECUL_PUPILLE = 0.030
+# Axial mounting only: how far the pupil sits back from the end cap.
+PUPIL_SETBACK = 0.030
 
-INDICE_AIR = 1.0
-INDICE_EAU = 1.33
-INDICE_ACRYLIQUE = 1.49
+AIR_INDEX = 1.0
+WATER_INDEX = 1.33
+ACRYLIC_INDEX = 1.49
 
-# Calibrations enregistrees par calibrate.py --mounting <name>
-MONTAGES = ("nue_air", "tube_air", "tube_eau")
+# Calibrations recorded by calibrate.py --mounting <name>
+#
+# The names are in English now. The three French names used until the handover
+# are still accepted when read from local_mounting.txt or UUV_MOUNTING, so a
+# machine already set up keeps working without anyone touching it.
+MOUNTINGS = ("bare_air", "tube_air", "tube_water")
+LEGACY_MOUNTING_NAMES = {"nue_air": "bare_air", "tube_air": "tube_air",
+                         "tube_eau": "tube_water"}
 
-# On cherche le folder des calibrations la ou il peut etre, selon que ce
-# path vive a la racine du depot ou dans calibration/. Se tromper ici ne
-# fait pas planter : `charger` retombe silencieusement sur la camera nue, et
-# on measurement des semaines avec la mauvaise focal_length sans jamais s'en apercevoir.
-_ICI = Path(__file__).resolve().parent
-DOSSIER_MONTAGES = next(
-    (d for d in (_ICI / "montages", _ICI / "calibration" / "montages")
+# The calibration folder is looked for wherever it may be, depending on
+# whether this file lives at the repository root or inside calibration/.
+# Getting it wrong does not crash anything: `load` silently falls back to
+# the bare camera, and one can measure for weeks with the wrong focal length
+# without ever noticing. Both the English and the pre-handover French folder
+# names are accepted.
+_HERE = Path(__file__).resolve().parent
+MOUNTINGS_FOLDER = next(
+    (d for d in (_HERE / "mountings", _HERE / "montages",
+                 _HERE / "calibration" / "mountings",
+                 _HERE / "calibration" / "montages")
      if d.is_dir()),
-    _ICI / "montages")
+    _HERE / "mountings")
 
-# LE MONTAGE ACTIF — trouve tout seul, sans que personne n'ait a editer de
-# path Python.
+# THE ACTIVE MOUNTING — found on its own, with nobody editing a Python file.
 #
-# Le probleme concret : deux ordinateurs travaillent sur le meme depot. Le
-# portable de bureau a la camera nue sur une table ; le PC du bord du bassin
-# a la camera dans le tube, sous l'water. Le bon mounting n'est donc pas une
-# propriete du CODE, c'est une propriete de la MACHINE. Ecrire le name en dur
-# dans un path versionne oblige les deux a se contredire a chaque git pull,
-# et surtout oblige a se prevenir par message — le jour ou personne ne previent,
-# les distances sont fausses d'un tiers et rien ne le signale.
+# The concrete problem: two computers work on the same repository. The office
+# laptop has the bare camera on a table; the PC at the poolside has the camera
+# in the tube, underwater. The right mounting is therefore not a property of
+# the CODE, it is a property of the MACHINE. Writing the name into a versioned
+# file forces the two to contradict each other at every git pull, and above
+# all forces people to warn each other by message — and the day nobody warns
+# anybody, distances are wrong by a third and nothing says so.
 #
-# La chaine de decision, du plus fort au plus faible :
+# The decision chain, strongest first:
 #
-#   1. la variable d'environnement UUV_MONTAGE. Elle ne dure que le time
-#      d'une commande : c'est la derogation ponctuelle, pour comparer deux
-#      montages sur la meme manip sans rien deregler.
-#          UUV_MONTAGE=nue_air python localization/world_frame_check.py
+#   1. the UUV_MOUNTING environment variable. It lasts only for one command:
+#      the one-off override, to compare two mountings on the same run without
+#      disturbing anything.
+#          UUV_MOUNTING=bare_air python localization/world_frame_check.py
 #
-#   2. le path montage_local.txt, ecrit UNE fois par machine. Il n'est PAS
-#      versionne (.gitignore) : c'est exactement ce qui permet aux deux PC de
-#      ne pas etre d'accord sans se battre. Le PC du bassin y met "tube_eau"
-#      une bonne fois, et plus personne n'a rien a se dire ensuite.
+#   2. the local_mounting.txt file, written ONCE per machine. It is NOT
+#      versioned (.gitignore): that is exactly what lets the two PCs disagree
+#      without fighting. The pool PC puts "tube_water" in it once and for all,
+#      and nobody has to say anything to anybody afterwards.
 #
-#   3. a default, la question est posee au terminal au first lancement, et la
-#      reponse est ecrite dans ce path. Une seule fois par machine.
+#   3. failing that, the question is asked at the terminal on first launch,
+#      and the answer written to that file. Once per machine.
 #
-# Ce qu'on ne fait deliberement PAS : deviner en silence. Aucune image ne
-# permet de distinguer a coup sur l'air de l'water — la balance des blancs de la
-# camera efface le bleu, et la depth RealSense se trompe du meme facteur
-# que les tags, donc les deux restent d'accord entre elles meme quand elles ont
-# tort. Une question au first lancement coute dix seconds ; une mauvaise
-# devinette a coute deux semaines.
-FICHIER_MONTAGE_LOCAL = _ICI / "montage_local.txt"
+# What we deliberately do NOT do: guess in silence. No image reliably tells
+# air from water — the camera's white balance removes the blue cast, and the
+# RealSense depth is wrong by the same factor as the tags, so the two agree
+# with each other even when both are wrong. A question at first launch costs
+# ten seconds; one bad guess cost two weeks.
+LOCAL_MOUNTING_FILE = _HERE / "local_mounting.txt"
+LEGACY_LOCAL_MOUNTING_FILE = _HERE / "montage_local.txt"
 
 
-def _lire_montage_local():
-    """Le mounting kept sur CETTE machine, ou None s'il n'y en a pas."""
-    try:
-        text = FICHIER_MONTAGE_LOCAL.read_text(encoding="utf-8")
-    except OSError:
-        return None
-    for row in text.splitlines():
-        row = row.split("#", 1)[0].strip()
-        if not row:
+def _normalise_mounting(name):
+    """Accept the pre-handover French names, return the English one.
+
+    A machine set up before the repository was translated still holds
+    "tube_eau" in its file. Refusing it would silently send that machine back
+    to the bare-camera calibration, which is exactly the kind of failure this
+    module exists to prevent.
+    """
+    name = LEGACY_MOUNTING_NAMES.get(name, name)
+    return name if name in MOUNTINGS else None
+
+
+def _read_local_mounting():
+    """The mounting kept on THIS machine, or None if there is none."""
+    for path in (LOCAL_MOUNTING_FILE, LEGACY_LOCAL_MOUNTING_FILE):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
             continue
-        if row in MONTAGES:
-            return row
-        print(f"[optics] {FICHIER_MONTAGE_LOCAL.name} : '{row}' n'est pas "
-              f"un mounting known, row ignoree.")
+        for row in text.splitlines():
+            row = row.split("#", 1)[0].strip()
+            if not row:
+                continue
+            mounting = _normalise_mounting(row)
+            if mounting:
+                return mounting
+            print(f"[optics] {path.name}: '{row}' is not a known mounting, "
+                  f"line ignored.")
     return None
 
 
-def ecrire_montage_local(name):
-    """Fixe le mounting de CETTE machine, une fois pour toutes."""
-    if name not in MONTAGES:
-        raise ValueError(f"mounting inconnu : {name!r}")
-    FICHIER_MONTAGE_LOCAL.write_text(
-        "# Le mounting physique de CETTE machine-ci.\n"
-        "# Une seule row utile : nue_air, tube_air ou tube_eau.\n"
-        "# Ce path n'est pas versionne : chaque ordinateur garde le sien.\n"
-        "# Pour en changer :  python calibration/set_mounting.py\n"
+def write_local_mounting(name):
+    """Pin down THIS machine's mounting, once and for all."""
+    name = _normalise_mounting(name)
+    if name is None:
+        raise ValueError(f"unknown mounting: {name!r}")
+    LOCAL_MOUNTING_FILE.write_text(
+        "# The physical mounting of THIS machine.\n"
+        "# One useful line: bare_air, tube_air or tube_water.\n"
+        "# This file is not versioned: each computer keeps its own.\n"
+        "# To change it:  python calibration/set_mounting.py\n"
         f"{name}\n", encoding="utf-8")
-    return FICHIER_MONTAGE_LOCAL
+    return LOCAL_MOUNTING_FILE
 
 
-def montage_probable():
-    """Le mounting le plus vraisemblable seen ce qui est calibre sur la machine.
+def _quiet_requested():
+    """Has the caller asked for no questions and no chatter?
 
-    Sert uniquement de reponse par default a la question posee au first
-    lancement : une machine sur laquelle quelqu'un a pris la peine de calibrer
-    tube_eau est tres probablement celle du bassin. Ce n'est qu'une suggestion,
-    jamais une decision.
+    Both spellings are honoured: the English one and the French one used
+    before the handover, so an existing script or CI job keeps working.
+
+    Written as a helper rather than inline because the inline version was
+    once `not A or B`, which parses as `(not A) or B` and silently stopped
+    the legacy variable from working.
     """
-    for name in ("tube_eau", "tube_air", "nue_air"):
-        if (DOSSIER_MONTAGES / f"{name}.npz").exists():
-            return name
-    return "nue_air"
+    return bool(os.environ.get("UUV_MOUNTING_QUIET")
+                or os.environ.get("UUV_MONTAGE_MUET"))
+
+
+def likely_mounting():
+    """The most plausible mounting, given what is calibrated on this machine.
+
+    Only used as the default answer to the question asked at first launch: a
+    machine on which somebody bothered to calibrate tube_water is very
+    probably the pool one. It is a suggestion, never a decision.
+    """
+    for name in ("tube_water", "tube_air", "bare_air"):
+        legacy = {v: k for k, v in LEGACY_MOUNTING_NAMES.items()}.get(name)
+        for candidate in (name, legacy):
+            if candidate and (MOUNTINGS_FOLDER / f"{candidate}.npz").exists():
+                return name
+    return "bare_air"
 
 
 _DESCRIPTIONS = {
-    "nue_air": "camera nue, a l'air          (banc, bureau, table)",
-    "tube_air": "camera dans le tube, a l'air (trial a sec)",
-    "tube_eau": "camera dans le tube, DANS L'EAU  (bassin)",
+    "bare_air": "bare camera, in air           (bench, desk, table)",
+    "tube_air": "camera in the tube, in air    (dry run)",
+    "tube_water": "camera in the tube, IN WATER  (pool)",
 }
 
 
-def _demander_montage():
-    """Pose la question une fois, au terminal. None si on ne peut pas."""
-    if os.environ.get("UUV_MONTAGE_MUET"):
+def _ask_for_mounting():
+    """Ask the question once, at the terminal. None if we cannot."""
+    if _quiet_requested():
         return None
     try:
         if not (sys.stdin and sys.stdin.isatty()):
@@ -239,130 +304,137 @@ def _demander_montage():
     except (AttributeError, ValueError):
         return None
 
-    suggere = montage_probable()
+    suggested = likely_mounting()
     print("\n" + "=" * 68)
-    print("QUEL EST LE MONTAGE DE CETTE MACHINE ?")
+    print("WHAT IS THIS MACHINE'S MOUNTING?")
     print("=" * 68)
-    print("Question posee UNE seule fois par ordinateur. La reponse est gardee")
-    print(f"dans {FICHIER_MONTAGE_LOCAL} et ne part pas sur git :")
-    print("chaque PC garde la sienne.\n")
-    for index, name in enumerate(MONTAGES, start=1):
-        marque = " <- suggere" if name == suggere else ""
-        print(f"  {index}) {name:9s} {_DESCRIPTIONS[name]}{marque}")
-    print(f"\n  Entree seule = {suggere}")
+    print("Asked ONCE per computer. The answer is kept in")
+    print(f"{LOCAL_MOUNTING_FILE} and does not go into git:")
+    print("every PC keeps its own.\n")
+    for index, name in enumerate(MOUNTINGS, start=1):
+        mark = " <- suggested" if name == suggested else ""
+        print(f"  {index}) {name:11s} {_DESCRIPTIONS[name]}{mark}")
+    print(f"\n  Enter alone = {suggested}")
     try:
-        reponse = input("  Ton choix : ").strip()
+        answer = input("  Your choice: ").strip()
     except (EOFError, KeyboardInterrupt):
         print()
         return None
 
-    if not reponse:
-        chosen = suggere
-    elif reponse.isdigit() and 1 <= int(reponse) <= len(MONTAGES):
-        chosen = MONTAGES[int(reponse) - 1]
-    elif reponse in MONTAGES:
-        chosen = reponse
+    if not answer:
+        chosen = suggested
+    elif answer.isdigit() and 1 <= int(answer) <= len(MOUNTINGS):
+        chosen = MOUNTINGS[int(answer) - 1]
+    elif _normalise_mounting(answer):
+        chosen = _normalise_mounting(answer)
     else:
-        print(f"  '{reponse}' n'est pas un choix valable, on garde {suggere}.")
-        chosen = suggere
+        print(f"  '{answer}' is not a valid choice, keeping {suggested}.")
+        chosen = suggested
 
     try:
-        path = ecrire_montage_local(chosen)
-        print(f"  -> mounting '{chosen}' kept, ecrit dans {path}")
-        print("     Pour en changer plus tard :")
+        path = write_local_mounting(chosen)
+        print(f"  -> mounting '{chosen}' kept, written to {path}")
+        print("     To change it later:")
         print("       python calibration/set_mounting.py")
     except OSError as error:
-        print(f"  -> mounting '{chosen}' kept (non enregistre : {error})")
+        print(f"  -> mounting '{chosen}' kept (not saved: {error})")
     print("=" * 68 + "\n")
     return chosen
 
 
-def _resoudre_montage():
-    """Renvoie (mounting, d'ou il vient)."""
-    force = os.environ.get("UUV_MONTAGE")
-    if force:
-        if force not in MONTAGES:
+def _resolve_mounting():
+    """Return (mounting, where it came from)."""
+    forced = os.environ.get("UUV_MOUNTING") or os.environ.get("UUV_MONTAGE")
+    if forced:
+        mounting = _normalise_mounting(forced)
+        if mounting is None:
             raise SystemExit(
-                f"[optics] UUV_MONTAGE='{force}' inconnu. "
-                f"Montages possibles : {', '.join(MONTAGES)}")
-        return force, "variable UUV_MONTAGE"
+                f"[optics] UUV_MOUNTING='{forced}' is unknown. "
+                f"Possible mountings: {', '.join(MOUNTINGS)}")
+        return mounting, "UUV_MOUNTING variable"
 
-    local = _lire_montage_local()
+    local = _read_local_mounting()
     if local:
-        return local, FICHIER_MONTAGE_LOCAL.name
+        return local, LOCAL_MOUNTING_FILE.name
 
-    demande = _demander_montage()
-    if demande:
-        return demande, "reponse au first lancement"
+    asked = _ask_for_mounting()
+    if asked:
+        return asked, "answer at first launch"
 
-    # Ni reglage, ni terminal pour poser la question : on prend le plus
-    # prudent — la camera nue — et on le DIT. Le silence est le seul vrai
-    # danger ici.
-    default = "nue_air"
-    if not os.environ.get("UUV_MONTAGE_MUET"):
-        print(f"[optics] mounting non regle sur cette machine, on prend "
-              f"'{default}'.")
-        print("[optics]   si la camera est dans le tube ou dans l'water, les "
-              "distances seront fausses.")
-        print("[optics]   pour regler : python calibration/set_mounting.py")
-    return default, "default faute de reglage"
-
-
-MONTAGE_ACTIF, MONTAGE_ORIGINE = _resoudre_montage()
+    # Neither a setting nor a terminal to ask on: take the most cautious
+    # option — the bare camera — and SAY SO. Silence is the only real danger
+    # here.
+    default = "bare_air"
+    if not _quiet_requested():
+        print(f"[optics] no mounting set on this machine, using '{default}'.")
+        print("[optics]   if the camera is in the tube or in the water, "
+              "distances will be wrong.")
+        print("[optics]   to set it: python calibration/set_mounting.py")
+    return default, "default, nothing configured"
 
 
-def resume_montage():
+ACTIVE_MOUNTING, MOUNTING_SOURCE = _resolve_mounting()
+
+
+def mounting_summary():
     """Une row lisible : quel mounting, et d'ou vient la decision."""
-    reel = source(MONTAGE_ACTIF)
-    if reel != MONTAGE_ACTIF:
-        return (f"mounting {MONTAGE_ACTIF} (via {MONTAGE_ORIGINE}) "
+    reel = source(ACTIVE_MOUNTING)
+    if reel != ACTIVE_MOUNTING:
+        return (f"mounting {ACTIVE_MOUNTING} (via {MOUNTING_SOURCE}) "
                 f"mais PAS CALIBRE -> chiffres de {reel}")
-    return f"mounting {MONTAGE_ACTIF} (via {MONTAGE_ORIGINE})"
+    return f"mounting {ACTIVE_MOUNTING} (via {MOUNTING_SOURCE})"
 
 
 def _actif(mounting):
     """Resout le mounting demande. None = celui qui est actif."""
-    return MONTAGE_ACTIF if mounting is None else mounting
+    return ACTIVE_MOUNTING if mounting is None else mounting
 
 
 # --- chargement -------------------------------------------------------------
 def source(mounting=None):
     """Le mounting dont les chiffres seront REELLEMENT servis.
 
-    Tant qu'un mounting n'a pas ete calibre, `charger` retombe sur la camera
+    Tant qu'un mounting n'a pas ete calibre, `load` retombe sur la camera
     nue. Les conversions optiques ont besoin de savoir laquelle des deux elles
     ont sous la main, sinon elles corrigent deux fois.
     """
     mounting = _actif(mounting)
-    return mounting if (DOSSIER_MONTAGES / f"{mounting}.npz").exists() else "nue_air"
+    return mounting if (MOUNTINGS_FOLDER / f"{mounting}.npz").exists() else "nue_air"
 
 
-def charger(mounting=None, quiet=False):
-    """La matrix et les distorsions d'un mounting donne.
+def load(mounting=None, quiet=False):
+    """The matrix and distortion coefficients of a given mounting.
 
-    Tant qu'un mounting n'a pas ete calibre, on retombe sur la camera nue en le
-    disant. C'est defendable en AIR : la lame plane ne devie rien selon l'axis
-    du tube, et le menisque ne coute qu'un peu plus de 1 % selon l'autre axis.
-    Ce n'est PAS defendable sous l'water, ou la paroi devient une vraie lentille.
+    Until a mounting has been calibrated we fall back to the bare camera, and
+    say so. That is defensible IN AIR: the plane-parallel slab deflects
+    nothing along the tube axis, and the meniscus costs just over 1 % along
+    the other. It is NOT defensible underwater, where the wall becomes a real
+    lens.
     """
     mounting = _actif(mounting)
-    path = DOSSIER_MONTAGES / f"{mounting}.npz"
-    if path.exists():
-        donnees = np.load(path)
-        return donnees["K"], donnees["dist"]
-    if not quiet and mounting != "nue_air":
-        default = ("acceptable en air" if mounting == "tube_air"
-                  else "NON VALABLE, la paroi refracte")
-        print(f"[optics] mounting '{mounting}' pas encore calibre, "
-              f"on prend la camera nue ({default}).")
-        print(f"[optics]   pour le calibrer : python calibration/calibrate.py "
+    # A machine calibrated before the handover holds tube_eau.npz, not
+    # tube_water.npz. Both names are tried, newest first.
+    legacy = {v: k for k, v in LEGACY_MOUNTING_NAMES.items()}.get(mounting)
+    for name in (mounting, legacy):
+        if not name:
+            continue
+        path = MOUNTINGS_FOLDER / f"{name}.npz"
+        if path.exists():
+            data = np.load(path)
+            return data["K"], data["dist"]
+    if not quiet and mounting != "bare_air":
+        verdict = ("acceptable in air" if mounting == "tube_air"
+                   else "NOT VALID, the wall refracts")
+        print(f"[optics] mounting '{mounting}' not calibrated yet, "
+              f"falling back to the bare camera ({verdict}).")
+        print(f"[optics]   to calibrate it: python calibration/calibrate.py "
               f"--mounting {mounting}")
-    return K_NUE_AIR.copy(), DIST_NUE_AIR.copy()
+    return K_BARE_AIR.copy(), DIST_BARE_AIR.copy()
 
 
 def focal_length(mounting=None):
     """La focal_length horizontale du mounting, en pixels."""
-    return float(charger(mounting, quiet=True)[0][0, 0])
+    return float(load(mounting, quiet=True)[0][0, 0])
 
 
 # --- garde-fou : ce que la camera voit contredit-il le mounting declare ? ----
@@ -379,7 +451,7 @@ _SEUIL_AIR = 0.85          # au dessus = tres probablement de l'air
 _deja_alerte = False
 
 
-def controler_image(image, mounting=None):
+def check_image_matches_mounting(image, mounting=None):
     """Compare la colour dominante au mounting declare.
 
     Renvoie un message d'alerte a afficher, ou None quand rien ne cloche ou
@@ -401,7 +473,7 @@ def controler_image(image, mounting=None):
         return None
 
     report = rouge / bleu
-    sous_leau = montage_est_immerge(_actif(mounting))
+    sous_leau = mounting_is_submerged(_actif(mounting))
     if report < _SEUIL_EAU and not sous_leau:
         _deja_alerte = True
         return (f"l'image est tres bleue (rouge/bleu = {report:.2f}) alors que "
@@ -421,7 +493,7 @@ def controler_image(image, mounting=None):
     return None
 
 
-def montage_est_immerge(mounting=None):
+def mounting_is_submerged(mounting=None):
     """Le mounting donne assumed-t-il la camera dans l'water ?"""
     return _actif(mounting).endswith("_eau")
 
@@ -476,19 +548,19 @@ def montage_est_immerge(mounting=None):
 #
 # A REMESURER : trois distances ou plus avec la focal_length actuelle, dont 0.5 m,
 # puis lire la section FORME DE L'ERREUR que check_distance.py affiche.
-DECALAGE_HUBLOT = {
+WINDOW_OFFSET = {
     "tube_eau": 0.0159,      # measurement au bassin a fx 791.34, 4 distances, 7 sigma
     "tube_air": 0.0,         # jamais measurement
     "nue_air": 0.0,          # pas de hublot : rien a correct
 }
 
 
-def decalage_hublot(mounting=None):
+def window_offset(mounting=None):
     """Metres a AJOUTER a une distance measured, pour ce mounting."""
-    return DECALAGE_HUBLOT.get(_actif(mounting), 0.0)
+    return WINDOW_OFFSET.get(_actif(mounting), 0.0)
 
 
-def corriger_hublot(tvec, mounting=None):
+def correct_window_offset(tvec, mounting=None):
     """Corrige un vector camera->objet du decalage du point de vue.
 
     La direction est juste — c'est un probleme de distance, pas d'angle — donc
@@ -497,7 +569,7 @@ def corriger_hublot(tvec, mounting=None):
     tag_map se retrouvent alors trop proches les uns des autres, et le filter
     voit un world qui retrecit.
     """
-    decalage = decalage_hublot(mounting)
+    decalage = window_offset(mounting)
     t = np.asarray(tvec, dtype=float)
     if decalage == 0.0:
         return t.copy()
@@ -507,20 +579,20 @@ def corriger_hublot(tvec, mounting=None):
     return t * ((distance + decalage) / distance)
 
 
-def annoncer_montage(prefixe="[optics]"):
+def announce_mounting(prefixe="[optics]"):
     """Affiche le mounting kept. A appeler au demarrage de tout script qui
     measurement quelque chose : c'est la row qu'on relit six mois plus tard pour
     savoir avec quels chiffres la manip a tourne."""
-    print(f"{prefixe} {resume_montage()}")
-    if MONTAGE_ORIGINE.startswith("default"):
+    print(f"{prefixe} {mounting_summary()}")
+    if MOUNTING_SOURCE.startswith("default"):
         print(f"{prefixe} regle-le une fois pour toutes : "
               f"python calibration/set_mounting.py")
 
 
 # --- geometrie du champ -----------------------------------------------------
-def demi_champs(K=None):
+def half_fields_of_view(K=None):
     """Demi-angles du champ : horizontal, vertical, diagonal, en degres."""
-    K = K_NUE_AIR if K is None else K
+    K = K_BARE_AIR if K is None else K
     fx, fy, cx, cy = K[0, 0], K[1, 1], K[0, 2], K[1, 2]
     return (float(np.degrees(np.arctan(cx / fx))),
             float(np.degrees(np.arctan(cy / fy))),
@@ -529,11 +601,11 @@ def demi_champs(K=None):
 
 def rayon_tube(pire_cas=True):
     """Rayon interieur utile du tube."""
-    return (TUBE_DI - (TUBE_DI_TOLERANCE if pire_cas else 0.0)) / 2
+    return (TUBE_INNER_DIAMETER - (TUBE_INNER_DIAMETER_TOLERANCE if pire_cas else 0.0)) / 2
 
 
 def rayon_exterieur(pire_cas=True):
-    return (TUBE_DE + (TUBE_DE_TOLERANCE if pire_cas else 0.0)) / 2
+    return (TUBE_OUTER_DIAMETER + (TUBE_OUTER_DIAMETER_TOLERANCE if pire_cas else 0.0)) / 2
 
 
 # --- ou se trouve la pupil dans le tube -----------------------------------
@@ -545,9 +617,9 @@ def decentrement_pupille(jeu_arriere=None):
     Negatif = en retrait de l'axis (cas normal : le boitier bute au fond).
     Positif = en avant de l'axis, vers la paroi regardee.
     """
-    jeu = JEU_ARRIERE if jeu_arriere is None else jeu_arriere
+    jeu = BACK_CLEARANCE if jeu_arriere is None else jeu_arriere
     return float(-rayon_tube(pire_cas=False) + jeu
-                 + CAMERA_PROFONDEUR - PUPILLE_DERRIERE_FACE)
+                 + CAMERA_DEPTH - PUPIL_BEHIND_FACE)
 
 
 def jeu_arriere_optimal():
@@ -556,14 +628,14 @@ def jeu_arriere_optimal():
     C'est le seul chiffre que la mecanique ait a respecter : de combien
     SURELEVER la camera au-dessus de la paroi du fond.
     """
-    return float(rayon_tube(pire_cas=False) - CAMERA_PROFONDEUR
-                 + PUPILLE_DERRIERE_FACE)
+    return float(rayon_tube(pire_cas=False) - CAMERA_DEPTH
+                 + PUPIL_BEHIND_FACE)
 
 
 def encombrement_libre(jeu_arriere=None):
     """Marge restante entre la face avant de la camera et la paroi regardee."""
-    jeu = JEU_ARRIERE if jeu_arriere is None else jeu_arriere
-    return float(2 * rayon_tube() - jeu - CAMERA_PROFONDEUR)
+    jeu = BACK_CLEARANCE if jeu_arriere is None else jeu_arriere
+    return float(2 * rayon_tube() - jeu - CAMERA_DEPTH)
 
 
 def demi_champ_tube(recul=None):
@@ -576,21 +648,21 @@ def demi_champ_tube(recul=None):
     """
     if ORIENTATION == "radiale":
         return 90.0
-    recul = RECUL_PUPILLE if recul is None else recul
+    recul = PUPIL_SETBACK if recul is None else recul
     return 90.0 if recul <= 0 else float(
         np.degrees(np.arctan(rayon_tube() / recul)))
 
 
 def recul_maximal(K=None):
     """Le plus grand recul admissible avant que le tube ne rogne le champ."""
-    _, _, diagonal = demi_champs(K)
+    _, _, diagonal = half_fields_of_view(K)
     return float(rayon_tube() / np.tan(np.radians(diagonal)))
 
 
 def vignettage(recul=None, K=None):
     """Ce que le tube rogne du champ, s'il rogne quelque chose."""
     passe = demi_champ_tube(recul)
-    h, v, d = demi_champs(K)
+    h, v, d = half_fields_of_view(K)
     return {"demi_angle_tube": passe,
             "rogne_diagonale": passe < d,
             "rogne_horizontal": passe < h,
@@ -609,7 +681,7 @@ def _refracter(direction, normale, eta):
     return eta * direction + (eta * cosinus - np.sqrt(1.0 - sinus2)) * normale
 
 
-def sortie_cylindre(angle_deg, decentrement=None, indice_exterieur=INDICE_EAU):
+def sortie_cylindre(angle_deg, decentrement=None, indice_exterieur=WATER_INDEX):
     """Sous quel angle un radius ressort de la paroi, dans le plan de section.
 
     Le radius part de la pupil, decalee de `decentrement` par report a l'axis
@@ -625,8 +697,8 @@ def sortie_cylindre(angle_deg, decentrement=None, indice_exterieur=INDICE_EAU):
     point = np.array([decentrement, 0.0])
     direction = np.array([np.cos(np.radians(angle_deg)),
                           np.sin(np.radians(angle_deg))])
-    etapes = ((rayon_tube(), INDICE_AIR / INDICE_ACRYLIQUE),
-              (rayon_exterieur(), INDICE_ACRYLIQUE / indice_exterieur))
+    etapes = ((rayon_tube(), AIR_INDEX / ACRYLIC_INDEX),
+              (rayon_exterieur(), ACRYLIC_INDEX / indice_exterieur))
     for radius, eta in etapes:
         b = float(point @ direction)
         c = float(point @ point) - radius * radius
@@ -653,7 +725,7 @@ def _angles_de_sortie(decentrement, indice_exterieur, demi_champ, points=40):
     return vises[valides], sortis[valides]
 
 
-def erreur_decentrement(decentrement=None, indice_exterieur=INDICE_EAU,
+def erreur_decentrement(decentrement=None, indice_exterieur=WATER_INDEX,
                         K=None, demi_champ=None):
     """Deviation BRUTE due au decentrement de la pupil, en pixels.
 
@@ -662,9 +734,9 @@ def erreur_decentrement(decentrement=None, indice_exterieur=INDICE_EAU,
     calibration faite dans cette configuration en absorbe la quasi-totalite
     sous forme de focal_length. Ce qui reste vraiment, c'est `residu_section`.
     """
-    K = K_NUE_AIR if K is None else K
+    K = K_BARE_AIR if K is None else K
     if demi_champ is None:
-        demi_champ = demi_champs(K)[1]     # circonferentiel = vertical
+        demi_champ = half_fields_of_view(K)[1]     # circonferentiel = vertical
     decentrement = (decentrement_pupille() if decentrement is None
                     else decentrement)
     vises, sortis = _angles_de_sortie(decentrement, indice_exterieur, demi_champ)
@@ -674,7 +746,7 @@ def erreur_decentrement(decentrement=None, indice_exterieur=INDICE_EAU,
 
 
 # --- ce que le menisque fait vraiment a l'image -----------------------------
-def grandissement_section(decentrement=None, indice_exterieur=INDICE_EAU,
+def grandissement_section(decentrement=None, indice_exterieur=WATER_INDEX,
                           K=None):
     """Facteur par lequel le menisque multiplie la focal_length VERTICALE.
 
@@ -683,11 +755,11 @@ def grandissement_section(decentrement=None, indice_exterieur=INDICE_EAU,
     report a la focal_length nue. 1.0 = pupil sur l'axis, le cylindre est
     optiquement absent.
     """
-    K = K_NUE_AIR if K is None else K
+    K = K_BARE_AIR if K is None else K
     decentrement = (decentrement_pupille() if decentrement is None
                     else decentrement)
     vises, sortis = _angles_de_sortie(decentrement, indice_exterieur,
-                                      demi_champs(K)[1])
+                                      half_fields_of_view(K)[1])
     if len(vises) == 0:
         return 1.0
     # y_image = f * tan(angle_monde) ; on cherche f tel que f*tan(sortis)
@@ -696,25 +768,25 @@ def grandissement_section(decentrement=None, indice_exterieur=INDICE_EAU,
                  / np.sum(np.tan(sortis) ** 2))
 
 
-def residu_section(decentrement=None, indice_exterieur=INDICE_EAU, K=None):
+def residu_section(decentrement=None, indice_exterieur=WATER_INDEX, K=None):
     """Ce que le menisque laisse APRES que la focal_length ait absorbe ce qu'elle peut.
 
     C'est la vraie error du mounting : la part de la deviation qu'aucune
     calibration ne peut ranger dans un parametre. A comparer a CORNER_NOISE_PX.
     """
-    K = K_NUE_AIR if K is None else K
+    K = K_BARE_AIR if K is None else K
     fy = float(K[1, 1])
     decentrement = (decentrement_pupille() if decentrement is None
                     else decentrement)
     vises, sortis = _angles_de_sortie(decentrement, indice_exterieur,
-                                      demi_champs(K)[1])
+                                      half_fields_of_view(K)[1])
     if len(vises) == 0:
         return 0.0
     ajustee = fy * grandissement_section(decentrement, indice_exterieur, K)
     return float(np.max(np.abs(fy * np.tan(vises) - ajustee * np.tan(sortis))))
 
 
-def sensibilite_glissement(indice_exterieur=INDICE_EAU, pas=0.001):
+def sensibilite_glissement(indice_exterieur=WATER_INDEX, pas=0.001):
     """Combien coute un millimetre de glissement APRES calibration, en %.
 
     La focal_length verticale est ce que la calibration a fige. Si la camera bouge
@@ -728,7 +800,7 @@ def sensibilite_glissement(indice_exterieur=INDICE_EAU, pas=0.001):
 
 
 def decentrement_depuis_calibration(K_mesure, K_reference=None,
-                                    indice_exterieur=INDICE_AIR):
+                                    indice_exterieur=AIR_INDEX):
     """Retrouve le decentrement reel a partir d'une calibration measured.
 
     C'est tout l'interet de calibrer D'ABORD DANS L'AIR. En air, la lame plane
@@ -736,9 +808,9 @@ def decentrement_depuis_calibration(K_mesure, K_reference=None,
     mounting, pas d'optics. En revanche fy passe par le menisque, et le
     report fy_tube / fy_nue donne directement l'gap de la pupil a l'axis —
     sans demonter quoi que ce soit, et sans devoir croire la value supposee
-    de PUPILLE_DERRIERE_FACE.
+    de PUPIL_BEHIND_FACE.
     """
-    K_reference = K_NUE_AIR if K_reference is None else K_reference
+    K_reference = K_BARE_AIR if K_reference is None else K_reference
     vise = float(K_mesure[1, 1]) / float(K_reference[1, 1])
     grille = np.arange(-0.015, 0.015, 0.0001)
     gaps = [abs(grandissement_section(float(d), indice_exterieur,
@@ -755,9 +827,9 @@ def demi_champ_eau(demi_angle_air, direction="axis"):
     radius a travers les deux surfaces courbes).
     """
     if ORIENTATION == "radiale" and direction == "section":
-        output = sortie_cylindre(demi_angle_air, indice_exterieur=INDICE_EAU)
+        output = sortie_cylindre(demi_angle_air, indice_exterieur=WATER_INDEX)
         return demi_angle_air if output is None else output
-    sine = np.sin(np.radians(demi_angle_air)) / INDICE_EAU
+    sine = np.sin(np.radians(demi_angle_air)) / WATER_INDEX
     return float(np.degrees(np.arcsin(np.clip(sine, -1.0, 1.0))))
 
 
@@ -777,18 +849,18 @@ def focales_eau(mounting=None):
     les deux focales sont multipliees.
     """
     mounting = _actif(mounting)
-    K, _ = charger(mounting, quiet=True)
+    K, _ = load(mounting, quiet=True)
     fx, fy = float(K[0, 0]), float(K[1, 1])
     if mounting == "tube_eau" and source(mounting) == "tube_eau":
         return fx, fy                      # deja measurement sous l'water
     if ORIENTATION != "radiale":
-        return fx * INDICE_EAU, fy * INDICE_EAU
-    deja = (grandissement_section(indice_exterieur=INDICE_AIR)
+        return fx * WATER_INDEX, fy * WATER_INDEX
+    deja = (grandissement_section(indice_exterieur=AIR_INDEX)
             if source(mounting) == "tube_air" else 1.0)
-    return fx * INDICE_EAU, fy * grandissement_section() / deja
+    return fx * WATER_INDEX, fy * grandissement_section() / deja
 
 
-def focale_eau(mounting=None):
+def water_focal_length(mounting=None):
     """La focal_length sous l'water la plus DEFAVORABLE des deux.
 
     Un seul count ne peut pas decrire un systeme anamorphique. Pour tout ce
@@ -813,9 +885,9 @@ def portee_eau(portee_air, mounting=None):
     c'est la focal_length la plus petite qui decide — et en mounting radial avec une
     pupil en retrait, c'est la verticale, qui peut meme retrecir.
     """
-    K, _ = charger(mounting, quiet=True)
+    K, _ = load(mounting, quiet=True)
     limitante_air = min(float(K[0, 0]), float(K[1, 1]))
-    return float(portee_air * focale_eau(mounting) / limitante_air)
+    return float(portee_air * water_focal_length(mounting) / limitante_air)
 
 
 def rayon_image(angle_eau_deg, f=None):
@@ -824,14 +896,14 @@ def rayon_image(angle_eau_deg, f=None):
     Vaut pour la direction ou la paroi se comporte en lame plane : l'axis du
     tube en mounting radial, les deux directions en mounting axial.
     """
-    # 'tube_air' est ecrit en dur A DESSEIN, et ne suit pas MONTAGE_ACTIF :
+    # 'tube_air' est ecrit en dur A DESSEIN, et ne suit pas ACTIVE_MOUNTING :
     # cette fonction PART d'une focal_length en air pour lui apply la refraction.
     # Lui donner une focal_length deja measured sous l'water compterait l'water deux fois.
     f = focal_length("tube_air") if f is None else f
     angle_air = np.degrees(np.arcsin(np.clip(
-        INDICE_EAU * np.sin(np.radians(angle_eau_deg)), -1.0, 1.0)))
+        WATER_INDEX * np.sin(np.radians(angle_eau_deg)), -1.0, 1.0)))
     exact = f * np.tan(np.radians(angle_air))
-    paraxial = INDICE_EAU * f * np.tan(np.radians(angle_eau_deg))
+    paraxial = WATER_INDEX * f * np.tan(np.radians(angle_eau_deg))
     return float(exact), float(paraxial)
 
 
@@ -854,44 +926,44 @@ def angle_modele_fiable(f=None, tolerance_px=1.0):
 # --- encombrement -----------------------------------------------------------
 def budget_longueur():
     """Ce qu'il reste dans le tube une fois la camera dedans, en metres."""
-    occupe = (CAMERA_LARGEUR if ORIENTATION == "radiale"
-              else CAMERA_PROFONDEUR)
-    return TUBE_LONGUEUR - occupe
+    occupe = (CAMERA_WIDTH if ORIENTATION == "radiale"
+              else CAMERA_DEPTH)
+    return TUBE_LENGTH - occupe
 
 
 def verifier_montage():
     """Les incompatibilites mecaniques et optiques du mounting decrit ici."""
     soucis = []
-    libre = TUBE_DI - TUBE_DI_TOLERANCE
-    section = np.hypot(CAMERA_HAUTEUR, CAMERA_PROFONDEUR)
+    libre = TUBE_INNER_DIAMETER - TUBE_INNER_DIAMETER_TOLERANCE
+    section = np.hypot(CAMERA_HEIGHT, CAMERA_DEPTH)
 
     if ORIENTATION == "axiale":
-        if CAMERA_LARGEUR > libre:
+        if CAMERA_WIDTH > libre:
             soucis.append(
-                f"Montage axial : la camera fait {1000*CAMERA_LARGEUR:.0f} mm de "
+                f"Montage axial : la camera fait {1000*CAMERA_WIDTH:.0f} mm de "
                 f"large et le tube n'offre que {1000*libre:.1f} mm. Il faut la "
                 "coucher (ORIENTATION = \"radiale\") ou passer en serie 4 pouces.")
         v = vignettage()
         if v["rogne_diagonale"]:
             soucis.append(
                 f"Le tube ne laisse passer que {2*v['demi_angle_tube']:.0f} deg "
-                f"quand la camera en couvre {2*demi_champs()[2]:.0f} en diagonale : "
+                f"quand la camera en couvre {2*half_fields_of_view()[2]:.0f} en diagonale : "
                 f"corners noirs. Recul maximal {1000*v['recul_maximal']:.0f} mm, "
-                f"contre {1000*RECUL_PUPILLE:.0f} prevus.")
+                f"contre {1000*PUPIL_SETBACK:.0f} prevus.")
         return soucis
 
     if section > libre:
         soucis.append(
             f"La section de la camera ({1000*section:.0f} mm en diagonale) ne "
             f"passe pas dans {1000*libre:.1f} mm.")
-    if CAMERA_LARGEUR > TUBE_LONGUEUR:
+    if CAMERA_WIDTH > TUBE_LENGTH:
         soucis.append(
-            f"La camera ({1000*CAMERA_LARGEUR:.0f} mm) est plus longue que le "
-            f"tube ({1000*TUBE_LONGUEUR:.0f} mm).")
+            f"La camera ({1000*CAMERA_WIDTH:.0f} mm) est plus longue que le "
+            f"tube ({1000*TUBE_LENGTH:.0f} mm).")
 
     if encombrement_libre() < 0:
         soucis.append(
-            f"Avec {1000*JEU_ARRIERE:.1f} mm de jeu arriere, la camera depasse du "
+            f"Avec {1000*BACK_CLEARANCE:.1f} mm de jeu arriere, la camera depasse du "
             f"tube de {-1000*encombrement_libre():.1f} mm. Reduire le jeu.")
 
     soucis.append(
@@ -901,7 +973,7 @@ def verifier_montage():
         "le point faible du mounting, bien avant le centrage lui-meme.")
 
     soucis.append(
-        f"PUPILLE_DERRIERE_FACE ({1000*PUPILLE_DERRIERE_FACE:.0f} mm) est une "
+        f"PUPIL_BEHIND_FACE ({1000*PUPIL_BEHIND_FACE:.0f} mm) est une "
         "estimation, pas une measurement. La calibration en air la corrige : "
         "calibrate.py --mounting tube_air en deduit le decentrement reel.")
 
@@ -912,7 +984,7 @@ def verifier_montage():
         "residus de calibration plus eleves qu'en air.")
 
     soucis.append(
-        f"Le model « focal_length x {INDICE_EAU} » ne tient qu'a moins de "
+        f"Le model « focal_length x {WATER_INDEX} » ne tient qu'a moins de "
         f"{angle_modele_fiable():.0f} deg de l'axis (a 1 px pres), et seulement "
         "selon l'axis du tube. Au-dela il faut une calibration faite SOUS L'EAU.")
     return soucis
@@ -920,50 +992,50 @@ def verifier_montage():
 
 def report():
     """Un state des lieux lisible du mounting."""
-    h, v, d = demi_champs()
+    h, v, d = half_fields_of_view()
     f = focal_length("nue_air")
-    fy_nue = float(K_NUE_AIR[1, 1])
+    fy_nue = float(K_BARE_AIR[1, 1])
     fx_eau, fy_eau = focales_eau()
     gap = decentrement_pupille()
-    servi = source(MONTAGE_ACTIF)
+    servi = source(ACTIVE_MOUNTING)
     # En tete, et non en bas de page : c'est le first chiffre a check
-    # apres une bascule. `servi` differe de `MONTAGE_ACTIF` quand le mounting
+    # apres une bascule. `servi` differe de `ACTIVE_MOUNTING` quand le mounting
     # demande n'est pas encore calibre — le seul cas ou l'on measurement avec une
     # optics qui n'est pas celle qu'on croit.
     rows = [
         "=" * 74, "OPTIQUE DU MONTAGE", "=" * 74,
-        f"\nMONTAGE ACTIF  {MONTAGE_ACTIF}  (via {MONTAGE_ORIGINE})",
-        (f"  source des chiffres : {servi}" if servi == MONTAGE_ACTIF else
-         f"  >>> ATTENTION : '{MONTAGE_ACTIF}' n'est pas calibre, les chiffres "
+        f"\nMONTAGE ACTIF  {ACTIVE_MOUNTING}  (via {MOUNTING_SOURCE})",
+        (f"  source des chiffres : {servi}" if servi == ACTIVE_MOUNTING else
+         f"  >>> ATTENTION : '{ACTIVE_MOUNTING}' n'est pas calibre, les chiffres "
          f"servis viennent de '{servi}'."),
-        (f"  decalage du hublot : +{1000*decalage_hublot():.1f} mm ajoutes a "
-         f"chaque distance" if decalage_hublot() else
+        (f"  decalage du hublot : +{1000*window_offset():.1f} mm ajoutes a "
+         f"chaque distance" if window_offset() else
          "  decalage du hublot : aucun (jamais measurement pour ce mounting)"),
         "\nCAMERA (nue, en air)",
         f"  focal_length {f:.1f} px, champ {2*h:.1f} x {2*v:.1f} deg (diagonale {2*d:.1f})",
-        f"  encombrement {1000*CAMERA_LARGEUR:.0f} x {1000*CAMERA_HAUTEUR:.0f} x "
-        f"{1000*CAMERA_PROFONDEUR:.0f} mm",
-        f"\nTUBE  {TUBE_NOM}",
-        f"  interieur {1000*TUBE_DI:.1f} +/- {1000*TUBE_DI_TOLERANCE:.1f} mm "
-        f"(pire cas {1000*(TUBE_DI-TUBE_DI_TOLERANCE):.1f}), "
-        f"exterieur {1000*TUBE_DE:.1f} +/- {1000*TUBE_DE_TOLERANCE:.1f} mm",
-        f"  paroi {1000*(TUBE_DE-TUBE_DI)/2:.2f} mm, length "
-        f"{1000*TUBE_LONGUEUR:.0f} mm, {1000*TUBE_MASSE:.0f} g, "
-        f"tenue {TUBE_PROFONDEUR_MAX} m",
+        f"  encombrement {1000*CAMERA_WIDTH:.0f} x {1000*CAMERA_HEIGHT:.0f} x "
+        f"{1000*CAMERA_DEPTH:.0f} mm",
+        f"\nTUBE  {TUBE_NAME}",
+        f"  interieur {1000*TUBE_INNER_DIAMETER:.1f} +/- {1000*TUBE_INNER_DIAMETER_TOLERANCE:.1f} mm "
+        f"(pire cas {1000*(TUBE_INNER_DIAMETER-TUBE_INNER_DIAMETER_TOLERANCE):.1f}), "
+        f"exterieur {1000*TUBE_OUTER_DIAMETER:.1f} +/- {1000*TUBE_OUTER_DIAMETER_TOLERANCE:.1f} mm",
+        f"  paroi {1000*(TUBE_OUTER_DIAMETER-TUBE_INNER_DIAMETER)/2:.2f} mm, length "
+        f"{1000*TUBE_LENGTH:.0f} mm, {1000*TUBE_MASS:.0f} g, "
+        f"tenue {TUBE_MAX_DEPTH} m",
         f"\nMONTAGE  {ORIENTATION}",
     ]
     if ORIENTATION == "radiale":
         rows += [
             "  camera couchee le long du tube, objectifs alignes selon l'axis,",
             "  regard a travers la paroi cylindrique",
-            f"  place occupee {1000*CAMERA_LARGEUR:.0f} mm sur "
-            f"{1000*TUBE_LONGUEUR:.0f}, reste {1000*budget_longueur():.0f} mm",
+            f"  place occupee {1000*CAMERA_WIDTH:.0f} mm sur "
+            f"{1000*TUBE_LENGTH:.0f}, reste {1000*budget_longueur():.0f} mm",
             "",
             "  OU EST LA PUPILLE  (l'axis du tube est l'origin, le regard va vers +)",
             f"    radius interieur          {1000*rayon_tube(False):+7.2f} mm",
-            f"    jeu laisse par le support{1000*JEU_ARRIERE:+7.2f} mm",
-            f"    depth du boitier    {1000*CAMERA_PROFONDEUR:+7.2f} mm",
-            f"    retrait de la pupil    {-1000*PUPILLE_DERRIERE_FACE:+7.2f} mm",
+            f"    jeu laisse par le support{1000*BACK_CLEARANCE:+7.2f} mm",
+            f"    depth du boitier    {1000*CAMERA_DEPTH:+7.2f} mm",
+            f"    retrait de la pupil    {-1000*PUPIL_BEHIND_FACE:+7.2f} mm",
             f"    ---------------------------------",
             f"    pupil / axis du tube    {1000*gap:+7.2f} mm"
             + ("   (en retrait de l'axis)" if gap < 0 else "   (en avant de l'axis)"),
@@ -973,7 +1045,7 @@ def report():
     else:
         rows += [
             "  camera face au bouchon, regard par le bout du tube",
-            f"  recul de la pupil {1000*RECUL_PUPILLE:.0f} mm, maximum sans "
+            f"  recul de la pupil {1000*PUPIL_SETBACK:.0f} mm, maximum sans "
             f"vignettage {1000*recul_maximal():.0f} mm",
         ]
 
@@ -1026,13 +1098,13 @@ def report():
             "jeu dans le support).",
             "",
             "  CE QUE LA CALIBRATION EN AIR VA DIRE",
-            f"    fx doit retomber sur {K_NUE_AIR[0,0]:.1f} px : en air la lame "
+            f"    fx doit retomber sur {K_BARE_AIR[0,0]:.1f} px : en air la lame "
             "plane ne devie rien,",
             "    donc tout gap la-dessus est un probleme de mounting, pas "
             "d'optics.",
             f"    fy doit valoir "
-            f"{fy_nue*grandissement_section(indice_exterieur=INDICE_AIR):.1f} px "
-            f"({100*(grandissement_section(indice_exterieur=INDICE_AIR)-1):+.2f} %) "
+            f"{fy_nue*grandissement_section(indice_exterieur=AIR_INDEX):.1f} px "
+            f"({100*(grandissement_section(indice_exterieur=AIR_INDEX)-1):+.2f} %) "
             "si la pupil est bien ou",
             "    on la croit. C'est ce report-la qui MESURE le decentrement reel.",
         ]
@@ -1057,15 +1129,15 @@ def report():
             rows.append(f"  {numero}. {souci}")
 
     rows += ["", "CALIBRATIONS ENREGISTREES"]
-    for mounting in MONTAGES:
-        path = DOSSIER_MONTAGES / f"{mounting}.npz"
+    for mounting in MOUNTINGS:
+        path = MOUNTINGS_FOLDER / f"{mounting}.npz"
         if path.exists():
-            K, _ = charger(mounting, quiet=True)
+            K, _ = load(mounting, quiet=True)
             rows.append(f"  {mounting:10} fx = {K[0,0]:8.2f}  fy = {K[1,1]:8.2f}   "
                           f"{path.name}")
         elif mounting == "nue_air":
-            rows.append(f"  {mounting:10} fx = {K_NUE_AIR[0,0]:8.2f}  "
-                          f"fy = {K_NUE_AIR[1,1]:8.2f}   (en dur dans optics.py)")
+            rows.append(f"  {mounting:10} fx = {K_BARE_AIR[0,0]:8.2f}  "
+                          f"fy = {K_BARE_AIR[1,1]:8.2f}   (en dur dans optics.py)")
         else:
             rows.append(f"  {mounting:10} {'—':>8}     pas encore measurement  "
                           f"(calibrate.py --mounting {mounting})")

@@ -80,7 +80,7 @@ import numpy as np
 FX_NUE_DEFAUT = 604.1876
 FY_NUE_DEFAUT = 602.3668
 
-INDICE_EAU = 1.33
+WATER_INDEX = 1.33
 
 # ===========================================================================
 # GROSSISSEMENT SOUS L'EAU, SELON L'AXE DU TUBE
@@ -134,7 +134,7 @@ CRITERES = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 ICI = Path(__file__).resolve().parent
 DOSSIER = ICI / "montages"
 
-MONTAGES = {
+MOUNTINGS = {
     "n": ("nue_air", "camera NUE, hors du tube"),
     "a": ("tube_air", "tube A L'AIR"),
     "e": ("tube_eau", "tube DANS L'EAU"),
@@ -152,8 +152,8 @@ def choisir_montage():
     print("=" * 68)
     while True:
         reponse = input("  ton choix (n / a / e) : ").strip().lower()
-        if reponse in MONTAGES:
-            name, description = MONTAGES[reponse]
+        if reponse in MOUNTINGS:
+            name, description = MOUNTINGS[reponse]
             print(f"\n  -> {description}   (sera enregistre sous '{name}')\n")
             return name
         print("  Reponds par n, a ou e.")
@@ -407,7 +407,7 @@ def diagnostic(mounting, K, dist, rms, vues, distance_damier=None):
             print(f"\n     fx {fx:.1f}   attendu {attendu_fx:.1f}   ({gap:+.1f} %)")
             print(f"     Grossissement axial attendu : x{grossissement:.3f}")
             print("     (la paroi est localement PLANE selon l'axis du tube : sous")
-            print(f"     l'water une lame a faces paralleles multiplie par {INDICE_EAU}.")
+            print(f"     l'water une lame a faces paralleles multiplie par {WATER_INDEX}.")
             print("     La distance n'y change que quelques dixiemes de pourcent.)")
             if fx < fx_air:
                 print("     [PROBLEME] fx a BAISSE. L'water grossit : une baisse est")

@@ -35,7 +35,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import optics  # noqa: E402
 
-MONTAGE = optics.MONTAGE_ACTIF
+MONTAGE = optics.ACTIVE_MOUNTING
 # L'optics vient de optics.py : camera, tube, hublot, milieu. Le mounting
 # n'est ecrit dans aucun path de code : optics.py le lit dans
 # calibration/montage_local.txt, propre a CETTE machine, et le demande une
@@ -45,7 +45,7 @@ MONTAGE = optics.MONTAGE_ACTIF
 #     UUV_MONTAGE=nue_air python ce_script.py
 # Tant qu'il n'est pas calibre, optics.py retombe sur la camera nue en le
 # disant.
-K_CALIB, DIST_CALIB = optics.charger(MONTAGE)
+K_CALIB, DIST_CALIB = optics.load(MONTAGE)
 
 FAMILLE = cv2.aruco.DICT_APRILTAG_36h11
 BORDURE = 1

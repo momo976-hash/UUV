@@ -39,7 +39,7 @@ R_MONDE = np.array([[1, 0, 0],
 
 # --- Calibration reelle de la camera (damier 5x7, 22 vues, RMS 0.169 px) ---
 # Si le path calibration_camera.npz est a cote du script, il est utilise.
-MONTAGE = optics.MONTAGE_ACTIF
+MONTAGE = optics.ACTIVE_MOUNTING
 # L'optics vient de optics.py : camera, tube, hublot, milieu. Le mounting
 # n'est ecrit dans aucun path de code : optics.py le lit dans
 # calibration/montage_local.txt, propre a CETTE machine, et le demande une
@@ -49,7 +49,7 @@ MONTAGE = optics.MONTAGE_ACTIF
 #     UUV_MONTAGE=nue_air python ce_script.py
 # Tant qu'il n'est pas calibre, optics.py retombe sur la camera nue en le
 # disant.
-K_CALIB, DIST_CALIB = optics.charger(MONTAGE)
+K_CALIB, DIST_CALIB = optics.load(MONTAGE)
 LARGEUR_CALIB = 640          # resolution utilisee lors de la calibration
 
 

@@ -128,13 +128,13 @@ def modeles(mounting, width, height):
         [0.0, 0.0, 1.0],
     ], dtype=np.float64)
 
-    K_tube, dist_tube = optics.charger(mounting, quiet=True)
+    K_tube, dist_tube = optics.load(mounting, quiet=True)
     return [
         ("NO CALIBRATION", "guessed focal length, distortion ignored",
          devine, np.zeros(5, dtype=np.float64), ROUGE),
         ("NOT CALIBRATED IN THE TUBE", "bare camera, calibrated before mounting",
-         optics.K_NUE_AIR.astype(np.float64),
-         optics.DIST_NUE_AIR.astype(np.float64), JAUNE),
+         optics.K_BARE_AIR.astype(np.float64),
+         optics.DIST_BARE_AIR.astype(np.float64), JAUNE),
         ("CALIBRATED IN THE TUBE", f"mounting '{mounting}' — the one we use",
          K_tube.astype(np.float64), dist_tube.ravel().astype(np.float64), VERT),
     ]
@@ -299,8 +299,8 @@ def main():
                            metavar="METRES",
                            help="distance vraie measured au metre a ruban ; "
                                 "active l'display des errors")
-    parser.add_argument("--mounting", default=optics.MONTAGE_ACTIF,
-                           choices=optics.MONTAGES,
+    parser.add_argument("--mounting", default=optics.ACTIVE_MOUNTING,
+                           choices=optics.MOUNTINGS,
                            help="calibration a mettre en 3e row "
                                 "(default %(default)s)")
     parser.add_argument("--zoom", type=float, default=1.5,

@@ -52,7 +52,7 @@ MIN_LIAISON = 6      # co-visibilites avant d'utiliser un tag (liaison rapide)
 MAX_LIAISON = 60     # on garde ce count d'observations pour affiner la liaison
 LISSAGE = 15
 
-MONTAGE = optics.MONTAGE_ACTIF
+MONTAGE = optics.ACTIVE_MOUNTING
 # L'optics vient de optics.py : camera, tube, hublot, milieu. Le mounting
 # n'est ecrit nulle part dans le code : optics.py le lit dans le path
 # montage_local.txt propre a CETTE machine, et le demande une fois s'il
@@ -62,7 +62,7 @@ MONTAGE = optics.MONTAGE_ACTIF
 #     UUV_MONTAGE=nue_air python ce_script.py
 # Tant qu'il n'est pas calibre, optics.py retombe sur la camera nue en le
 # disant.
-K_CALIB, DIST_CALIB = optics.charger(MONTAGE)
+K_CALIB, DIST_CALIB = optics.load(MONTAGE)
 LARGEUR_CALIB, HAUTEUR_CALIB = optics.RESOLUTION
 
 
@@ -319,7 +319,7 @@ if not os.path.exists(CSV):
         csv.writer(fic).writerow(ENTETE)
 
 print("=" * 66)
-optics.annoncer_montage("MONTAGE :")
+optics.announce_mounting("MONTAGE :")
 print("VERIFICATION DANS UN REPERE MONDE (deplacement libre entre tags)")
 print("  1. regarde le tag de reference, appuie sur 'o'")
 print("  2. bouge vers le 2e tag : la liaison se fait TOUTE SEULE en path")
@@ -359,8 +359,8 @@ while True:
         continue
     # Garde-fou : l'image contredit-elle le mounting declare ? Ne se declenche
     # qu'une fois, et seulement quand le doute n'est pas permis (voir
-    # optics.controler_image).
-    alerte = optics.controler_image(image, MONTAGE)
+    # optics.check_image_matches_mounting).
+    alerte = optics.check_image_matches_mounting(image, MONTAGE)
     if alerte:
         print(f"\n*** MONTAGE SUSPECT : {alerte}\n")
 
@@ -380,7 +380,7 @@ while True:
                 # les distances sortent 16 mm trop courtes sous l'water, measurement
                 # au bassin. La direction, elle, est juste — on allonge sans
                 # tourner. Vaut 0 hors mounting immerge.
-                tvec = optics.corriger_hublot(tvec, MONTAGE)
+                tvec = optics.correct_window_offset(tvec, MONTAGE)
                 poses[int(tid)] = transformation(cv2.Rodrigues(rvec)[0], tvec)
                 surfaces[int(tid)] = cv2.contourArea(pts.astype(np.float32))
 

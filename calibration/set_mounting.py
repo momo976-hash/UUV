@@ -38,32 +38,32 @@ def montrer():
     print("=" * 68)
     print("MONTAGE DE CETTE MACHINE")
     print("=" * 68)
-    print(f"  actif           : {optics.MONTAGE_ACTIF}")
-    print(f"  decide par      : {optics.MONTAGE_ORIGINE}")
-    print(f"  path local   : {optics.FICHIER_MONTAGE_LOCAL}")
+    print(f"  actif           : {optics.ACTIVE_MOUNTING}")
+    print(f"  decide par      : {optics.MOUNTING_SOURCE}")
+    print(f"  path local   : {optics.LOCAL_MOUNTING_FILE}")
 
-    local = optics._lire_montage_local()
+    local = optics._read_local_mounting()
     if local:
         print(f"                    contient '{local}'")
-    elif optics.FICHIER_MONTAGE_LOCAL.exists():
+    elif optics.LOCAL_MOUNTING_FILE.exists():
         print("                    present mais illisible")
     else:
         print("                    ABSENT — rien n'est encore regle ici")
 
-    reel = optics.source(optics.MONTAGE_ACTIF)
-    if reel != optics.MONTAGE_ACTIF:
-        print(f"\n  ATTENTION : '{optics.MONTAGE_ACTIF}' n'est pas calibre sur")
+    reel = optics.source(optics.ACTIVE_MOUNTING)
+    if reel != optics.ACTIVE_MOUNTING:
+        print(f"\n  ATTENTION : '{optics.ACTIVE_MOUNTING}' n'est pas calibre sur")
         print(f"  cette machine. Les scripts serviront les chiffres de "
               f"'{reel}'.")
         print(f"  Pour le calibrer :")
         print(f"      python calibration/calibrate.py "
-              f"--mounting {optics.MONTAGE_ACTIF}")
+              f"--mounting {optics.ACTIVE_MOUNTING}")
 
     print("\n  calibrations presentes :")
-    for name in optics.MONTAGES:
-        path = optics.DOSSIER_MONTAGES / f"{name}.npz"
+    for name in optics.MOUNTINGS:
+        path = optics.MOUNTINGS_FOLDER / f"{name}.npz"
         if path.exists():
-            K, _ = optics.charger(name, quiet=True)
+            K, _ = optics.load(name, quiet=True)
             print(f"    {name:9s} oui   fx = {K[0, 0]:7.2f}   fy = {K[1, 1]:7.2f}")
         else:
             print(f"    {name:9s} non")
@@ -72,9 +72,9 @@ def montrer():
 
 def choisir():
     """Demande le mounting au terminal et l'ecrit."""
-    suggere = optics.montage_probable()
+    suggere = optics.likely_mounting()
     print("\nQuel est le mounting de cette machine ?\n")
-    for index, name in enumerate(optics.MONTAGES, start=1):
+    for index, name in enumerate(optics.MOUNTINGS, start=1):
         marque = "  <- suggere" if name == suggere else ""
         print(f"  {index}) {name:9s} {optics._DESCRIPTIONS[name]}{marque}")
     print(f"\n  Entree seule = {suggere}")
@@ -86,9 +86,9 @@ def choisir():
 
     if not reponse:
         chosen = suggere
-    elif reponse.isdigit() and 1 <= int(reponse) <= len(optics.MONTAGES):
-        chosen = optics.MONTAGES[int(reponse) - 1]
-    elif reponse in optics.MONTAGES:
+    elif reponse.isdigit() and 1 <= int(reponse) <= len(optics.MOUNTINGS):
+        chosen = optics.MOUNTINGS[int(reponse) - 1]
+    elif reponse in optics.MOUNTINGS:
         chosen = reponse
     else:
         print(f"'{reponse}' n'est pas un choix valable. Rien n'a change.")
@@ -98,12 +98,12 @@ def choisir():
 
 def apply(name):
     """Ecrit le reglage et dit ce qui vient de changer."""
-    if name not in optics.MONTAGES:
+    if name not in optics.MOUNTINGS:
         print(f"ERREUR : '{name}' inconnu. "
-              f"Possibles : {', '.join(optics.MONTAGES)}")
+              f"Possibles : {', '.join(optics.MOUNTINGS)}")
         return 1
 
-    path = optics.ecrire_montage_local(name)
+    path = optics.write_local_mounting(name)
     print(f"\nMontage de cette machine : {name}")
     print(f"  ecrit dans {path}")
     print("  ce path n'est pas versionne : l'autre PC garde le sien.")
@@ -123,7 +123,7 @@ def apply(name):
 def main():
     parser = argparse.ArgumentParser(
         description="Regle le mounting physique de cette machine.")
-    parser.add_argument("mounting", nargs="?", choices=optics.MONTAGES,
+    parser.add_argument("mounting", nargs="?", choices=optics.MOUNTINGS,
                            help="le mounting a retenir sur cette machine")
     parser.add_argument("--montrer", action="store_true",
                            help="afficher l'state sans rien changer")
@@ -132,9 +132,9 @@ def main():
     options = parser.parse_args()
 
     if options.effacer:
-        if optics.FICHIER_MONTAGE_LOCAL.exists():
-            optics.FICHIER_MONTAGE_LOCAL.unlink()
-            print(f"Reglage efface : {optics.FICHIER_MONTAGE_LOCAL}")
+        if optics.LOCAL_MOUNTING_FILE.exists():
+            optics.LOCAL_MOUNTING_FILE.unlink()
+            print(f"Reglage efface : {optics.LOCAL_MOUNTING_FILE}")
             print("La question sera reposee au prochain lancement.")
         else:
             print("Il n'y avait rien a effacer.")

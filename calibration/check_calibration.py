@@ -33,8 +33,8 @@ import optics  # noqa: E402
 
 _analyseur = argparse.ArgumentParser(
     description="Verifie qu'un mounting correspond encore a sa calibration.")
-_analyseur.add_argument("--mounting", default=optics.MONTAGE_ACTIF,
-                        choices=optics.MONTAGES,
+_analyseur.add_argument("--mounting", default=optics.ACTIVE_MOUNTING,
+                        choices=optics.MOUNTINGS,
                         help="mounting a check (default %(default)s)")
 MONTAGE = _analyseur.parse_args().mounting
 
@@ -87,7 +87,7 @@ if optics.source(MONTAGE) != MONTAGE:
           "rien a check.")
     print(f"  python calibrate.py --mounting {MONTAGE}")
     raise SystemExit
-K, dist = optics.charger(MONTAGE)
+K, dist = optics.load(MONTAGE)
 K = K.astype(np.float64)
 dist = dist.ravel()
 Lc, Hc = RESOLUTION

@@ -28,7 +28,7 @@ K = np.array([[595.7891, 0.0, 323.4873],
               [0.0, 0.0, 1.0]])
 DIST = np.array([-0.004641, 1.047342, 0.008001, 0.002722, -3.430226])
 
-path = optics.DOSSIER_MONTAGES / "tube_air.npz"
+path = optics.MOUNTINGS_FOLDER / "tube_air.npz"
 path.parent.mkdir(parents=True, exist_ok=True)
 
 if path.exists():

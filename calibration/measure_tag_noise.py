@@ -58,8 +58,8 @@ VITESSE_MAX_CONSEILLEE = 0.15    # m/s
 # Le noise measurement vaut pour le milieu ou la manip est faite. Celui du depot a
 # ete releve EN AIR ; sous l'water, la turbidite et la perte de contraste le
 # degraderont, et il faut donc le remesurer une fois immerge — en basculant
-# optics.MONTAGE_ACTIF sur 'tube_eau'.
-MONTAGE = optics.MONTAGE_ACTIF
+# optics.ACTIVE_MOUNTING sur 'tube_eau'.
+MONTAGE = optics.ACTIVE_MOUNTING
 # L'optics vient de optics.py : camera, tube, hublot, milieu. Le mounting
 # n'est ecrit dans aucun path de code : optics.py le lit dans
 # calibration/montage_local.txt, propre a CETTE machine, et le demande une
@@ -69,7 +69,7 @@ MONTAGE = optics.MONTAGE_ACTIF
 #     UUV_MONTAGE=nue_air python ce_script.py
 # Tant qu'il n'est pas calibre, optics.py retombe sur la camera nue en le
 # disant.
-K_CALIB, DIST_CALIB = optics.charger(MONTAGE)
+K_CALIB, DIST_CALIB = optics.load(MONTAGE)
 
 CSV = Path(__file__).resolve().with_name("bruit_tag.csv")
 COLONNES = ["mode", "distance_m", "incidence_deg", "frames", "vitesse_cm_s",

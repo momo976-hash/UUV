@@ -200,7 +200,7 @@ import optics  # noqa: E402
 #    that; only the mechanics can.
 #
 # `python calibration/optics.py` puts numbers on all three.
-WATER_FOCAL_LENGTH = optics.focale_eau()
+WATER_FOCAL_LENGTH = optics.water_focal_length()
 TAG_SIZE = optics.LARGE_TAG_SIZE   # caliper-measured, not the nominal 223 mm
 
 # ===========================================================================

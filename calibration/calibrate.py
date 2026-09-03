@@ -57,8 +57,8 @@ import optics  # noqa: E402
 
 _analyseur = argparse.ArgumentParser(
     description="Calibration par damier, rangee sous le name d'un mounting.")
-_analyseur.add_argument("--mounting", default=optics.MONTAGE_ACTIF,
-                        choices=optics.MONTAGES,
+_analyseur.add_argument("--mounting", default=optics.ACTIVE_MOUNTING,
+                        choices=optics.MOUNTINGS,
                         help="mounting calibre (default %(default)s)")
 MONTAGE = _analyseur.parse_args().mounting
 
@@ -133,7 +133,7 @@ def relire_le_montage(K, erreur_rms):
     et optics.py), donc on les lit separement. C'est ce qui transforme une
     calibration en measurement mecanique.
     """
-    nue = optics.K_NUE_AIR
+    nue = optics.K_BARE_AIR
     fx, fy = float(K[0, 0]), float(K[1, 1])
     ecart_fx = 100 * (fx / nue[0, 0] - 1)
     radial = optics.ORIENTATION == "radiale"
@@ -166,9 +166,9 @@ def relire_le_montage(K, erreur_rms):
 
         if radial:
             ecart_mm = 1000 * optics.decentrement_depuis_calibration(
-                K, nue, optics.INDICE_AIR)
+                K, nue, optics.AIR_INDEX)
             attendu = nue[1, 1] * optics.grandissement_section(
-                indice_exterieur=optics.INDICE_AIR)
+                indice_exterieur=optics.AIR_INDEX)
             assumed = 1000 * optics.decentrement_pupille()
             print(f"\n  fy = {fy:.2f}  ({100*(fy/nue[1,1]-1):+.2f} % / camera nue)")
             print("    Selon la circonference la paroi est un menisque : il ne")
@@ -179,12 +179,12 @@ def relire_le_montage(K, erreur_rms):
                   f"(fy attendu {attendu:.2f})")
             if abs(ecart_mm - assumed) > 2:
                 print(f"\n    Les deux ne collent pas. Le suspect est "
-                      f"PUPILLE_DERRIERE_FACE")
-                print(f"    ({1000*optics.PUPILLE_DERRIERE_FACE:.0f} mm dans "
+                      f"PUPIL_BEHIND_FACE")
+                print(f"    ({1000*optics.PUPIL_BEHIND_FACE:.0f} mm dans "
                       "optics.py), qui n'etait qu'une estimation.")
                 corrige = (1000 * (optics.rayon_tube(pire_cas=False)
-                                   - optics.JEU_ARRIERE
-                                   - optics.CAMERA_PROFONDEUR) + ecart_mm)
+                                   - optics.BACK_CLEARANCE
+                                   - optics.CAMERA_DEPTH) + ecart_mm)
                 print(f"    Valeur compatible avec la measurement : "
                       f"{-corrige:.1f} mm. La correct dans optics.py")
                 print("    rendra justes toutes les predictions sous l'water.")
@@ -192,7 +192,7 @@ def relire_le_montage(K, erreur_rms):
                 print("\n    Coherent avec la geometrie supposee : optics.py "
                       "decrit bien le mounting.")
             print(f"\n    residu apres calibration : "
-                  f"{optics.residu_section(ecart_mm/1000, optics.INDICE_EAU):.2f} px "
+                  f"{optics.residu_section(ecart_mm/1000, optics.WATER_INDEX):.2f} px "
                   f"sous l'water")
             print(f"    (noise de detection measurement : "
                   f"{optics.CORNER_NOISE_PX:.3f} px)")
@@ -200,8 +200,8 @@ def relire_le_montage(K, erreur_rms):
 
     # tube_eau
     depart = optics.source("tube_air")
-    K_air, _ = optics.charger("tube_air", quiet=True)
-    attendu_fx = float(K_air[0, 0]) * optics.INDICE_EAU
+    K_air, _ = optics.load("tube_air", quiet=True)
+    attendu_fx = float(K_air[0, 0]) * optics.WATER_INDEX
     print(f"\n  reference en air : {depart} (fx {K_air[0,0]:.2f}  "
           f"fy {K_air[1,1]:.2f})")
     if depart == "nue_air":
@@ -210,11 +210,11 @@ def relire_le_montage(K, erreur_rms):
     print(f"\n  fx = {fx:.2f}   attendu {attendu_fx:.2f} "
           f"({100*(fx/attendu_fx-1):+.1f} %)")
     print(f"    Lame plane sous l'water : la focal_length est multipliee par "
-          f"{optics.INDICE_EAU}.")
+          f"{optics.WATER_INDEX}.")
     if radial:
         attendu_fy = float(K_air[1, 1]) * (
-            optics.grandissement_section(indice_exterieur=optics.INDICE_EAU)
-            / (optics.grandissement_section(indice_exterieur=optics.INDICE_AIR)
+            optics.grandissement_section(indice_exterieur=optics.WATER_INDEX)
+            / (optics.grandissement_section(indice_exterieur=optics.AIR_INDEX)
                if depart == "tube_air" else 1.0))
         print(f"\n  fy = {fy:.2f}   attendu {attendu_fy:.2f} "
               f"({100*(fy/attendu_fy-1):+.1f} %)")
@@ -241,10 +241,10 @@ def retenir_le_montage_de_la_machine():
     On propose, on n'impose pas : on peut tres bien calibrer un mounting depuis
     une machine qui n'est pas celle qui mesurera.
     """
-    if optics.MONTAGE_ACTIF == MONTAGE:
+    if optics.ACTIVE_MOUNTING == MONTAGE:
         return
-    print(f"\nCette machine est reglee sur '{optics.MONTAGE_ACTIF}' "
-          f"({optics.MONTAGE_ORIGINE}),")
+    print(f"\nCette machine est reglee sur '{optics.ACTIVE_MOUNTING}' "
+          f"({optics.MOUNTING_SOURCE}),")
     print(f"mais tu viens de calibrer '{MONTAGE}'.")
     try:
         if not sys.stdin.isatty():
@@ -256,10 +256,10 @@ def retenir_le_montage_de_la_machine():
         print()
         return
     if reponse.strip().lower() in ("", "o", "oui", "y", "yes"):
-        path = optics.ecrire_montage_local(MONTAGE)
+        path = optics.write_local_mounting(MONTAGE)
         print(f"  -> kept dans {path}. Plus rien a preciser ensuite.")
     else:
-        print(f"  -> reglage inchange ('{optics.MONTAGE_ACTIF}').")
+        print(f"  -> reglage inchange ('{optics.ACTIVE_MOUNTING}').")
 
 
 def calibrer(points_3d, points_2d, taille_image):
@@ -268,8 +268,8 @@ def calibrer(points_3d, points_2d, taille_image):
         points_3d, points_2d, taille_image, None, None)
 
     # Sauvegarde immediate : on ne veut pas perdre le result en cas de souci
-    optics.DOSSIER_MONTAGES.mkdir(parents=True, exist_ok=True)
-    path = optics.DOSSIER_MONTAGES / f"{MONTAGE}.npz"
+    optics.MOUNTINGS_FOLDER.mkdir(parents=True, exist_ok=True)
+    path = optics.MOUNTINGS_FOLDER / f"{MONTAGE}.npz"
     np.savez(path, K=K, dist=dist,
              width=taille_image[0], height=taille_image[1])
     np.savez("calibration_camera.npz", K=K, dist=dist,
@@ -334,7 +334,7 @@ def calibrer(points_3d, points_2d, taille_image):
         "  data: [" + ", ".join(
             f"{v:.8f}" for v in np.hstack([K, np.zeros((3, 1))]).flatten()) + "]",
     ]
-    yaml_montage = optics.DOSSIER_MONTAGES / f"{MONTAGE}_ros.yaml"
+    yaml_montage = optics.MOUNTINGS_FOLDER / f"{MONTAGE}_ros.yaml"
     with open(yaml_montage, "w") as f:
         f.write("\n".join(lignes_yaml) + "\n")
     print(f"Fichier ROS ecrit : {yaml_montage}")

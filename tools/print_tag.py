@@ -195,7 +195,7 @@ def main():
     # C'est l'axis le MOINS grossi qui decide si un tag est decode : un carre
     # trop etroit dans un sens ne passe pas, meme large dans l'autre. Ces
     # measurements se font en air, sur un bureau, donc avec les focales en air.
-    K_air, _ = optics.charger("tube_air", quiet=True)
+    K_air, _ = optics.load("tube_air", quiet=True)
     focal_length = min(float(K_air[0, 0]), float(K_air[1, 1]))
     print(f"Ecrit : {output}")
     print("\nA quelle distance chaque tag atteint-il la limit supposee ?")
