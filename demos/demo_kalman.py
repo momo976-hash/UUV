@@ -93,7 +93,7 @@ def rotation_camera(azimuth, roll, pitch):
     return Rz @ Ry @ Rx
 
 
-def trajectoire(t):
+def trajectory(t):
     """Back and forth along wall B, looking at wall A."""
     x = 1.90 + 1.40 * np.sin(2 * np.pi * t / 30.0)
     y = 1.48 + 0.12 * np.sin(2 * np.pi * t / 7.0)
@@ -110,13 +110,13 @@ def simulate(seed=7):
                         derive_gyro_deg_s=GYRO_DRIFT)
 
     instants = np.arange(0.0, DURATION, 1.0 / FRAME_RATE)
-    log = {key: [] for key in ("t", "true", "raw", "filtered", "nb_tags",
-                                   "err_brute", "err_filtree", "sigma",
-                                   "err_angle_brut", "err_angle_filtre", "rejet")}
+    log = {key: [] for key in ("t", "true", "raw", "filtered", "n_tags",
+                                   "err_raw", "err_filtered", "sigma",
+                                   "err_angle_raw", "err_angle_filtered", "rejection")}
     previous = None
 
     for t in instants:
-        true_position, azimuth, roll, pitch = trajectoire(t)
+        true_position, azimuth, roll, pitch = trajectory(t)
         R_true = rotation_camera(azimuth, roll, pitch)
         q_true = matrix_to_quaternion(R_true)
 
@@ -125,59 +125,59 @@ def simulate(seed=7):
         filter.predict(dt)
 
         # --- what the camera really sees from this pose --------------------
-        aveugle = BUBBLES[0] <= t < BUBBLES[1]
-        seen = [] if aveugle else visible_from(true_position, azimuth)
+        blind = BUBBLES[0] <= t < BUBBLES[1]
+        seen = [] if blind else visible_from(true_position, azimuth)
 
         raw_measurement, angle_raw = None, None
         for tid, distance, incidence, _ in seen:
             C = tag_position_covariance(true_position, TAG_POSITION[tid], incidence)
-            position_mesuree = (true_position + map_offset(tid, t)
+            measured_position = (true_position + map_offset(tid, t)
                                 + rng.multivariate_normal(np.zeros(3), C))
 
             sigma_angle = tag_angle_std(distance, incidence)
             perturbation = rng.normal(0.0, sigma_angle, 3)
-            norme = np.linalg.norm(perturbation)
-            axis = perturbation / norme if norme > 1e-12 else np.array([1.0, 0.0, 0.0])
-            dq = np.concatenate([[np.cos(norme / 2)], axis * np.sin(norme / 2)])
+            norm = np.linalg.norm(perturbation)
+            axis = perturbation / norm if norm > 1e-12 else np.array([1.0, 0.0, 0.0])
+            dq = np.concatenate([[np.cos(norm / 2)], axis * np.sin(norm / 2)])
             w0, v0, w1, v1 = dq[0], dq[1:], q_true[0], q_true[1:]
-            q_mesure = np.concatenate([[w0 * w1 - v0 @ v1],
+            q_measured = np.concatenate([[w0 * w1 - v0 @ v1],
                                        w0 * v1 + w1 * v0 + np.cross(v0, v1)])
 
-            if rng.random() < OUTLIER_PROBABILITY:     # flip du tag
-                position_mesuree = position_mesuree + rng.normal(0.0, 0.25, 3)
-                q_mesure = np.roll(q_mesure, 2)
+            if rng.random() < OUTLIER_PROBABILITY:     # the tag flips
+                measured_position = measured_position + rng.normal(0.0, 0.25, 3)
+                q_measured = np.roll(q_measured, 2)
 
-            filter.add_tag(position_mesuree, TAG_POSITION[tid], incidence,
-                               rotation_mesuree=q_mesure, distance=distance,
+            filter.add_tag(measured_position, TAG_POSITION[tid], incidence,
+                               rotation_mesuree=q_measured, distance=distance,
                                identifiant=tid)
             if raw_measurement is None:
-                raw_measurement, angle_raw = position_mesuree, quaternion_angle(q_mesure, q_true)
+                raw_measurement, angle_raw = measured_position, quaternion_angle(q_measured, q_true)
 
-        rejets_avant = filter.position.rejections
+        rejections_before = filter.position.rejections
         accepted, count = filter.apply()
-        rejected = filter.position.rejections > rejets_avant
+        rejected = filter.position.rejections > rejections_before
 
         log["t"].append(t)
         log["true"].append(true_position)
         log["filtered"].append(filter.position.position)
-        log["nb_tags"].append(count)
+        log["n_tags"].append(count)
         log["sigma"].append(filter.position.position_uncertainty)
-        log["rejet"].append(rejected)
-        log["err_filtree"].append(np.linalg.norm(filter.position.position - true_position))
-        log["err_angle_filtre"].append(quaternion_angle(filter.orientation.q, q_true))
+        log["rejection"].append(rejected)
+        log["err_filtered"].append(np.linalg.norm(filter.position.position - true_position))
+        log["err_angle_filtered"].append(quaternion_angle(filter.orientation.q, q_true))
         if raw_measurement is not None:
             log["raw"].append(raw_measurement)
-            log["err_brute"].append(np.linalg.norm(raw_measurement - true_position))
-            log["err_angle_brut"].append(angle_raw)
+            log["err_raw"].append(np.linalg.norm(raw_measurement - true_position))
+            log["err_angle_raw"].append(angle_raw)
         else:
             log["raw"].append(np.full(3, np.nan))
-            log["err_brute"].append(np.nan)
-            log["err_angle_brut"].append(np.nan)
+            log["err_raw"].append(np.nan)
+            log["err_angle_raw"].append(np.nan)
 
     for key in log:
         log[key] = np.array(log[key])
-    log["rejets_total"] = filter.position.rejections
-    log["rejets_angle"] = filter.orientation.rejections
+    log["rejections_total"] = filter.position.rejections
+    log["rejections_angle"] = filter.orientation.rejections
     log["recoveries"] = filter.position.recoveries + filter.orientation.recoveries
     log["watchdog"] = filter.watchdog
     return log
@@ -188,19 +188,19 @@ def rms(values):
     return float(np.sqrt(np.mean(np.square(values)))) if len(values) else float("nan")
 
 
-def statistiques(values, echelle=1.0):
+def statistics(values, scale=1.0):
     """RMS, median, 95th percentile and maximum. The median says what usually
     happens, the 95th percentile and the max say what the bad moments are."""
-    v = values[~np.isnan(values)] * echelle
+    v = values[~np.isnan(values)] * scale
     return (float(np.sqrt(np.mean(np.square(v)))), float(np.median(v)),
             float(np.percentile(v, 95)), float(np.max(v)))
 
 
-def stats_line(intitule, values, echelle, unite, width=8, decimals=1):
-    r, med, p95, maxi = statistiques(values, echelle)
-    return (f"   {intitule:<30s}"
+def stats_line(label, values, scale, unit, width=8, decimals=1):
+    r, med, p95, maxi = statistics(values, scale)
+    return (f"   {label:<30s}"
             f"{med:{width}.{decimals}f}{p95:{width}.{decimals}f}"
-            f"{r:{width}.{decimals}f}{maxi:{width}.{decimals}f}   {unite}")
+            f"{r:{width}.{decimals}f}{maxi:{width}.{decimals}f}   {unit}")
 
 
 def report(log):
@@ -212,20 +212,20 @@ def report(log):
     print("SIMULATION IN THE 3.80 x 1.67 x 1.00 m POOL")
     print("=" * 72)
     print(f"{len(t)} frames at {FRAME_RATE:.0f} Hz over {DURATION:.0f} s")
-    seen = log["nb_tags"]
+    seen = log["n_tags"]
     print(f"tags visible: 0 tags {100*np.mean(seen == 0):.0f} % of the time, "
           f"1 tag {100*np.mean(seen == 1):.0f} %, "
           f"2 tags or more {100*np.mean(seen >= 2):.0f} %")
     print("-" * 72)
     print("A. AS LONG AS AT LEAST ONE TAG IS VISIBLE  (the filtering proper)")
     print(f"   {'':<30s}{'median':>8s}{'95th':>8s}{'RMS':>8s}{'max':>8s}")
-    raw, filtered = log["err_brute"][outside_bubbles], log["err_filtree"][outside_bubbles]
+    raw, filtered = log["err_raw"][outside_bubbles], log["err_filtered"][outside_bubbles]
     print(stats_line("position raw (one tag)", raw, 1000, "mm"))
     print(stats_line("position filtered", filtered, 1000, "mm"))
     print(f"   -> {rms(raw) and np.median(raw[~np.isnan(raw)])/np.median(filtered):.1f}x "
           f"better on the median, {rms(raw)/rms(filtered):.1f}x on the RMS")
-    angle_raw = log["err_angle_brut"][outside_bubbles]
-    angle_filtered = log["err_angle_filtre"][outside_bubbles]
+    angle_raw = log["err_angle_raw"][outside_bubbles]
+    angle_filtered = log["err_angle_filtered"][outside_bubbles]
     print(stats_line("orientation raw", angle_raw, 1.0, "deg", decimals=2))
     print(stats_line("orientation filtered", angle_filtered, 1.0, "deg", decimals=2))
     print(f"   -> {np.median(angle_raw[~np.isnan(angle_raw)])/np.median(angle_filtered):.1f}x "
@@ -237,15 +237,15 @@ def report(log):
     print("   The filter runs on dead reckoning. It drifts, which is normal and")
     print("   unavoidable: what matters is that it drifts CLEANLY and says so.")
     print(f"   drift after 3 blind s          "
-          f"{1000*log['err_filtree'][during][-1]:7.0f} mm")
+          f"{1000*log['err_filtered'][during][-1]:7.0f} mm")
     print(f"   uncertainty reported (1 sigma) "
           f"{1000*log['sigma'][during][-1]:7.0f} mm")
     print(f"   orientation lost               "
-          f"{log['err_angle_filtre'][during][-1]:7.1f} deg")
+          f"{log['err_angle_filtered'][during][-1]:7.1f} deg")
     print("-" * 72)
     print("C. ROBUSTNESS")
-    print(f"   outliers rejected: {log['rejets_total']} in position, "
-          f"{log['rejets_angle']} in orientation")
+    print(f"   outliers rejected: {log['rejections_total']} in position, "
+          f"{log['rejections_angle']} in orientation")
     print(f"   recoveries after lock-out: {log['recoveries']}")
     print("-" * 72)
     print("D. WATCHING THE SUPPORTS")
@@ -292,15 +292,15 @@ def plot(log):
     ax = axes[1]
     ax.axvspan(*BUBBLES, color="#cbd5e1", alpha=0.6,
                label="curtain of bubbles")
-    ax.plot(t, 1000 * log["err_brute"], color="#f59e0b", linewidth=0.8,
+    ax.plot(t, 1000 * log["err_raw"], color="#f59e0b", linewidth=0.8,
             alpha=0.8, label="raw error")
-    ax.plot(t, 1000 * log["err_filtree"], color="#16a34a", linewidth=1.4,
+    ax.plot(t, 1000 * log["err_filtered"], color="#16a34a", linewidth=1.4,
             label="filtered error")
     ax.plot(t, 1000 * log["sigma"], color="#0ea5e9", linewidth=1.0,
             linestyle="--", label="reported uncertainty (1 sigma)")
-    rejections = log["rejet"]
+    rejections = log["rejection"]
     if rejections.any():
-        ax.plot(t[rejections], 1000 * log["err_brute"][rejections], "x",
+        ax.plot(t[rejections], 1000 * log["err_raw"][rejections], "x",
                 color="#dc2626", markersize=6, label="rejected outliers")
     ax.set_yscale("log")
     ax.set_xlabel("time (s)")
@@ -312,9 +312,9 @@ def plot(log):
     # --- 3. orientation and number of tags ---------------------------------
     ax = axes[2]
     ax.axvspan(*BUBBLES, color="#cbd5e1", alpha=0.6)
-    ax.plot(t, log["err_angle_brut"], color="#f59e0b", linewidth=0.8,
+    ax.plot(t, log["err_angle_raw"], color="#f59e0b", linewidth=0.8,
             alpha=0.8, label="orientation raw")
-    ax.plot(t, log["err_angle_filtre"], color="#7c3aed", linewidth=1.4,
+    ax.plot(t, log["err_angle_filtered"], color="#7c3aed", linewidth=1.4,
             label="orientation filtered")
     ax.set_xlabel("time (s)")
     ax.set_ylabel("orientation error (deg)")
@@ -322,10 +322,10 @@ def plot(log):
     ax.legend(fontsize=8, loc="upper left")
     ax.grid(alpha=0.25)
     twin = ax.twinx()
-    twin.fill_between(t, log["nb_tags"], step="mid", color="#0ea5e9",
+    twin.fill_between(t, log["n_tags"], step="mid", color="#0ea5e9",
                         alpha=0.18)
     twin.set_ylabel("number of tags seen", color="#0369a1")
-    twin.set_ylim(0, max(3, log["nb_tags"].max() + 1))
+    twin.set_ylim(0, max(3, log["n_tags"].max() + 1))
     twin.tick_params(axis="y", colors="#0369a1")
 
     fig.suptitle("Kalman filter on the pose estimated from AprilTags — "
