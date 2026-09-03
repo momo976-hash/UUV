@@ -18,7 +18,7 @@ d = (600 - taille_px) // 2
 canvas[d:d + taille_px, d:d + taille_px] = marqueur
 image = cv2.cvtColor(canvas, cv2.COLOR_GRAY2BGR)
 
-# --- 2) Detecter le tag ---
+# --- 2) Detect the tag ---
 detector = cv2.aruco.ArucoDetector(dictionary, cv2.aruco.DetectorParameters())
 corners, ids, _ = detector.detectMarkers(canvas)
 
@@ -29,7 +29,7 @@ dist = np.zeros(5)
 h = TAG_SIZE / 2
 coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
-# --- 4) Dessiner le result ---
+# --- 4) Draw the result ---
 if ids is not None:
     print(f"OK : {len(ids)} tag(s) detecte(s), id = {ids.flatten().tolist()}")
     cv2.aruco.drawDetectedMarkers(image, corners, ids)

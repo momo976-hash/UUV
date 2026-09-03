@@ -146,7 +146,7 @@ def visible_from(position, azimuth):
     """
     axis = np.array([np.cos(azimuth), np.sin(azimuth), 0.0])
     right = np.array([-np.sin(azimuth), np.cos(azimuth), 0.0])
-    bas = np.array([0.0, 0.0, 1.0])
+    down = np.array([0.0, 0.0, 1.0])
 
     found = []
     for tid, wall, x, y, z, normal in TAGS:
@@ -154,12 +154,12 @@ def visible_from(position, azimuth):
         distance = np.linalg.norm(v)
         if distance < 1e-6:
             continue
-        avant = float(v @ axis)
-        if avant <= 0:
+        forward = float(v @ axis)
+        if forward <= 0:
             continue
-        if abs(np.arctan2(float(v @ right), avant)) > HALF_FOV_H:
+        if abs(np.arctan2(float(v @ right), forward)) > HALF_FOV_H:
             continue
-        if abs(np.arctan2(float(v @ bas), avant)) > HALF_FOV_V:
+        if abs(np.arctan2(float(v @ down), forward)) > HALF_FOV_V:
             continue
         n = np.asarray(normal, dtype=float)
         incidence = np.degrees(np.arccos(np.clip(float(-v @ n) / distance, -1.0, 1.0)))
@@ -246,7 +246,7 @@ def draw(ax):
     for i, j in aretes:
         ax.plot(*zip(corners[i], corners[j]), color="#5c6b76", linewidth=1.0, alpha=0.8)
 
-    # --- boucle des liaisons ---------------------------------------------
+    # --- the linking loop ------------------------------------------------
     positions = np.array([[x, y, z] for _, _, x, y, z, _ in TAGS])
     if state["boucle"]:
         boucle = np.vstack([positions, positions[0]])
@@ -288,8 +288,8 @@ def draw(ax):
         a = camera["azimuth"]
         axis = np.array([np.cos(a), np.sin(a), 0.0])
         right = np.array([-np.sin(a), np.cos(a), 0.0])
-        bas = np.array([0.0, 0.0, 1.0])
-        rays = [axis + sh * np.tan(HALF_FOV_H) * right + sv * np.tan(HALF_FOV_V) * bas
+        down = np.array([0.0, 0.0, 1.0])
+        rays = [axis + sh * np.tan(HALF_FOV_H) * right + sv * np.tan(HALF_FOV_V) * down
                   for sh, sv in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
         t = usable_range(p, rays)   # the cone stops on the wall aimed at
         loin = [p + t * u for u in rays]

@@ -66,15 +66,15 @@ def main():
             print("     -> CENTRALE INERTIELLE PRESENTE (accel + gyro)")
             with_imu.append((numero, name, serie))
         else:
-            manque = [n for n, present in (("gyro", gyro), ("accel", accel))
+            missing = [n for n, present in (("gyro", gyro), ("accel", accel))
                       if not present]
-            print(f"     -> PAS d'IMU utilisable (manque : {', '.join(manque)})")
+            print(f"     -> NO usable IMU (missing: {', '.join(missing)})")
 
     print("\n" + "=" * 68)
     print("CONCLUSION")
     print("=" * 68)
     if not with_imu:
-        print("Aucun appareil branche n'a de imu inertielle.")
+        print("No device plugged in has an inertial IMU.")
         print("\nThe D435 model (without the 'i') does NOT have one; only the")
         print("D435i carries one. Check the exact name shown above: it is the")
         print("only way to tell them apart, they are physically identical.")
@@ -83,7 +83,7 @@ def main():
         print("  python imu_realsense.py --simulation")
         return 1
 
-    print(f"{len(with_imu)} appareil(s) avec imu inertielle :")
+    print(f"{len(with_imu)} device(s) with an inertial IMU:")
     for numero, name, serie in with_imu:
         print(f"  [{numero}] {name}   serie {serie}")
     if len(appareils) > 1:

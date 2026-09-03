@@ -29,7 +29,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERROR: aucune camera ouverte.")
+    print("ERROR: no camera opened.")
     raise SystemExit
 
 K = np.array([[L, 0, L / 2], [0, L, H / 2], [0, 0, 1]], dtype=np.float64)
@@ -49,8 +49,8 @@ counter = 0
 
 print("=" * 55)
 print("VALIDATION. Place the tag, keep it still and squarely facing you.")
-print("  's' = enregistrer la measurement stabilisee")
-print("  'q' = quitter")
+print("  's' = record the stabilised measurement")
+print("  'q' = quit")
 print(f"The measurements are recorded in: {path}")
 print("=" * 55)
 
@@ -77,10 +77,10 @@ while True:
     if distance_stable is not None:
         cv2.putText(image, f"distance = {distance_stable:.3f} m",
                     (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
-        cv2.putText(image, "'s' = enregistrer   'q' = quitter",
+        cv2.putText(image, "'s' = record   'q' = quit",
                     (10, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
     else:
-        cv2.putText(image, "Aucun tag detecte", (10, 40),
+        cv2.putText(image, "No tag detected", (10, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
 
     cv2.imshow("Validation precision (q pour quitter)", image)
@@ -95,4 +95,4 @@ while True:
 
 cam.release()
 cv2.destroyAllWindows()
-print(f"\nTermine. Mesures dans : {path}")
+print(f"\nDone. Measurements in: {path}")

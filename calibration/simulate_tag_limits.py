@@ -231,7 +231,7 @@ def boundary_map(detector, pattern, quiet):
     for angle in angles:
         threshold, _ = taille_seuil(angle, detector, pattern, quiet, sizes)
         if threshold is None:
-            print(f"  {angle:>7} deg {'jamais':>13} {'—':>13}")
+            print(f"  {angle:>7} deg {'never':>13} {'—':>13}")
             continue
         compressed = threshold * np.cos(np.radians(angle))
         print(f"  {angle:>7} deg {threshold:>10} px {compressed:>10.1f} px")

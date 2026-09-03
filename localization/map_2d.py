@@ -6,7 +6,7 @@ import sys
 #   - The 1st tag seen becomes the frame's origin.
 #   - The following tags record themselves when they are seen at the same
 #     time as an already-known tag (Thein's method), after N observations.
-# Keys: s = sauver la tag_map | r = reset | q = quitter
+# KEYS: s = save the map | r = reset | q = quit
 from collections import defaultdict, deque
 
 import cv2
@@ -22,7 +22,7 @@ RESOLUTION = (640, 480)
 
 TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au calipers, pas 223 mm nominal
 
-ECHANTILLONS_REQUIS = 25    # observations avant d'enregistrer un tag
+REQUIRED_SAMPLES = 25       # observations before a tag is recorded
 SAUT_MAX = 0.40             # metres : au-dela, measurement jugee aberrante
 LISSAGE = 9                 # positions moyennees (anti-tremblement)
 
@@ -59,7 +59,7 @@ def charger_calibration(width, height):
     try:
         f = np.load("calibration_camera.npz")
         K, d, Lc = f["K"].astype(np.float64), f["dist"].ravel(), int(f["width"])
-        print("Calibration chargee depuis calibration_camera.npz")
+        print("Calibration loaded from calibration_camera.npz")
     except Exception:
         print("Calibration integree au script used")
     if width != Lc:                      # mise a l'echelle si resolution differente
@@ -167,7 +167,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERROR: aucune camera ouverte.")
+    print("ERROR: no camera opened.")
     raise SystemExit
 
 K, dist = charger_calibration(L, H)
@@ -186,7 +186,7 @@ derniere_pos = None
 
 print("Deux windows : video + tag_map 2D.")
 print("Frame TWO tags together to record the following ones automatically.")
-print("Keys: s=sauver tag_map  r=reset  q=quitter")
+print("KEYS: s=save map  r=reset  q=quit")
 
 while True:
     ok, image = cam.read()
@@ -195,7 +195,7 @@ while True:
     gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     corners, ids, _ = detector.detectMarkers(gris)
 
-    # --- pose de chaque tag visible ---
+    # --- pose of each visible tag ---
     poses, surfaces = {}, {}
     if ids is not None:
         cv2.aruco.drawDetectedMarkers(image, corners, ids)
@@ -209,7 +209,7 @@ while True:
             poses[int(tag_id)] = transformation(cv2.Rodrigues(rvec)[0], tvec)
             surfaces[int(tag_id)] = cv2.contourArea(pts.astype(np.float32))
 
-    # --- le first tag seen devient l'origin ---
+    # --- the first tag seen becomes the origin ---
     if not tag_map and poses:
         ancre = max(poses, key=lambda i: surfaces[i])
         tag_map[ancre] = transformation(R_MONDE, (0, 0, 0))
@@ -224,7 +224,7 @@ while True:
             continue
         A = max(known, key=lambda i: surfaces[i])
         candidats[B].append(tag_map[A] @ inverse(poses[A]) @ poses[B])
-        if len(candidats[B]) >= ECHANTILLONS_REQUIS:
+        if len(candidats[B]) >= REQUIRED_SAMPLES:
             obs = np.array(candidats[B])
             T = np.median(obs, axis=0)
             T[:3, :3] = obs[len(obs) // 2][:3, :3]
@@ -256,21 +256,21 @@ while True:
         cv2.putText(image, f"CAMERA: X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m  (tag {ref})",
                     (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
     else:
-        cv2.putText(image, "Aucun tag known visible", (10, y),
+        cv2.putText(image, "No known tag visible", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
     y += 26
     cv2.putText(image, f"Tags enregistres : {sorted(tag_map)}", (10, y),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
     y += 24
     for B, obs in candidats.items():
-        pct = int(100 * len(obs) / ECHANTILLONS_REQUIS)
+        pct = int(100 * len(obs) / REQUIRED_SAMPLES)
         cv2.putText(image, f"enregistrement tag {B} : {pct}%", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 170, 255), 2)
         y += 22
-    cv2.putText(image, "s=sauver  r=reset  q=quitter", (10, H - 14),
+    cv2.putText(image, "s=save  r=reset  q=quit", (10, H - 14),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
-    cv2.imshow("Video (q pour quitter)", image)
+    cv2.imshow("Video (q to quit)", image)
     cv2.imshow("Carte 2D - vue de dessus", dessiner_carte(cam_xyz, cam_R))
 
     key = cv2.waitKey(1) & 0xFF

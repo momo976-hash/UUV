@@ -13,7 +13,7 @@ This script covers steps 1 -> 4 of the road map:
   Step 4: estimate the pose (rvec, tvec) with cv2.solvePnP + draw the 3D axes
 
 Controls:
-  q ou ECHAP : quitter
+  q or ESC: quit
 
 References:
   - Kallwies et al., "Determining and Improving the Localization Accuracy of
@@ -230,7 +230,7 @@ def main():
             RealSenseSource() if args.source == "realsense" else WebcamSource()
         )
     except Exception as exc:  # noqa: BLE001
-        print(f"[ERREUR] Impossible d'ouvrir la source : {exc}", file=sys.stderr)
+        print(f"[ERROR] Cannot open the source: {exc}", file=sys.stderr)
         return 1
 
     print(f"[INFO] Source : {args.source}")
@@ -277,7 +277,7 @@ def main():
                 fps = 0.9 * fps + 0.1 * (1.0 / dt)
 
             draw_hud(frame, poses, fps)
-            cv2.imshow("AprilTag - localisation UUV (q/ECHAP pour quitter)", frame)
+            cv2.imshow("AprilTag - UUV localisation (q/ESC to quit)", frame)
 
             key = cv2.waitKey(1) & 0xFF
             if key in (ord("q"), 27):  # 'q' ou ECHAP

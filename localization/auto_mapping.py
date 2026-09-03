@@ -6,7 +6,7 @@
 #     is computed from A, without knowing the camera's position:
 #         T_monde_B = T_monde_A @ inverse(T_camera_A) @ T_camera_B
 #   - By moving around and showing overlapping pairs, the map builds
-#     remplit toute seule. Aucun tape measure.
+#     fills itself in. No tape measure.
 #
 # KEYS:  's' = save the map to saved_map.py   |   'q' = quit
 from collections import deque
@@ -48,7 +48,7 @@ def sauver_carte(tag_map):
     rows.append("}")
     with open("saved_map.py", "w") as f:
         f.write("\n".join(rows) + "\n")
-    print("Carte sauvegardee dans saved_map.py :")
+    print("Map saved to saved_map.py:")
     print("\n".join(rows))
 
 
@@ -75,7 +75,7 @@ def dessiner_carte(cam_xyz):
         cv2.putText(m, "CAM", (px + 9, py - 6),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
 
-    cv2.putText(m, f"echelle: {SCALE} px/m  ('+'/'-' zoom, 'c' effacer trace)",
+    cv2.putText(m, f"scale: {SCALE} px/m  ('+'/'-' zoom, 'c' clear trail)",
                 (10, CARTE_PX - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (140, 140, 140), 1)
     return m
 
@@ -97,7 +97,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERROR: aucune camera ouverte.")
+    print("ERROR: no camera opened.")
     raise SystemExit
 
 FOCALE = L * FACTEUR_FOCALE
@@ -111,7 +111,7 @@ detector = cv2.aruco.ArucoDetector(dictionary, cv2.aruco.DetectorParameters())
 
 tag_map = {}   # id -> T_world_tag (4x4). Fills itself in.
 print("Show tags. The 1st becomes the origin. Show PAIRS to chain them.")
-print("'s' = sauver la tag_map   |   'q' = quitter")
+print("'s' = save the map   |   'q' = quit")
 
 while True:
     ok, image = cam.read()
@@ -172,21 +172,21 @@ while True:
         X, Y, Z = cam_xyz
         cv2.putText(image, f"CAMERA: X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m", (10, 55),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-    cv2.putText(image, "'s'=sauver  '+/-'=zoom tag_map  'c'=effacer trace  'q'=quitter",
+    cv2.putText(image, "'s'=save  '+/-'=zoom map  'c'=clear trail  'q'=quit",
                 (10, H - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
-    cv2.imshow("Auto-enregistrement (q pour quitter)", image)
+    cv2.imshow("Auto-recording (q to quit)", image)
     cv2.imshow("Carte 2D", dessiner_carte(cam_xyz))
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):
         break
     if key == ord("s") and tag_map:
         sauver_carte(tag_map)
-    if key in (ord("+"), ord("=")):        # zoom avant
+    if key in (ord("+"), ord("=")):        # zoom in
         SCALE = min(int(SCALE * 1.3), 2000)
     if key in (ord("-"), ord("_")):        # zoom arriere
         SCALE = max(int(SCALE / 1.3), 5)
-    if key == ord("c"):                    # effacer la trail
+    if key == ord("c"):                    # clear the trail
         trail.clear()
 
 cam.release()

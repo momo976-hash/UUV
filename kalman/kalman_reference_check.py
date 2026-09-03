@@ -146,7 +146,7 @@ def example_du_document():
     print("       stays symmetric positive-definite after thousands of")
     print("       floating-point iterations.")
 
-    # --- ITERATION 1 : prediction suivante ---------------------------------
+    # --- ITERATION 1: the next prediction ----------------------------------
     print("\nITERATION 1 — prediction")
     filter.predict(F, Q)
     compare("x(2,1)", filter.x)

@@ -57,7 +57,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERROR: aucune camera ouverte.")
+    print("ERROR: no camera opened.")
     raise SystemExit
 
 FOCALE = L * FACTEUR_FOCALE
@@ -93,7 +93,7 @@ while True:
 
             # --- Transformations homogenes ---
             R, _ = cv2.Rodrigues(rvec)
-            T_camera_tag = transformation(R, tvec)              # tag seen depuis la camera
+            T_camera_tag = transformation(R, tvec)              # the tag seen from the camera
 
             # The tag's pose in the pool. Rotation = identity (all tags
             # oriented alike). NOTE: for a tilted tag, replace np.eye(3)
@@ -110,13 +110,13 @@ while True:
         X, Y, Z = np.mean(positions_camera, axis=0)
         cv2.putText(image, f"CAMERA in pool: X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m",
                     (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        cv2.putText(image, f"(calcule avec {len(positions_camera)} tag(s) known(s))",
+        cv2.putText(image, f"(computed from {len(positions_camera)} known tag(s))",
                     (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
     else:
         cv2.putText(image, "No tag from the map is visible", (10, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-    cv2.imshow("Localisation piscine (homogene) - q pour quitter", image)
+    cv2.imshow("Pool localisation (homogeneous) - q to quit", image)
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 

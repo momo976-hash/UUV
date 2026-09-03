@@ -20,7 +20,7 @@ RESOLUTION = (640, 480)
 TAG_SIZE = 0.22389        # cote du carre noir, measurement au calipers (nominal 223 mm)
 FOCAL_FACTOR = 0.95         # focal-length correction from the validation
 
-ECHANTILLONS_REQUIS = 25    # observations avant d'enregistrer un tag
+REQUIRED_SAMPLES = 25       # observations before a tag is recorded
 SAUT_MAX = 0.40             # metres : au-dela, measurement jugee aberrante
 LISSAGE = 9                 # positions moyennees (anti-tremblement)
 MIN_STEP = 0.04             # minimum movement before adding a point
@@ -158,7 +158,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERROR: aucune camera ouverte.")
+    print("ERROR: no camera opened.")
     raise SystemExit
 
 FOCALE = L * FOCAL_FACTOR
@@ -180,7 +180,7 @@ derniere_pos = dernier_point = None
 
 print("=" * 60)
 print("DEMO: show the tags. Everything records itself automatically.")
-print("Keys: c=effacer trail  s=sauver tag_map  r=reset  q=quitter")
+print("KEYS: c=clear trail  s=save map  r=reset  q=quit")
 print("=" * 60)
 
 while True:
@@ -222,7 +222,7 @@ while True:
             continue
         A = max(known, key=lambda i: surfaces[i])
         candidats[B].append(tag_map[A] @ inverse(poses[A]) @ poses[B])
-        if len(candidats[B]) >= ECHANTILLONS_REQUIS:
+        if len(candidats[B]) >= REQUIRED_SAMPLES:
             obs = np.array(candidats[B])
             T = np.median(obs, axis=0)
             T[:3, :3] = obs[len(obs) // 2][:3, :3]
@@ -249,7 +249,7 @@ while True:
             lissage.clear()
             derniere_pos = measurement
 
-    # --- display video : pose de chaque tag detecte ---
+    # --- video display: the pose of each detected tag ---
     y = 28
     for tag_id, x, yy, z, roll, pitch, yaw in infos:
         cv2.putText(image, f"tag {tag_id}: x={x:+.2f} y={yy:+.2f} z={z:+.2f} m",
@@ -258,7 +258,7 @@ while True:
                     (10, y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1)
         y += 46
     for B, obs in candidats.items():
-        pct = int(100 * len(obs) / ECHANTILLONS_REQUIS)
+        pct = int(100 * len(obs) / REQUIRED_SAMPLES)
         cv2.putText(image, f"enregistrement tag {B} : {pct}%", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 170, 255), 2)
         y += 22
@@ -266,10 +266,10 @@ while True:
         X, Y, Z = cam_xyz
         cv2.putText(image, f"CAMERA in the frame: X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m",
                     (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-    cv2.putText(image, "c=trail  s=sauver  r=reset  q=quitter", (10, H - 14),
+    cv2.putText(image, "c=trail  s=save  r=reset  q=quit", (10, H - 14),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
-    cv2.imshow("Detection AprilTag (q pour quitter)", image)
+    cv2.imshow("AprilTag detection (q to quit)", image)
     cv2.imshow("Carte 2D - vue de dessus", dessiner_carte(tag_map, cam_xyz, cam_R, trail))
 
     key = cv2.waitKey(1) & 0xFF

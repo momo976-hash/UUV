@@ -7,10 +7,10 @@
 #   5. The trajectory is COLOURED by the reference tag used: if the colour
 #      changes in the middle of a jump, it is the map that is imprecise.
 #   6. Map check: the distances between tags are displayed,
-#      a comparer au tape measure AVANT de presenter.
+#      to be compared with a tape measure BEFORE presenting.
 #
-# Keys: s=sauver tag_map | c=effacer trail | t=tags | v=check tag_map
-#           r=reset | q=quitter
+# KEYS: s=save map | c=clear trail | t=tags | v=check map
+#       r=reset | q=quit
 from collections import defaultdict, deque
 
 import cv2
@@ -24,7 +24,7 @@ RESOLUTION = (640, 480)
 TAG_SIZE = 0.22389        # cote du carre noir, measurement au calipers (nominal 223 mm)
 FACTEUR_FOCALE = 0.95       # correction de focal_length (calibration)
 
-ECHANTILLONS_REQUIS = 25    # observations avant d'enregistrer un tag
+REQUIRED_SAMPLES = 25       # observations before a tag is recorded
 MAX_JUMP = 0.40             # metres: beyond this the measurement is an outlier
 LISSAGE = 9                 # positions moyennees (anti-tremblement)
 MIN_STEP = 0.04             # metres: minimum movement before adding a point
@@ -63,7 +63,7 @@ def sauver_carte(tag_map):
     rows.append("}")
     with open("carte_enregistree.py", "w") as f:
         f.write("\n".join(rows) + "\n")
-    print("Carte sauvegardee dans carte_enregistree.py :\n" + "\n".join(rows))
+    print("Map saved to saved_map.py:\n" + "\n".join(rows))
 
 
 def verifier_carte(tag_map):
@@ -98,7 +98,7 @@ def dessiner_carte(tag_map, cam_xyz, cam_R, trail, montrer_tags, distance):
         return (int(CARTE_PX / 2 + (X - cx) * echelle),
                 int(CARTE_PX / 2 - (Z - cz) * echelle))
 
-    # --- grille de 1 m ---
+    # --- 1 m grid ---
     if echelle > 12:
         k = 0
         while True:
@@ -187,7 +187,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERROR: aucune camera ouverte.")
+    print("ERROR: no camera opened.")
     raise SystemExit
 
 FOCALE = L * FACTEUR_FOCALE
@@ -211,10 +211,10 @@ distance_totale = 0.0
 montrer_tags = True
 
 print("=" * 64)
-print("1) Cadre DEUX tags ensemble -> le 2e s'enregistre (progression en %)")
+print("1) Frame TWO tags together -> the 2nd records itself (progress in %)")
 print("2) Repeat for the 3rd tag, then press 'v' to CHECK the map")
 print("3) Press 'c' then move around: the trajectory draws itself")
-print("Keys: s=sauver  c=trail  t=tags  v=check  r=reset  q=quitter")
+print("KEYS: s=save  c=trail  t=tags  v=check  r=reset  q=quit")
 print("=" * 64)
 
 while True:
@@ -251,7 +251,7 @@ while True:
             continue
         A = max(known, key=lambda i: surfaces[i])
         candidats[B].append(tag_map[A] @ inverse(poses[A]) @ poses[B])
-        if len(candidats[B]) >= ECHANTILLONS_REQUIS:
+        if len(candidats[B]) >= REQUIRED_SAMPLES:
             obs = np.array(candidats[B])
             T = np.median(obs, axis=0)
             T[:3, :3] = obs[len(obs) // 2][:3, :3]
@@ -291,7 +291,7 @@ while True:
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
     y = 52
     for B, obs in candidats.items():
-        pct = int(100 * len(obs) / ECHANTILLONS_REQUIS)
+        pct = int(100 * len(obs) / REQUIRED_SAMPLES)
         cv2.putText(image, f"tag {B} : enregistrement {pct}%", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 170, 255), 2)
         y += 22
@@ -300,12 +300,12 @@ while True:
         cv2.putText(image, f"CAMERA: X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m (ref tag {ref})",
                     (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, couleur_tag(ref), 2)
     elif not known_seen:
-        cv2.putText(image, "Aucun tag known visible", (10, y),
+        cv2.putText(image, "No known tag visible", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-    cv2.putText(image, "s=sauver c=trail t=tags v=check r=reset q=quitter",
+    cv2.putText(image, "s=save c=trail t=tags v=check r=reset q=quit",
                 (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1)
 
-    cv2.imshow("Video (q pour quitter)", image)
+    cv2.imshow("Video (q to quit)", image)
     cv2.imshow("Trajectoire - vue de dessus",
                dessiner_carte(tag_map, cam_xyz, cam_R, trail, montrer_tags,
                               distance_totale))

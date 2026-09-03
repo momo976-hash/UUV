@@ -546,7 +546,7 @@ def fuse_positions(measurements):
     Retourne (position_fusionnee, covariance_fusionnee).
     """
     if not measurements:
-        raise ValueError("aucune measurement a fusionner")
+        raise ValueError("no measurement to fuse")
     if len(measurements) == 1:
         return np.asarray(measurements[0][0], dtype=float), np.asarray(measurements[0][1], dtype=float)
 
@@ -679,7 +679,7 @@ class PositionKalmanFilter:
         self.consecutive_rejections = 0
         self.recoveries = 0
         # Filled in on every update, for the plots (see correct).
-        # Reste None tant qu'aucune measurement n'est arrivee.
+        # Stays None until a measurement has arrived.
         self.last_update = None
 
     # x and P live in the core; they are exposed as they are so that the rest
@@ -854,8 +854,8 @@ class OrientationFilter:
         # bring, and subtracted from the following measurements.
         self.bias = np.zeros(3)
         self.bias_tau = float(bias_tau)   # time constant of the estimation
-        self._temps_depuis_correction = 0.0
-        self._rotation_gyro = np.zeros(3)   # rotation integree depuis la derniere
+        self._time_since_correction = 0.0
+        self._rotation_gyro = np.zeros(3)   # rotation integrated since the last one
         self.gyro_used = False
 
     def start(self, R_ou_q, sigma_deg=5.0):
@@ -893,7 +893,7 @@ class OrientationFilter:
         self.q = quaternion_product(self.q, quaternion_from_rotation(rotation))
         self.q /= np.linalg.norm(self.q)
         self.variance += (self.gyro_noise * dt) ** 2
-        self._temps_depuis_correction += dt
+        self._time_since_correction += dt
         self._rotation_gyro = self._rotation_gyro + rotation
 
     def correct_with_gravity(self, acceleration, sigma_deg=8.0,
@@ -933,7 +933,7 @@ class OrientationFilter:
         cosinus = float(np.clip(attendue @ measured, -1.0, 1.0))
         angle = float(np.arctan2(sine, cosinus))
         if sine < 1e-9:
-            return True, 0.0                       # deja aligne
+            return True, 0.0                       # already aligned
         axis = axis / sine
 
         # Scalar Kalman gain, as for the correction by the tags.
@@ -942,7 +942,7 @@ class OrientationFilter:
         # SIGN. `axis, angle` describes the rotation Delta that takes the
         # PREDICTED direction onto the MEASURED one, both in the body frame.
         # The orientation q goes from body to world: for its correction to
-        # prevision R'^T.ez vaille `measured`, one must R' = R.Delta^T, donc
+        # prediction R'^T.ez to equal `measured`, we need R' = R.Delta^T, so
         # compose on the right by the INVERSE of Delta — hence the minus.
         # With the opposite sign the correction moves away from the target
         # and the orientation converges to the fixed point 180 degrees away.
@@ -981,7 +981,7 @@ class OrientationFilter:
         # scalar Kalman gain on the angle
         r = float(sigma_mesure_rad) ** 2
         gain = self.variance / (self.variance + r)
-        avant = self.q.copy()
+        before = self.q.copy()
         self.q = slerp(self.q, q, gain)
         self.variance = (1.0 - gain) * self.variance
         if self.gyro_used:
@@ -990,10 +990,10 @@ class OrientationFilter:
         # applied correction would under-estimate it by that much, and the
         # more so the more confident the filter is. The full gap — the
         # innovation — is the true measure of the drift accumulated since the
-            self._reestimate_bias(avant, q)
+            self._reestimate_bias(before, q)
         return True, gap
 
-    def _reestimate_bias(self, avant, measurement):
+    def _reestimate_bias(self, before, measurement):
         """Attribute to the gyro bias the systematic part of the innovation.
 
         Between two tags, the orientation only advances by integrating the
@@ -1004,18 +1004,17 @@ class OrientationFilter:
         It is averaged slowly (time constant bias_tau) because an isolated
         correction mixes the bias with the tag's noise. A real bias is
         constant, noise is not: only the former survives the averaging.
-        averaging.
         """
-        dt = self._temps_depuis_correction
-        self._temps_depuis_correction = 0.0
+        dt = self._time_since_correction
+        self._time_since_correction = 0.0
         rotation_gyro = self._rotation_gyro
         self._rotation_gyro = np.zeros(3)
         if dt < 0.05:
             return                              # too short to separate anything
 
         # Rotation brought by the correction, expressed in the body frame.
-        delta = quaternion_product(np.array([avant[0], -avant[1], -avant[2],
-                                              -avant[3]]), measurement)
+        delta = quaternion_product(np.array([before[0], -before[1], -before[2],
+                                             -before[3]]), measurement)
         angle = 2.0 * np.arctan2(float(np.linalg.norm(delta[1:])),
                                  float(abs(delta[0])))
         if angle < 1e-9:
@@ -1068,7 +1067,7 @@ class TagWatchdog:
     filter's output. The reason is subtle but decisive: the filter's output
     lags behind the real motion, and that lag depends on which tag is
     visible. Comparing against the filter therefore manufactures false
-    Deux measurements prises au meme timestamp, elles, n'ont aucun retard relatif.
+    Two measurements taken at the same timestamp have no relative delay.
 
     Accepted consequence: a tag seen ALONE is never blamed. That is the
     observability limit, not an implementation flaw -- nothing then
@@ -1150,7 +1149,7 @@ class TagWatchdog:
         return confirmed
 
     def suspicious_pairs(self):
-        """Paires en desaccord dont aucun membre n'est formellement convaincu."""
+        """Disagreeing pairs where neither member is formally convicted."""
         confirmed = set(self.suspects())
         douteuses = {}
         for (i, j), observations in self.gaps.items():
@@ -1162,7 +1161,7 @@ class TagWatchdog:
         return douteuses
 
     def main_suspect(self):
-        """Tag commun a plusieurs paires en desaccord.
+        """A tag common to several disagreeing pairs.
 
         A weaker clue than a conviction, but often enough: if every disputing
         pair contains the same tag, that common denominator is the one to go
@@ -1210,7 +1209,7 @@ class TagWatchdog:
 class PoseFilter:
     """Enveloppe pratique : une pose complete (position + orientation).
 
-    Utilisation type, a chaque image :
+    Typical use, on every frame:
         filter.predict(dt, gyro=omega, accel=a)     # IMU facultative
         for tag in tags_vus:
             filter.add_tag(position_estimatede, position_tag, incidence, R_mesuree)
@@ -1463,7 +1462,7 @@ def _auto_test():
           f"{np.abs(identity - np.eye(4)).max():.1e}")
 
     # -- does the gyro hold the heading when the tags disappear? ------------
-    # 6 seconds sans aucun tag, l'vehicle tournant a 20 deg/s.
+    # 6 seconds with no tag at all, the vehicle turning at 20 deg/s.
     dt, duration = 1 / 200, 6.0
     true_rate = np.radians([3.0, -5.0, 20.0])
     true_bias = np.radians([0.4, -0.3, 0.6])
@@ -1483,7 +1482,7 @@ def _auto_test():
               f"{gap:6.1f} deg   (reported uncertainty "
               f"{suivi.uncertainty_deg:5.1f} deg)")
         if avec_gyro:
-            # le bias non estimated domine : 0.6 deg/s pendant 6 s = 3.6 deg
+            # the unestimated bias dominates: 0.6 deg/s over 6 s = 3.6 deg
             assert gap < 8.0, f"the gyro must hold the heading, got {gap:.1f} deg"
         else:
             assert gap > 100.0, "without a gyro everything must be lost"

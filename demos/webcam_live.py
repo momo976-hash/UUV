@@ -39,7 +39,7 @@ def charger_calibration(width, height):
     try:
         f = np.load("calibration_camera.npz")
         K, d, Lc = f["K"].astype(np.float64), f["dist"].ravel(), int(f["width"])
-        print("Calibration chargee depuis calibration_camera.npz")
+        print("Calibration loaded from calibration_camera.npz")
     except Exception:
         print("Calibration integree au script used")
     if width != Lc:                      # mise a l'echelle si resolution differente
@@ -81,7 +81,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERROR: aucune camera ouverte (index 0 a 3).")
+    print("ERROR: no camera opened (indices 0 to 3).")
     raise SystemExit
 
 K, dist = charger_calibration(L, H)
@@ -134,7 +134,7 @@ while True:
             cv2.putText(image, f"d={float(np.linalg.norm(tvec)):.2f}m", (cx - 30, cy),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-    cv2.imshow("AprilTag en direct (q pour quitter)", image)
+    cv2.imshow("AprilTag live (q to quit)", image)
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 

@@ -54,7 +54,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optics  # noqa: E402
 
 CAMERA_INDEX = None
@@ -134,8 +134,8 @@ def split_noise(values, half_window=7, degree=2):
     usable = flat[half_window:flat.shape[0] - half_window]
     noise = (usable - smooth) / np.sqrt(correction)
 
-    nouvelle_forme = (smooth.shape[0],) + shape[1:]
-    return smooth.reshape(nouvelle_forme), noise.reshape(nouvelle_forme)
+    new_shape = (smooth.shape[0],) + shape[1:]
+    return smooth.reshape(new_shape), noise.reshape(new_shape)
 
 
 def analyse(corners, positions, focal_length, tag_size, moving=False):
@@ -157,10 +157,10 @@ def analyse(corners, positions, focal_length, tag_size, moving=False):
         position_noise = positions - positions.mean(axis=0)
         reference = np.repeat(positions.mean(axis=0)[None], len(positions), axis=0)
 
-    # --- noise des corners, en pixels ---------------------------------------
+    # --- corner noise, in pixels -------------------------------------------
     sigma_pixel = float(np.sqrt(np.mean(np.square(corner_noise))))
 
-    # --- noise de position, decompose lateral / depth -----------------
+    # --- position noise, split into lateral / depth -------------------------
     # the line of sight changes as the camera moves: it is retaken each frame
     distances = np.linalg.norm(reference, axis=1)
     distance = float(np.mean(distances))

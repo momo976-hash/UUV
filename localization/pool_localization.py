@@ -42,7 +42,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERROR: aucune camera ouverte.")
+    print("ERROR: no camera opened.")
     raise SystemExit
 
 FOCALE = L * FOCAL_FACTOR
@@ -93,13 +93,13 @@ while True:
         X, Y, Z = np.mean(camera_positions, axis=0)
         cv2.putText(image, f"CAMERA in pool: X={X:+.2f} Y={Y:+.2f} Z={Z:+.2f} m",
                     (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        cv2.putText(image, f"(calcule avec {len(camera_positions)} tag(s) known(s))",
+        cv2.putText(image, f"(computed from {len(camera_positions)} known tag(s))",
                     (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
     else:
         cv2.putText(image, "No tag from the map is visible", (10, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-    cv2.imshow("Localisation piscine (q pour quitter)", image)
+    cv2.imshow("Pool localisation (q to quit)", image)
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 

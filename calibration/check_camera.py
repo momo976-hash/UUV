@@ -100,7 +100,7 @@ def angle_entre(R1, R2):
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERROR: aucune camera ouverte.")
+    print("ERROR: no camera opened.")
     raise SystemExit
 
 # A) approximation
@@ -151,7 +151,7 @@ print("  1. 'o' sets the camera's reference pose")
 print("  2. MOVE or TURN the camera by a known amount")
 print("  3. type that amount, then 's' to record it")
 print("  'm' bascule deplacement <-> rotation | 'q' quitte")
-print(f"Resultats dans : {CSV}")
+print(f"Results in: {CSV}")
 print("=" * 66)
 
 while True:
@@ -221,7 +221,7 @@ while True:
         cv2.putText(image, f"Reference tag {ref_tag} out of frame", (10, 52),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
     else:
-        cv2.putText(image, "Aucun tag detecte", (10, 52),
+        cv2.putText(image, "No tag detected", (10, 52),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
     if ref_pa is None:
@@ -247,7 +247,7 @@ while True:
 
     cv2.putText(image, f"value reelle ({unite}) : {typed or '...'}", (10, H - 38),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
-    cv2.putText(image, "m=mode  o=reference  chiffres=saisir  s=enregistrer  q=quitter",
+    cv2.putText(image, "m=mode  o=reference  digits=type  s=record  q=quit",
                 (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
     cv2.imshow("Check from the camera's motion (q to quit)", image)
@@ -260,7 +260,7 @@ while True:
         ref_pa = ref_Ra = ref_pb = ref_Rb = ref_tag = None
         hist_a.clear(); hist_b.clear()
         typed = ""
-        print(f"Mode : {MODES[mode]} (reference remise a zero, appuie sur 'o')")
+        print(f"Mode: {MODES[mode]} (reference cleared, press 'o')")
     if key == ord("o"):
         if pa is not None:
             ref_pa, ref_Ra = pa.copy(), Ra.copy()

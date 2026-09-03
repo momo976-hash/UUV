@@ -33,7 +33,7 @@ def cameras_disponibles(nb_index=5):
 
 liste = cameras_disponibles()
 if not liste:
-    print("Aucune camera detectee.")
+    print("No camera detected.")
     raise SystemExit
 
 print("=" * 58)
@@ -42,7 +42,7 @@ for index, _, name, w, h in liste:
     print(f"  index={index}  backend={name}  resolution={w}x{h}")
 print("=" * 58)
 print("Look at each image and note the index of the one you want to use.")
-print("Keys: 'n' = suivante | 'q' = quitter")
+print("KEYS: 'n' = next | 'q' = quit")
 
 position = 0
 while True:
@@ -60,7 +60,7 @@ while True:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         cv2.putText(image, f"resolution = {w}x{h}", (10, 60),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-        cv2.putText(image, "'n' = camera suivante   'q' = quitter", (10, h - 14),
+        cv2.putText(image, "'n' = next camera   'q' = quit", (10, h - 14),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
         cv2.imshow("Identification des cameras", image)
 

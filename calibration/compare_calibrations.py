@@ -99,7 +99,7 @@ def angle_entre(R1, R2):
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERROR: aucune camera ouverte.")
+    print("ERROR: no camera opened.")
     raise SystemExit
 
 # A) approximation
@@ -250,7 +250,7 @@ while True:
 
     cv2.putText(image, f"reference ({'deg' if mode >= 2 else 'm'}) : {typed or '...'}", (10, H - 38),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
-    cv2.putText(image, "m=mode  o=ref.orientation  chiffres=saisir  s=enregistrer  q=quitter",
+    cv2.putText(image, "m=mode  o=orientation ref  digits=type  s=record  q=quit",
                 (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1)
 
     cv2.imshow("Calibration comparison (q to quit)", image)
@@ -300,4 +300,4 @@ while True:
 
 cam.release()
 cv2.destroyAllWindows()
-print(f"\nTermine. Mesures dans : {CSV}")
+print(f"\nDone. Measurements in: {CSV}")

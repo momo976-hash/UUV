@@ -64,7 +64,7 @@ def ouvrir_camera():
 
 cam, L, H = ouvrir_camera()
 if cam is None:
-    print("ERROR: aucune camera ouverte.")
+    print("ERROR: no camera opened.")
     raise SystemExit
 
 FOCALE = L * FACTEUR_FOCALE
@@ -99,7 +99,7 @@ while True:
                 continue
             cv2.drawFrameAxes(image, K, dist, rvec, tvec, TAG_SIZE / 2, 2)
 
-            # Tag seen depuis la camera
+            # The tag seen from the camera
             R_cam, _ = cv2.Rodrigues(rvec)
             T_camera_tag = transformation(R_cam, tvec)
 
@@ -129,7 +129,7 @@ while True:
         cv2.putText(image, "No tag from the map is visible", (10, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-    cv2.imshow("Localisation piscine + orientation (q pour quitter)", image)
+    cv2.imshow("Pool localisation + orientation (q to quit)", image)
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 

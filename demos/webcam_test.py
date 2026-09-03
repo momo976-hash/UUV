@@ -1,5 +1,5 @@
 # webcam_test.py — Minimal webcam + AprilTag test.
-# Utilise le detector AprilTag integre a OpenCV (cv2.aruco) : aucune librairie
+# Uses the AprilTag detector built into OpenCV (cv2.aruco): no library
 # to compile, and works even on Python 3.14.
 import cv2
 import numpy as np
@@ -9,7 +9,7 @@ TAG_SIZE = 0.10  # tag side in metres (measure your printed tag and change this)
 # --- Webcam ---
 cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # CAP_DSHOW : evite l'error MSMF sous Windows
 if not cam.isOpened():
-    print("ERROR: impossible d'ouvrir la webcam.")
+    print("ERROR: cannot open the webcam.")
     raise SystemExit
 
 # --- Rough camera parameters (good enough for a test) ---
@@ -52,7 +52,7 @@ while True:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2,
                 )
 
-    cv2.imshow("AprilTag (q pour quitter)", image)
+    cv2.imshow("AprilTag (q to quit)", image)
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 
