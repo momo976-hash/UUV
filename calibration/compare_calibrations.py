@@ -38,14 +38,14 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optics  # noqa: E402
 
-CAMERA_INDEX = None          # None = detection automatique
+CAMERA_INDEX = None          # None = automatic detection
 RESOLUTION = (640, 480)      # must be identical to the calibration's
 
-TAG_SIZE = optics.LARGE_TAG_SIZE   # measurement au calipers, pas 223 mm nominal
-FACTEUR_APPROX = 0.95        # ancienne approximation
-SMOOTHING = 30                 # frames moyennees pour stabiliser l'display
+TAG_SIZE = optics.LARGE_TAG_SIZE   # caliper-measured, not the nominal 223 mm
+APPROX_FACTOR = 0.95        # the old approximation
+SMOOTHING = 30                 # frames averaged to stabilise the display
 
-# Calibration par checkerboard (5x7, 22 vues, RMS 0.169 px)
+# Checkerboard calibration (5x7, 22 views, RMS 0.169 px)
 MOUNTING = optics.ACTIVE_MOUNTING
 # The optics come from optics.py: camera, tube, viewport, medium. The mounting
 # is written in no code file: optics.py reads it from
@@ -60,7 +60,7 @@ K_CALIB, DIST_CALIB = optics.load(MOUNTING)
 CALIB_WIDTH, CALIB_HEIGHT = 640, 480
 
 
-def ouvrir_camera():
+def open_camera():
     """Opens the camera, always forcing the same resolution."""
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
@@ -73,37 +73,37 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
+                    print(f"Camera used: index={index}, backend={name}, {ww}x{hh}")
                     return cap, ww, hh
             cap.release()
     return None, 0, 0
 
 
-def positions(pts_par_tag, K, dist):
+def positions(pts_by_tag, K, dist):
     """Pose (position, rotation) of each tag in the camera frame."""
     result = {}
-    for tag_id, pts in pts_par_tag.items():
-        ok, rvec, tvec = cv2.solvePnP(coins_3d, pts, K, dist,
+    for tag_id, pts in pts_by_tag.items():
+        ok, rvec, tvec = cv2.solvePnP(corners_3d, pts, K, dist,
                                       flags=cv2.SOLVEPNP_IPPE_SQUARE)
         if ok:
             result[tag_id] = (tvec.flatten(), cv2.Rodrigues(rvec)[0])
     return result
 
 
-def angle_entre(R1, R2):
+def angle_between(R1, R2):
     """Angle (degrees) of the rotation taking frame 1 onto frame 2."""
     R_rel = R1.T @ R2
     cos = (np.trace(R_rel) - 1.0) / 2.0
     return float(np.degrees(np.arccos(np.clip(cos, -1.0, 1.0))))
 
 
-cam, L, H = ouvrir_camera()
+cam, L, H = open_camera()
 if cam is None:
     print("ERROR: no camera opened.")
     raise SystemExit
 
 # A) approximation
-f = L * FACTEUR_APPROX
+f = L * APPROX_FACTOR
 K_approx = np.array([[f, 0, L / 2], [0, f, H / 2], [0, 0, 1]], dtype=np.float64)
 dist_approx = np.zeros(5)
 
@@ -115,15 +115,15 @@ try:
     K_calib = path["K"].astype(np.float64)
     dist_calib = path["dist"].ravel()
     Lc, Hc = int(path["width"]), int(path["height"])
-    print("Calibration chargee depuis calibration_camera.npz")
+    print("Calibration loaded from calibration_camera.npz")
 except Exception:
-    print("Calibration integree au script used")
-print(f"  calibration : {Lc}x{Hc} (fx = {K_calib[0, 0]:.1f})   capture : {L}x{H}")
+    print("Calibration built into the script")
+print(f"  calibration: {Lc}x{Hc} (fx = {K_calib[0, 0]:.1f})   capture: {L}x{H}")
 if (L, H) != (Lc, Hc):
     print("  >>> WARNING: different formats, the calibration is not valid here.")
 
 h = TAG_SIZE / 2
-coins_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
+corners_3d = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]], dtype=np.float64)
 
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
 params = cv2.aruco.DetectorParameters()
@@ -160,24 +160,24 @@ while True:
     grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     corners, ids, _ = detector.detectMarkers(grey)
 
-    pts_par_tag = {}
+    pts_by_tag = {}
     if ids is not None:
         cv2.aruco.drawDetectedMarkers(image, corners, ids)
         for c, tag_id in zip(corners, ids.flatten()):
-            pts_par_tag[int(tag_id)] = c.reshape(4, 2).astype(np.float64)
+            pts_by_tag[int(tag_id)] = c.reshape(4, 2).astype(np.float64)
 
-    pos_a = positions(pts_par_tag, K_approx, dist_approx)
-    pos_b = positions(pts_par_tag, K_calib, dist_calib)
+    pos_a = positions(pts_by_tag, K_approx, dist_approx)
+    pos_b = positions(pts_by_tag, K_calib, dist_calib)
 
     measured_a = measured_b = None
     detail = ""
     common = sorted(set(pos_a) & set(pos_b))
-    if mode == 0:                                   # gap entre deux tags
+    if mode == 0:                                   # gap between two tags
         if len(common) >= 2:
             t1, t2 = common[0], common[1]
             measured_a = float(np.linalg.norm(pos_a[t1][0] - pos_a[t2][0]))
             measured_b = float(np.linalg.norm(pos_b[t1][0] - pos_b[t2][0]))
-            detail = f"tags {t1} et {t2}"
+            detail = f"tags {t1} and {t2}"
         else:
             detail = "show TWO tags at the same time"
     elif mode == 1:                                 # distance camera -> tag
@@ -188,11 +188,11 @@ while True:
             detail = f"tag {t1}"
         else:
             detail = "no tag detected"
-    elif mode == 2:                                 # angle entre deux tags
+    elif mode == 2:                                 # angle between two tags
         if len(common) >= 2:
             t1, t2 = common[0], common[1]
-            measured_a = angle_entre(pos_a[t1][1], pos_a[t2][1])
-            measured_b = angle_entre(pos_b[t1][1], pos_b[t2][1])
+            measured_a = angle_between(pos_a[t1][1], pos_a[t2][1])
+            measured_b = angle_between(pos_b[t1][1], pos_b[t2][1])
             detail = f"tags {t1} and {t2} (coplanar -> expected 0 deg)"
         else:
             detail = "show TWO tags at the same time"
@@ -203,8 +203,8 @@ while True:
             detail = "place the tag, then 'o' to set the reference"
         else:
             t1 = common[0]
-            measured_a = angle_entre(ref_Ra, pos_a[t1][1])
-            measured_b = angle_entre(ref_Rb, pos_b[t1][1])
+            measured_a = angle_between(ref_Ra, pos_a[t1][1])
+            measured_b = angle_between(ref_Rb, pos_b[t1][1])
             detail = f"tag {t1}: rotation from the reference"
 
     if measured_a is not None:
@@ -217,38 +217,38 @@ while True:
     d_b = sum(hist_b) / len(hist_b) if hist_b else None
 
     # --- display ---
-    cv2.putText(image, f"MODE : {MODES[mode]}  ({detail})", (10, 26),
+    cv2.putText(image, f"MODE: {MODES[mode]}  ({detail})", (10, 26),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
     if d_a is not None:
-        unite = "deg" if mode >= 2 else "m"
-        cv2.putText(image, f"A) approximation : {d_a:.3f} {unite}", (10, 56),
+        unit = "deg" if mode >= 2 else "m"
+        cv2.putText(image, f"A) approximation: {d_a:.3f} {unit}", (10, 56),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
-        cv2.putText(image, f"B) calibration   : {d_b:.3f} {unite}", (10, 82),
+        cv2.putText(image, f"B) calibration:   {d_b:.3f} {unit}", (10, 82),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
         if typed:
             try:
                 ref = float(typed)
                 ea, eb = d_a - ref, d_b - ref
                 if mode >= 2:
-                    cv2.putText(image, f"gap A : {ea:+.2f} deg", (10, 112),
+                    cv2.putText(image, f"gap A: {ea:+.2f} deg", (10, 112),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
-                    cv2.putText(image, f"gap B : {eb:+.2f} deg", (10, 136),
+                    cv2.putText(image, f"gap B: {eb:+.2f} deg", (10, 136),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
                 elif ref:
-                    cv2.putText(image, f"gap A : {ea*100:+.1f} cm ({ea/ref*100:+.1f} %)",
+                    cv2.putText(image, f"gap A: {ea*100:+.1f} cm ({ea/ref*100:+.1f} %)",
                                 (10, 112), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
-                    cv2.putText(image, f"gap B : {eb*100:+.1f} cm ({eb/ref*100:+.1f} %)",
+                    cv2.putText(image, f"gap B: {eb*100:+.1f} cm ({eb/ref*100:+.1f} %)",
                                 (10, 136), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
                     if d_b:
                         cv2.putText(image,
-                                    f"TAG_SIZE deduite : {TAG_SIZE*ref/d_b*100:.1f} cm"
-                                    f"  (declaree {TAG_SIZE*100:.1f} cm)",
+                                    f"TAG_SIZE inferred: {TAG_SIZE*ref/d_b*100:.1f} cm"
+                                    f"  (declared {TAG_SIZE*100:.1f} cm)",
                                     (10, 162), cv2.FONT_HERSHEY_SIMPLEX, 0.52,
                                     (255, 255, 0), 2)
             except ValueError:
                 pass
 
-    cv2.putText(image, f"reference ({'deg' if mode >= 2 else 'm'}) : {typed or '...'}", (10, H - 38),
+    cv2.putText(image, f"reference ({'deg' if mode >= 2 else 'm'}): {typed or '...'}", (10, H - 38),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
     cv2.putText(image, "m=mode  o=orientation ref  digits=type  s=record  q=quit",
                 (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1)
@@ -261,7 +261,7 @@ while True:
     if key == ord("m"):
         mode = (mode + 1) % len(MODES)
         hist_a.clear(); hist_b.clear()
-        print(f"Mode : {MODES[mode]}")
+        print(f"Mode: {MODES[mode]}")
     if key == ord("o"):
         if common:
             t1 = common[0]
@@ -295,7 +295,7 @@ while True:
             print(f"[{MODES[mode]}] reference {ref:.2f} deg | "
                   f"approx {d_a:.2f} ({ea:+.2f} deg) | calib {d_b:.2f} ({eb:+.2f} deg)")
         else:
-            print(f"[{MODES[mode]}] ruban {ref:.3f} m | approx {d_a:.3f} ({ea*100:+.1f} cm) "
+            print(f"[{MODES[mode]}] tape {ref:.3f} m | approx {d_a:.3f} ({ea*100:+.1f} cm) "
                   f"| calib {d_b:.3f} ({eb*100:+.1f} cm)")
 
 cam.release()

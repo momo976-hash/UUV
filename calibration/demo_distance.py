@@ -80,7 +80,7 @@
 # 1 %: do not conclude from a gap smaller than that.
 #
 # KEYS: t = change tag size | + / - = adjust the reference
-#           0 = oublier la reference     | s = capturer l'ecran | q = quitter
+#           0 = clear the reference      | s = capture the screen | q = quit
 import argparse
 import sys
 from datetime import datetime

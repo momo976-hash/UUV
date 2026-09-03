@@ -187,11 +187,11 @@ def analyse(corners, positions, focal_length, tag_size, moving=False):
 def incidence(rvec, tvec):
     """Angle at which the camera sees the tag (0 = square on)."""
     R = cv2.Rodrigues(rvec)[0]
-    normale, vers = R[:, 2], tvec.flatten()
-    distance = np.linalg.norm(vers)
+    normal, towards = R[:, 2], tvec.flatten()
+    distance = np.linalg.norm(towards)
     if distance < 1e-9:
         return 0.0
-    cos = abs(float(normale @ vers) / distance)
+    cos = abs(float(normal @ towards) / distance)
     return float(np.degrees(np.arccos(np.clip(cos, 0.0, 1.0))))
 
 

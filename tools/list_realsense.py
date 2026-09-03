@@ -15,7 +15,6 @@
 # It answers one precise SDK error: "Couldn't resolve requests". That means
 # the streams requested do not exist on the device found, without saying which
 # are missing or why. The possible causes all look alike from the outside:
-# l'ecran :
 #
 #   - it is a D435 and not a D435i: the model WITHOUT the "i" has no IMU.
 #     By far the most frequent case, and nothing signals it other than that

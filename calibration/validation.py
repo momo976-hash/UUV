@@ -35,7 +35,7 @@ def ouvrir_camera():
                 ok, img = cap.read()
                 if ok and img is not None:
                     h, w = img.shape[:2]
-                    print(f"Camera trouvee : index={index}, backend={name}, {w}x{h}")
+                    print(f"Camera found: index={index}, backend={name}, {w}x{h}")
                     return cap, w, h
             cap.release()
     return None, 0, 0
@@ -97,7 +97,7 @@ while True:
         cv2.putText(image, "No tag detected", (10, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
 
-    cv2.imshow("Validation precision (q pour quitter)", image)
+    cv2.imshow("Precision validation (q to quit)", image)
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):
         break

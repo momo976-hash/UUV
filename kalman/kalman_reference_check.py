@@ -74,10 +74,10 @@ def compare(name, computed):
     ok = gap <= threshold
     _results.append((name, ok, gap))
 
-    plat = " ".join(f"{v:12.4f}" for v in np.ravel(computed))
+    flat = " ".join(f"{v:12.4f}" for v in np.ravel(computed))
     doc = " ".join(f"{v:12.4f}" for v in np.ravel(expected))
-    marque = "OK " if ok else "NON"
-    print(f"  [{marque}] {name:8s} computed: {plat}")
+    mark = "OK " if ok else "NO "
+    print(f"  [{mark}] {name:8s} computed: {flat}")
     print(f"          {'':8s} document: {doc}     gap {gap:.2e}")
     return ok
 

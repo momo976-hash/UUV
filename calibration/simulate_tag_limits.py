@@ -56,7 +56,7 @@ MOUNTING = optics.ACTIVE_MOUNTING
 K_CALIB, DIST_CALIB = optics.load(MOUNTING)
 
 TAG_FAMILY = cv2.aruco.DICT_APRILTAG_36h11
-BORDURE = 1
+BORDER = 1
 CELLS = 8             # 6 of payload plus one black border cell each side
 
 RATE_LIMIT = 0.95     # same convention as the real measurement
@@ -71,17 +71,17 @@ NOISE = 3.0           # sensor noise, in grey levels
 BLACK, WHITE = 40, 200  # what a paper print gives, not 0 and 255
 
 
-def tag_pattern(identifiant=0, pixels_par_cellule=10):
+def tag_pattern(tag_id=0, pixels_per_cell=10):
     """The tag, surrounded by two white cells of quiet zone."""
     dictionary = cv2.aruco.getPredefinedDictionary(TAG_FAMILY)
-    carre = cv2.aruco.generateImageMarker(
-        dictionary, identifiant, CELLS * pixels_par_cellule, BORDURE)
-    quiet = 2 * pixels_par_cellule
-    return cv2.copyMakeBorder(carre, quiet, quiet, quiet, quiet,
+    marker_img = cv2.aruco.generateImageMarker(
+        dictionary, tag_id, CELLS * pixels_per_cell, BORDER)
+    quiet = 2 * pixels_per_cell
+    return cv2.copyMakeBorder(marker_img, quiet, quiet, quiet, quiet,
                               cv2.BORDER_CONSTANT, value=255), quiet
 
 
-def coins_projetes(size_px, incidence_deg):
+def projected_corners(size_px, incidence_deg):
     """Where the four corners of the black square land, seen at this incidence.
 
     The tag is a unit square rotated about its vertical axis, then placed at
@@ -93,52 +93,52 @@ def coins_projetes(size_px, incidence_deg):
     rotation = np.array([[np.cos(theta), 0.0, np.sin(theta)],
                          [0.0, 1.0, 0.0],
                          [-np.sin(theta), 0.0, np.cos(theta)]])
-    distance = K_CALIB[1, 1] / size_px          # cote vertical = size_px
+    distance = K_CALIB[1, 1] / size_px          # vertical side = size_px
     # camera frame: y points DOWN. The corners are given in the order the
     # detector expects; swapping two of them mirrors the tag, and it is then
     # no longer in the dictionary at all.
-    carre = np.array([[-0.5, -0.5, 0.0], [0.5, -0.5, 0.0],
-                      [0.5, 0.5, 0.0], [-0.5, 0.5, 0.0]])
-    dans_camera = carre @ rotation.T + np.array([0.0, 0.0, distance])
-    projete = dans_camera @ K_CALIB.T
-    return projete[:, :2] / projete[:, 2:3]
+    square = np.array([[-0.5, -0.5, 0.0], [0.5, -0.5, 0.0],
+                       [0.5, 0.5, 0.0], [-0.5, 0.5, 0.0]])
+    in_camera = square @ rotation.T + np.array([0.0, 0.0, distance])
+    projected = in_camera @ K_CALIB.T
+    return projected[:, :2] / projected[:, 2:3]
 
 
-def rendre(size_px, incidence_deg, pattern, quiet, flou, noise, rng):
+def render(size_px, incidence_deg, pattern, quiet, blur, noise, rng):
     """Manufactures the image the camera would see of this tag."""
-    corners = coins_projetes(size_px, incidence_deg)
+    corners = projected_corners(size_px, incidence_deg)
 
     # a patch just wide enough to leave white around the tag
-    cote = max(int(3.5 * size_px), 80)
+    side = max(int(3.5 * size_px), 80)
     centre = corners.mean(axis=0)
-    decalage = np.array([cote / 2, cote / 2]) - centre
+    offset = np.array([side / 2, side / 2]) - centre
     # a different sub-pixel draw on each trial: where the tag falls in the
     # pixel grid changes the result near the limit
-    decalage += rng.uniform(-0.5, 0.5, size=2)
+    offset += rng.uniform(-0.5, 0.5, size=2)
 
-    grand = cote * SUPERSAMPLE
+    big = side * SUPERSAMPLE
     source = np.array([[quiet, quiet],
                        [pattern.shape[1] - quiet, quiet],
                        [pattern.shape[1] - quiet, pattern.shape[0] - quiet],
                        [quiet, pattern.shape[0] - quiet]], dtype=np.float32)
-    cible = ((corners + decalage) * SUPERSAMPLE).astype(np.float32)
+    destination = ((corners + offset) * SUPERSAMPLE).astype(np.float32)
 
-    homographie = cv2.getPerspectiveTransform(source, cible)
-    image = cv2.warpPerspective(pattern, homographie, (grand, grand),
+    homography = cv2.getPerspectiveTransform(source, destination)
+    image = cv2.warpPerspective(pattern, homography, (big, big),
                                 flags=cv2.INTER_LINEAR,
                                 borderMode=cv2.BORDER_CONSTANT, borderValue=255)
     # shrink by averaging: that is what a photosite does
-    image = cv2.resize(image, (cote, cote), interpolation=cv2.INTER_AREA)
+    image = cv2.resize(image, (side, side), interpolation=cv2.INTER_AREA)
 
-    # contraste reel d'une impression, puis optics, puis capteur
+    # real contrast of a print, then optics, then sensor
     image = BLACK + (WHITE - BLACK) * (image.astype(np.float64) / 255.0)
-    if flou > 0:
-        image = cv2.GaussianBlur(image, (0, 0), flou)
+    if blur > 0:
+        image = cv2.GaussianBlur(image, (0, 0), blur)
     image += rng.normal(0.0, noise, image.shape)
     return np.clip(image, 0, 255).astype(np.uint8)
 
 
-def detecteur_aruco():
+def aruco_detector():
     params = cv2.aruco.DetectorParameters()
     params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
     return cv2.aruco.ArucoDetector(
@@ -146,69 +146,69 @@ def detecteur_aruco():
 
 
 def detection_rate(size_px, incidence_deg, detector, pattern, quiet,
-                   flou=BLUR, noise=NOISE, trials=TRIALS, seed=0):
+                   blur=BLUR, noise=NOISE, trials=TRIALS, seed=0):
     rng = np.random.default_rng(seed)
     seen = 0
     for _ in range(trials):
-        image = rendre(size_px, incidence_deg, pattern, quiet, flou, noise,
+        image = render(size_px, incidence_deg, pattern, quiet, blur, noise,
                        rng)
         _, ids, _ = detector.detectMarkers(image)
         seen += int(ids is not None and len(ids) > 0)
     return seen / trials
 
 
-def limit(values, taux, croissant):
+def limit(values, rates, ascending):
     """First value where the rate drops below the threshold and stays there."""
-    ordre = np.argsort(values)
-    if not croissant:                      # difficulte croissante = value qui baisse
-        ordre = ordre[::-1]
-    v, t = np.array(values)[ordre], np.array(taux)[ordre]
+    order = np.argsort(values)
+    if not ascending:                      # increasing difficulty = falling value
+        order = order[::-1]
+    v, t = np.array(values)[order], np.array(rates)[order]
     for k in range(len(v)):
         if t[k] < RATE_LIMIT and all(x < RATE_LIMIT for x in t[k:]):
             return float(v[k])
     return None
 
 
-def barre(taux):
-    return "#" * int(round(20 * taux))
+def bar(rate):
+    return "#" * int(round(20 * rate))
 
 
-def size_sweep(detector, pattern, quiet, flou=BLUR, noise=NOISE,
-                    incidence=0.0, bavard=True):
+def size_sweep(detector, pattern, quiet, blur=BLUR, noise=NOISE,
+                    incidence=0.0, verbose=True):
     sizes = [10, 12, 14, 16, 18, 20, 23, 26, 30, 35, 40, 50, 60]
-    taux = [detection_rate(t, incidence, detector, pattern, quiet, flou, noise,
+    rates = [detection_rate(t, incidence, detector, pattern, quiet, blur, noise,
                            seed=1000 + t) for t in sizes]
-    if bavard:
-        print(f"\n  {'size apparente':>18} {'taux de detection':>18}")
-        for t, p in zip(reversed(sizes), reversed(taux)):
-            print(f"  {t:>15} px {100*p:>15.0f} %  {barre(p)}")
-    return limit(sizes, taux, croissant=False), sizes, taux
+    if verbose:
+        print(f"\n  {'apparent size':>18} {'detection rate':>18}")
+        for t, p in zip(reversed(sizes), reversed(rates)):
+            print(f"  {t:>15} px {100*p:>15.0f} %  {bar(p)}")
+    return limit(sizes, rates, ascending=False), sizes, rates
 
 
-def incidence_sweep(detector, pattern, quiet, size, flou=BLUR, noise=NOISE,
-                       bavard=True):
+def incidence_sweep(detector, pattern, quiet, size, blur=BLUR, noise=NOISE,
+                       verbose=True):
     angles = [0, 10, 20, 30, 40, 50, 55, 60, 65, 70, 75, 80, 85]
-    taux = [detection_rate(size, a, detector, pattern, quiet, flou, noise,
+    rates = [detection_rate(size, a, detector, pattern, quiet, blur, noise,
                            seed=2000 + a) for a in angles]
-    if bavard:
-        print(f"\n  {'incidence':>18} {'taux de detection':>18}")
-        for a, p in zip(angles, taux):
-            print(f"  {a:>14} deg {100*p:>15.0f} %  {barre(p)}")
-    return limit(angles, taux, croissant=True), angles, taux
+    if verbose:
+        print(f"\n  {'incidence':>18} {'detection rate':>18}")
+        for a, p in zip(angles, rates):
+            print(f"  {a:>14} deg {100*p:>15.0f} %  {bar(p)}")
+    return limit(angles, rates, ascending=True), angles, rates
 
 
-def taille_seuil(angle, detector, pattern, quiet, sizes, trials=40):
+def threshold_size(angle, detector, pattern, quiet, sizes, trials=40):
     """The smallest size still reliably detected at this angle.
 
     We walk up from small sizes towards large ones and keep the first that
     holds the threshold without ever losing it again above.
     """
-    taux = [detection_rate(t, angle, detector, pattern, quiet, trials=trials,
+    rates = [detection_rate(t, angle, detector, pattern, quiet, trials=trials,
                            seed=3000 + t + angle) for t in sizes]
     for k, t in enumerate(sizes):
-        if all(p >= RATE_LIMIT for p in taux[k:]):
-            return t, taux
-    return None, taux
+        if all(p >= RATE_LIMIT for p in rates[k:]):
+            return t, rates
+    return None, rates
 
 
 def boundary_map(detector, pattern, quiet):
@@ -222,29 +222,30 @@ def boundary_map(detector, pattern, quiet):
     sizes = [14, 16, 18, 20, 22, 25, 28, 32, 36, 40, 45, 50, 60, 75, 90, 110, 130]
     angles = [0, 20, 40, 55, 65, 70, 75, 80]
 
-    print("\n  FRONTIERE DE DETECTION")
+    print("\n  DETECTION BOUNDARY")
     print(f"  For each angle, the smallest size held at "
           f"{100*RATE_LIMIT:.0f} %, and the width")
     print("  left of it once the tag is compressed by the angle.")
-    print(f"\n  {'incidence':>10} {'size mini':>13} {'x cos(inc.)':>13}")
-    largeurs = []
+    print(f"\n  {'incidence':>10} {'min size':>13} {'x cos(inc.)':>13}")
+    widths = []
     for angle in angles:
-        threshold, _ = taille_seuil(angle, detector, pattern, quiet, sizes)
+        threshold, _ = threshold_size(angle, detector, pattern, quiet, sizes)
         if threshold is None:
             print(f"  {angle:>7} deg {'never':>13} {'—':>13}")
             continue
         compressed = threshold * np.cos(np.radians(angle))
         print(f"  {angle:>7} deg {threshold:>10} px {compressed:>10.1f} px")
-        largeurs.append((angle, compressed))
+        widths.append((angle, compressed))
 
-    if len(largeurs) < 3:
+    if len(widths) < 3:
         return
-    gentle = [w for a, w in largeurs if a <= 65]
+    gentle = [w for a, w in widths if a <= 65]
     print(f"\n  Up to 65 deg, that width stays between {min(gentle):.0f} and "
           f"{max(gentle):.0f} px:")
     print("  the angle does nothing but compress the tag. So a single criterion")
     print(f"  is enough in that range:  size x cos(incidence) >= "
           f"{np.mean(gentle):.0f} px")
+    steep = [(a, w) for a, w in widths if a > 65]
     if steep:
         print(f"\n  Beyond it the rule degrades: at {steep[0][0]} deg you already "
               f"need {steep[0][1]:.0f} px")
@@ -265,31 +266,31 @@ def sensitivity(detector, pattern, quiet):
     # an observed detection is a detection — no contamination manufactures
     # one. So it is a safe floor, and it is what settles the matter.
     print("\n  INFLUENCE OF THE ASSUMED IMAGE FORMATION")
-    print("  Arbitres : 100 % a 58 px, et au moins 84 % a 20 px (measurements reels)")
-    print(f"\n  {'flou':>6} {'noise':>7} {'PIXELS_MIN':>13} {'INCIDENCE_MAX':>16}"
+    print("  Reference points: 100 % at 58 px, and at least 84 % at 20 px (real measurements)")
+    print(f"\n  {'blur':>6} {'noise':>7} {'PIXELS_MIN':>13} {'INCIDENCE_MAX':>16}"
           f" {'58 px':>7} {'20 px':>7}")
-    trouves = []
-    for flou in (0.4, 0.8, 1.2, 1.6):
+    found = []
+    for blur in (0.4, 0.8, 1.2, 1.6):
         for noise in (1.5, 3.0, 6.0):
-            px, _, _ = size_sweep(detector, pattern, quiet, flou, noise,
-                                       bavard=False)
+            px, _, _ = size_sweep(detector, pattern, quiet, blur, noise,
+                                       verbose=False)
             deg, _, _ = incidence_sweep(detector, pattern, quiet, 60,
-                                           flou, noise, bavard=False)
-            gros = detection_rate(58, 0, detector, pattern, quiet, flou, noise,
+                                           blur, noise, verbose=False)
+            big = detection_rate(58, 0, detector, pattern, quiet, blur, noise,
                                   trials=40, seed=77)
-            petit = detection_rate(20, 0, detector, pattern, quiet, flou, noise,
+            small = detection_rate(20, 0, detector, pattern, quiet, blur, noise,
                                    trials=40, seed=78)
-            compatible = gros >= 0.99 and petit >= 0.84
-            print(f"  {flou:>6.1f} {noise:>7.1f} "
-                  f"{'jamais' if px is None else f'{px:.0f} px':>13} "
-                  f"{'jamais' if deg is None else f'{deg:.0f} deg':>16}"
-                  f" {100*gros:>6.0f}% {100*petit:>6.0f}%"
-                  + ("" if compatible else "   <- exclu"))
+            compatible = big >= 0.99 and small >= 0.84
+            print(f"  {blur:>6.1f} {noise:>7.1f} "
+                  f"{'never' if px is None else f'{px:.0f} px':>13} "
+                  f"{'never' if deg is None else f'{deg:.0f} deg':>16}"
+                  f" {100*big:>6.0f}% {100*small:>6.0f}%"
+                  + ("" if compatible else "   <- excluded"))
             if compatible and px is not None:
-                trouves.append((px, deg))
-    if trouves:
-        pixels = [p for p, _ in trouves]
-        angles = [d for _, d in trouves if d is not None]
+                found.append((px, deg))
+    if found:
+        pixels = [p for p, _ in found]
+        angles = [d for _, d in found if d is not None]
         print("\n  Keeping only the settings compatible with the real "
               "measurement:")
         print(f"    MIN_PIXELS    between {min(pixels):.0f} and "
@@ -315,7 +316,7 @@ def main():
                              "(default %(default)s)")
     options = parser.parse_args()
 
-    detector = detecteur_aruco()
+    detector = aruco_detector()
     pattern, quiet = tag_pattern()
 
     print("=" * 72)

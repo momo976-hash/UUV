@@ -2,26 +2,26 @@
 # ===========================================================================
 # HOW TO USE IT
 # ===========================================================================
-#     python calibration/check_distance.py --reel 1.500 --tag 0.22389
-#     python calibration/check_distance.py --reel 1.500 --pi     (camera on the Pi)
+#     python calibration/check_distance.py --real 1.500 --tag 0.22389
+#     python calibration/check_distance.py --real 1.500 --pi     (camera on the Pi)
 #
 # Put a tag at a distance MEASURED WITH A TAPE, pass that distance, and the
 # script reports what the camera makes of it. Repeat at three or more
 # distances, including 0.5 m: that is where a fixed offset separates from a
 # scale error, and the script then fits a line and tells you which it is.
 #
-# --focale FX[,FY] tries candidate focal lengths WITHOUT installing them, so
+# --focal-length FX[,FY] tries candidate focal lengths WITHOUT installing them, so
 # the calibration in service is never overwritten for a trial.
 # ===========================================================================
 #
-#     python check_distance.py --reel 1.000
+#     python check_distance.py --real 1.000
 #
 # Put the tag at a distance MEASURED WITH A TAPE, pass that distance, and
 # the script reports what the camera makes of it and concludes.
 #
 # CAMERA ON THE PI, MEASUREMENT ON THE PC:
 #
-#     python check_distance.py --reel 1.000 --pi
+#     python check_distance.py --real 1.000 --pi
 #
 # The Pi holds the camera at the poolside and pushes the frames; this PC
 # receives them, measures, and shows the window. Useful when the camera will
@@ -31,7 +31,7 @@
 #
 # TRYING A FOCAL LENGTH WITHOUT INSTALLING IT:
 #
-#     python check_distance.py --reel 1.500 --focal_length 838.45,652.10
+#     python check_distance.py --real 1.500 --focal-length 838.45,652.10
 #
 # The matrix is only changed in memory, the .npz is not touched. That is
 # what is needed to compare candidate focal lengths in the field: try them
@@ -41,7 +41,7 @@
 # of measurements has already been taken with a trial calibration that was
 # left in place by mistake.
 #
-# With a single value (--focale 838.45) the calibration's anamorphic ratio
+# With a single value (--focal-length 838.45) the calibration's anamorphic ratio
 # is preserved and fy follows: the fx/fy ratio is a property of the TUBE,
 # not a free parameter, and changing it by accident while testing fx would
 # be a silent corruption of the calibration.
