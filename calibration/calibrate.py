@@ -15,51 +15,52 @@
 # wrong name, and everything measured afterwards is wrong by tens of percent.
 # ===========================================================================
 #
-# Mesure les VRAIS params internes de la camera :
-#   fx, fy   focales reelles (en pixels)
-#   cx, cy   centre optics reel
-#   k1,k2,p1,p2,k3   coefficients de distortion de l'objectif
+# It measures the camera's REAL internal parameters:
+#   fx, fy           real focal lengths (in pixels)
+#   cx, cy           real optical centre
+#   k1,k2,p1,p2,k3   the lens's distortion coefficients
 #
-# Damier utilise : calib.io 5x7, carreaux de 50 mm.
-# WARNING : OpenCV compte les COINS INTERIEURS, pas les carreaux.
-#   5x7 carreaux  ->  4x6 corners interieurs.
+# Board used: calib.io 5x7, squares of 50 mm.
+# WARNING: OpenCV counts INNER CORNERS, not squares.
+#   5x7 squares  ->  4x6 inner corners.
 #
-# Procedure :
-#   1. Lance le programme, montre le checkerboard a la camera.
-#   2. Quand les corners colores apparaissent, appuie sur 'c' pour capturer.
-#   3. Capture 15 a 25 vues DIFFERENTES (angles, distances, corners de l'image).
-#   4. Appuie sur 'k' pour calculer la calibration.
-#   5. Les params sont sauves et affiches.
+# Procedure:
+#   1. Start the program, show the board to the camera.
+#   2. When the coloured corners appear, press 'c' to capture.
+#   3. Capture 15 to 25 DIFFERENT views (angles, distances, image corners).
+#   4. Press 'k' to compute the calibration.
+#   5. The parameters are saved and printed.
 #
-# UN MONTAGE, UNE CALIBRATION
-# La camera nue et la camera dans son tube ne voient pas pareil, et sous
-# l'water encore moins. On range donc chaque calibration sous le name de son
-# mounting, et optics.py va y puiser :
-#   --mounting nue_air    la camera seule, in air libre
-#   --mounting tube_air    dans le tube, viewport en place, in air  <- a faire
-#   --mounting tube_eau    dans le tube, immerge
+# ONE MOUNTING, ONE CALIBRATION
+# The bare camera and the camera in its tube do not see alike, and underwater
+# even less so. So each calibration is filed under its mounting's name, and
+# optics.py draws on it:
+#   --mounting bare_air     the camera alone, in open air
+#   --mounting tube_air     in the tube, viewport in place, in air  <- to do
+#   --mounting tube_water   in the tube, submerged
 #
-# CALIBRER DANS L'AIR N'EST PAS UN ECHAUFFEMENT
-# La camera est couchee dans le tube et regarde par la wall cylindrique. Les
-# deux axes de l'image ne traversent donc pas la meme chose (voir optics.py) :
+# CALIBRATING IN AIR IS NOT A WARM-UP
+# The camera lies in the tube and looks through the cylindrical wall. So the
+# two image axes do not cross the same thing (see optics.py):
 #
-#   fx, l'axis HORIZONTAL, suit l'axis du tube. La wall s'y reduit a deux plans
-#   paralleles, et in air un tel dioptre ne devie STRICTEMENT rien. fx doit
-#   retomber sur la camera nue. Tout gap la-dessus vient du mounting — mise
-#   au point, resolution, checkerboard mal measurement — pas de l'optics.
+#   fx, the HORIZONTAL axis, follows the tube axis. There the wall reduces to
+#   two parallel planes, and in air such an interface deviates STRICTLY
+#   nothing. fx must land back on the bare camera. Any gap there comes from
+#   the mounting — focus, resolution, a badly measured board — not from the
+#   optics.
 #
-#   fy, l'axis VERTICAL, est circonferentiel : c'est un meniscus. Il ne devie
-#   rien non plus SI la pupil est sur l'axis du tube, et de plus en plus
-#   quand elle s'en ecarte. Or la pupil de la D435i est forcement en retrait
-#   de quelques millimetres. Le report fy_tube / fy_nue MESURE donc ce
-#   retrait, sans rien demonter. C'est la seule facon de le connaitre.
+#   fy, the VERTICAL axis, is circumferential: it is a meniscus. It deviates
+#   nothing either IF the pupil is on the tube axis, and more and more as it
+#   departs from it. And the D435i's pupil is necessarily a few millimetres
+#   behind. So the ratio fy_tube / fy_bare MEASURES that setback, without
+#   dismantling anything. It is the only way to know it.
 #
-# La calibration in air fait ainsi d'une pierre deux coups : elle valide le
-# mounting, et elle donne le seul parametre geometrique qu'on ne sait pas
-# mesurer autrement. Sous l'water la wall devient une true lentille dans les
-# deux directions, et la recalibration n'est plus optionnelle.
+# The in-air calibration therefore kills two birds with one stone: it
+# validates the mounting, and it gives the one geometric parameter there is no
+# other way to measure. Underwater the wall becomes a real lens in both
+# directions, and recalibrating is no longer optional.
 #
-# Keys: c = capturer | k = calibrer | z = annuler la derniere | q = quitter
+# KEYS: c = capture | k = calibrate | z = undo the last | q = quit
 import argparse
 import sys
 from pathlib import Path
@@ -70,265 +71,278 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optics  # noqa: E402
 
-_analyseur = argparse.ArgumentParser(
-    description="Calibration par checkerboard, rangee sous le name d'un mounting.")
-_analyseur.add_argument("--mounting", default=optics.ACTIVE_MOUNTING,
-                        choices=optics.MOUNTINGS,
-                        help="mounting calibre (default %(default)s)")
-MONTAGE = _analyseur.parse_args().mounting
+_parser = argparse.ArgumentParser(
+    description="Checkerboard calibration, filed under a mounting's name.")
+# The French mounting names are accepted and translated, so that notes written
+# before the handover still run.
+_parser.add_argument("--mounting", "--montage", dest="mounting",
+                     default=optics.ACTIVE_MOUNTING,
+                     choices=(list(optics.MOUNTINGS)
+                              + list(optics.LEGACY_MOUNTING_NAMES)),
+                     help="mounting being calibrated (default %(default)s)")
+MOUNTING = optics.LEGACY_MOUNTING_NAMES.get(_parser.parse_args().mounting,
+                                            _parser.parse_args().mounting)
 
-# Index de la camera (None = detection automatique).
+# Camera index (None = automatic detection).
 CAMERA_INDEX = None
-# Resolution FIGEE : doit etre identique pour la calibration et les measurements.
+# FIXED resolution: must be identical for the calibration and the measurements.
 RESOLUTION = (640, 480)
 
 
-TAILLE_CARREAU = 0.050      # cote d'un carreau, en metres (50 mm)
-COINS = (6, 4)              # corners interieurs : 5x7 carreaux -> 4x6 (teste aussi 4x6)
-CAPTURES_MINI = 15          # count de vues recommande avant de calibrer
+SQUARE_SIZE = 0.050     # side of one square, in metres (50 mm)
+CORNERS = (6, 4)        # inner corners: 5x7 squares -> 4x6 (4x6 also tried)
+MIN_CAPTURES = 15       # number of views recommended before calibrating
 
-# Criteres d'affinage sub-pixel des corners
-CRITERES = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+# Sub-pixel corner refinement criteria
+CRITERIA = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
 
-def grille_3d(corners, size):
-    """Coordonnees 3D des corners du checkerboard dans son propre frame (Z = 0)."""
+def grid_3d(corners, size):
+    """3D coordinates of the board's corners in its own frame (Z = 0)."""
     p = np.zeros((corners[0] * corners[1], 3), np.float32)
     p[:, :2] = np.mgrid[0:corners[0], 0:corners[1]].T.reshape(-1, 2)
     return p * size
 
 
-def trouver_checkerboard(gris):
-    """Cherche le checkerboard dans les deux orientations possibles."""
-    for c in (COINS, (COINS[1], COINS[0])):
-        ok, coins_2d = cv2.findChessboardCorners(
-            gris, c,
+def find_board(grey):
+    """Looks for the board in both possible orientations."""
+    for c in (CORNERS, (CORNERS[1], CORNERS[0])):
+        ok, corners_2d = cv2.findChessboardCorners(
+            grey, c,
             cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE
             + cv2.CALIB_CB_FAST_CHECK)
         if ok:
-            coins_2d = cv2.cornerSubPix(gris, coins_2d, (11, 11), (-1, -1), CRITERES)
-            return True, coins_2d, c
+            corners_2d = cv2.cornerSubPix(grey, corners_2d, (11, 11), (-1, -1),
+                                          CRITERIA)
+            return True, corners_2d, c
     return False, None, None
 
 
-def ouvrir_camera():
-    """Ouvre la camera en forcant TOUJOURS la meme resolution.
+def open_camera():
+    """Opens the camera, ALWAYS forcing the same resolution.
 
-    Important : le champ de vision d'une RealSense depend du format demande
-    (640x480 en 4:3 est recadre, 1280x720 en 16:9 utilise tout le capteur).
-    Une calibration faite a une resolution n'est donc PAS transposable a une
-    autre par simple mise a l'echelle. On fige la resolution pour que la
-    calibration et les measurements portent sur exactement la meme optics.
+    Important: a RealSense's field of view depends on the format requested
+    (640x480 in 4:3 is cropped, 1280x720 in 16:9 uses the whole sensor). So a
+    calibration made at one resolution is NOT transposable to another by
+    simple scaling. The resolution is pinned so that the calibration and the
+    measurements bear on exactly the same optics.
     """
     backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (0, "AUTO")]
     indices = [CAMERA_INDEX] if CAMERA_INDEX is not None else range(4)
     for index in indices:
         for backend, name in backends:
-            cap = cv2.VideoCapture(index, backend) if backend else cv2.VideoCapture(index)
+            cap = (cv2.VideoCapture(index, backend) if backend
+                   else cv2.VideoCapture(index))
             if cap.isOpened():
                 cap.set(cv2.CAP_PROP_FRAME_WIDTH, RESOLUTION[0])
                 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, RESOLUTION[1])
                 ok, img = cap.read()
                 if ok and img is not None:
                     hh, ww = img.shape[:2]
-                    print(f"Camera used : index={index}, backend={name}, {ww}x{hh}")
+                    print(f"Camera used: index={index}, backend={name}, "
+                          f"{ww}x{hh}")
                     if (ww, hh) != RESOLUTION:
-                        print(f"  WARNING : resolution obtenue {ww}x{hh} au lieu de "
-                              f"{RESOLUTION[0]}x{RESOLUTION[1]}. La calibration ne sera "
-                              f"valable que si elle a ete faite dans ce meme format.")
+                        print(f"  WARNING: got {ww}x{hh} instead of "
+                              f"{RESOLUTION[0]}x{RESOLUTION[1]}. The "
+                              f"calibration will only be valid if it is used "
+                              f"in that same format.")
                     return cap, ww, hh
             cap.release()
     return None, 0, 0
 
 
-def relire_le_montage(K, erreur_rms):
-    """Ce que les focales measured disent du mounting physique.
+def read_back_the_mounting(K, rms_error):
+    """What the measured focal lengths say about the physical mounting.
 
-    Les deux axes de l'image ne traversent pas la meme optics (voir l'entete
-    et optics.py), donc on les lit separement. C'est ce qui transforme une
-    calibration en measurement mecanique.
+    The two image axes do not cross the same optics (see the header and
+    optics.py), so they are read separately. That is what turns a calibration
+    into a mechanical measurement.
     """
-    nue = optics.K_BARE_AIR
+    bare = optics.K_BARE_AIR
     fx, fy = float(K[0, 0]), float(K[1, 1])
-    ecart_fx = 100 * (fx / nue[0, 0] - 1)
-    radial = optics.ORIENTATION == "radiale"
+    gap_fx = 100 * (fx / bare[0, 0] - 1)
+    radial = optics.ORIENTATION == "radial"
 
     print("\n" + "-" * 58)
-    print(f"CE QUE CETTE CALIBRATION DIT DU MONTAGE  ({MONTAGE})")
+    print(f"WHAT THIS CALIBRATION SAYS ABOUT THE MOUNTING  ({MOUNTING})")
     print("-" * 58)
-    print(f"  camera nue de reference : fx {nue[0,0]:.2f}   fy {nue[1,1]:.2f}")
+    print(f"  bare-camera reference: fx {bare[0,0]:.2f}   fy {bare[1,1]:.2f}")
 
-    if MONTAGE == "nue_air":
-        print(f"  measurement                  : fx {fx:.2f}   fy {fy:.2f}"
-              f"   ({ecart_fx:+.1f} % sur fx)")
-        if abs(ecart_fx) > 3:
-            print("  WARNING : c'est la meme camera nue, les focales devraient")
-            print("  coincider. Verifie la resolution et la size des carreaux.")
+    if MOUNTING == "bare_air":
+        print(f"  measured             : fx {fx:.2f}   fy {fy:.2f}"
+              f"   ({gap_fx:+.1f} % on fx)")
+        if abs(gap_fx) > 3:
+            print("  WARNING: this is the same bare camera, the focal lengths")
+            print("  should agree. Check the resolution and the square size.")
         return
 
-    if MONTAGE == "tube_air":
-        print(f"\n  fx = {fx:.2f}  ({ecart_fx:+.2f} % / camera nue)")
+    if MOUNTING == "tube_air":
+        print(f"\n  fx = {fx:.2f}  ({gap_fx:+.2f} % vs the bare camera)")
         if not radial:
-            print("    mounting axial : le viewport plat ne devie rien in air.")
+            print("    axial mounting: the flat viewport deviates nothing in air.")
         else:
-            print("    Selon l'axis du tube la wall est une lame a faces "
-                  "paralleles ;")
-            print("    in air elle ne devie rien, fx doit coincider.")
-        if abs(ecart_fx) > 2:
-            print("    WARNING : gap trop grand pour de l'optics. Cherche")
-            print("    ailleurs — mise au point, resolution, checkerboard mal measurement,")
-            print("    ou wall rayee/embuee.")
+            print("    Along the tube axis the wall is a plane-parallel slab;")
+            print("    in air it deviates nothing, so fx must agree.")
+        if abs(gap_fx) > 2:
+            print("    WARNING: too large a gap for optics. Look elsewhere —")
+            print("    focus, resolution, a badly measured board, or a")
+            print("    scratched or fogged wall.")
 
         if radial:
-            ecart_mm = 1000 * optics.off_axis_offset_from_calibration(
-                K, nue, optics.AIR_INDEX)
-            attendu = nue[1, 1] * optics.section_magnification(
+            gap_mm = 1000 * optics.off_axis_offset_from_calibration(
+                K, bare, optics.AIR_INDEX)
+            expected = bare[1, 1] * optics.section_magnification(
                 outer_index=optics.AIR_INDEX)
             assumed = 1000 * optics.pupil_off_axis()
-            print(f"\n  fy = {fy:.2f}  ({100*(fy/nue[1,1]-1):+.2f} % / camera nue)")
-            print("    Selon la circonference la wall est un meniscus : il ne")
-            print("    devie rien si la pupil est sur l'axis, et d'autant plus")
-            print("    qu'elle s'en ecarte. Ce report MESURE cet gap.")
-            print(f"\n    off_axis_offset measurement  : {ecart_mm:+.1f} mm")
-            print(f"    off_axis_offset assumed : {assumed:+.1f} mm  "
-                  f"(fy attendu {attendu:.2f})")
-            if abs(ecart_mm - assumed) > 2:
-                print(f"\n    Les deux ne collent pas. Le suspect est "
-                      f"PUPIL_BEHIND_FACE")
-                print(f"    ({1000*optics.PUPIL_BEHIND_FACE:.0f} mm dans "
-                      "optics.py), qui n'etait qu'une estimation.")
-                corrige = (1000 * (optics.tube_radius(worst_case=False)
-                                   - optics.BACK_CLEARANCE
-                                   - optics.CAMERA_DEPTH) + ecart_mm)
-                print(f"    Valeur compatible avec la measurement : "
-                      f"{-corrige:.1f} mm. La correct dans optics.py")
-                print("    rendra justes toutes les predictions underwater.")
+            print(f"\n  fy = {fy:.2f}  ({100*(fy/bare[1,1]-1):+.2f} % vs the "
+                  f"bare camera)")
+            print("    Around the circumference the wall is a meniscus: it")
+            print("    deviates nothing if the pupil is on the axis, and more")
+            print("    and more as it departs from it. That ratio MEASURES the")
+            print("    departure.")
+            print(f"\n    off-axis offset measured: {gap_mm:+.1f} mm")
+            print(f"    off-axis offset assumed : {assumed:+.1f} mm  "
+                  f"(fy expected {expected:.2f})")
+            if abs(gap_mm - assumed) > 2:
+                print("\n    The two do not match. The suspect is "
+                      "PUPIL_BEHIND_FACE")
+                print(f"    ({1000*optics.PUPIL_BEHIND_FACE:.0f} mm in "
+                      "optics.py), which was only an estimate.")
+                corrected = (1000 * (optics.tube_radius(worst_case=False)
+                                     - optics.BACK_CLEARANCE
+                                     - optics.CAMERA_DEPTH) + gap_mm)
+                print(f"    Value compatible with the measurement: "
+                      f"{-corrected:.1f} mm. Correcting it in optics.py")
+                print("    will make every underwater prediction right.")
             else:
-                print("\n    Coherent avec la geometrie supposee : optics.py "
-                      "decrit bien le mounting.")
-            print(f"\n    residu apres calibration : "
-                  f"{optics.section_residual(ecart_mm/1000, optics.WATER_INDEX):.2f} px "
+                print("\n    Consistent with the assumed geometry: optics.py "
+                      "describes the mounting correctly.")
+            print(f"\n    residual after calibration: "
+                  f"{optics.section_residual(gap_mm/1000, optics.WATER_INDEX):.2f} px "
                   f"underwater")
-            print(f"    (noise de detection measurement : "
+            print(f"    (measured detection noise: "
                   f"{optics.CORNER_NOISE_PX:.3f} px)")
         return
 
-    # tube_eau
-    depart = optics.source("tube_air")
+    # tube_water
+    start = optics.source("tube_air")
     K_air, _ = optics.load("tube_air", quiet=True)
-    attendu_fx = float(K_air[0, 0]) * optics.WATER_INDEX
-    print(f"\n  reference in air : {depart} (fx {K_air[0,0]:.2f}  "
+    expected_fx = float(K_air[0, 0]) * optics.WATER_INDEX
+    print(f"\n  in-air reference: {start} (fx {K_air[0,0]:.2f}  "
           f"fy {K_air[1,1]:.2f})")
-    if depart == "nue_air":
-        print("  Le mounting tube_air n'est pas calibre : la comparaison ci-dessous")
-        print("  reste indicative. Calibre-le, c'est 10 minutes et ca cadre tout.")
-    print(f"\n  fx = {fx:.2f}   attendu {attendu_fx:.2f} "
-          f"({100*(fx/attendu_fx-1):+.1f} %)")
-    print(f"    Lame plane underwater : la focal_length est multipliee par "
+    if start != "tube_air":
+        print("  The tube_air mounting is not calibrated: the comparison below")
+        print("  is only indicative. Calibrate it — 10 minutes, and it settles")
+        print("  everything.")
+    print(f"\n  fx = {fx:.2f}   expected {expected_fx:.2f} "
+          f"({100*(fx/expected_fx-1):+.1f} %)")
+    print(f"    Plane slab underwater: the focal length is multiplied by "
           f"{optics.WATER_INDEX}.")
     if radial:
-        attendu_fy = float(K_air[1, 1]) * (
+        expected_fy = float(K_air[1, 1]) * (
             optics.section_magnification(outer_index=optics.WATER_INDEX)
             / (optics.section_magnification(outer_index=optics.AIR_INDEX)
-               if depart == "tube_air" else 1.0))
-        print(f"\n  fy = {fy:.2f}   attendu {attendu_fy:.2f} "
-              f"({100*(fy/attendu_fy-1):+.1f} %)")
-        print("    Menisque underwater : l'effet depend du off_axis_offset.")
-        print(f"\n  anamorphic_ratio measured : {max(fx,fy)/min(fx,fy):.3f}   "
-              f"predite {optics.anamorphic_ratio():.3f}")
-        print("    Les deux axes ne grossissent pas pareil : c'est normal et")
-        print("    c'est la signature du mounting radial. Une anamorphic_ratio de 1.00")
-        print("    voudrait dire que la camera n'est pas orientee comme on croit.")
-    print(f"\n  RMS {erreur_rms:.3f} px : underwater le model plumb_bob")
-    print("  n'a pas la symetrie de revolution qu'il assumed, un residu plus")
-    print("  eleve qu'in air est attendu — pas forcement une mauvaise calibration.")
+               if start == "tube_air" else 1.0))
+        print(f"\n  fy = {fy:.2f}   expected {expected_fy:.2f} "
+              f"({100*(fy/expected_fy-1):+.1f} %)")
+        print("    Meniscus underwater: the effect depends on the off-axis "
+              "offset.")
+        print(f"\n  anamorphic ratio measured: {max(fx,fy)/min(fx,fy):.3f}   "
+              f"predicted {optics.anamorphic_ratio():.3f}")
+        print("    The two axes do not magnify the same: that is normal, and")
+        print("    it is the signature of the radial mounting. An anamorphic")
+        print("    ratio of 1.00 would mean the camera is not oriented the way")
+        print("    we think it is.")
+    print(f"\n  RMS {rms_error:.3f} px: underwater the plumb_bob model does not")
+    print("  have the rotational symmetry it assumes, so a higher residual than")
+    print("  in air is expected — not necessarily a bad calibration.")
 
 
-def retenir_le_montage_de_la_machine():
-    """Proposer que cette machine se souvienne du mounting qu'on vient de calibrer.
+def offer_to_remember_the_mounting():
+    """Offer to have this machine remember the mounting just calibrated.
 
-    Qui vient de calibrer 'tube_eau' est, neuf fois sur dix, l'ordinateur du
-    bord du pool. Le lui faire retenir tout de suite evite le scenario qui
-    nous a deja coute : quelqu'un lance une measurement sur ce PC des semaines plus
-    tard, personne ne pense a preciser le mounting, et les distances sortent
-    fausses d'un quart sans le moindre message.
+    Whoever has just calibrated 'tube_water' is, nine times out of ten, the
+    poolside computer. Making it remember straight away avoids the scenario
+    that has already cost us: someone starts a measurement on that PC weeks
+    later, nobody thinks to state the mounting, and the distances come out a
+    quarter wrong with no message at all.
 
-    On propose, on n'impose pas : on peut tres bien calibrer un mounting depuis
-    une machine qui n'est pas celle qui mesurera.
+    It is offered, not imposed: a mounting can perfectly well be calibrated
+    from a machine that is not the one that will do the measuring.
     """
-    if optics.ACTIVE_MOUNTING == MONTAGE:
+    if optics.ACTIVE_MOUNTING == MOUNTING:
         return
-    print(f"\nCette machine est reglee sur '{optics.ACTIVE_MOUNTING}' "
+    print(f"\nThis machine is set to '{optics.ACTIVE_MOUNTING}' "
           f"({optics.MOUNTING_SOURCE}),")
-    print(f"mais tu viens de calibrer '{MONTAGE}'.")
+    print(f"but you have just calibrated '{MOUNTING}'.")
     try:
         if not sys.stdin.isatty():
-            print(f"  -> reglage inchange. Pour le changer : "
-                  f"python calibration/set_mounting.py {MONTAGE}")
+            print(f"  -> setting unchanged. To change it: "
+                  f"python calibration/set_mounting.py {MOUNTING}")
             return
-        reponse = input(f"  Cette machine devient-elle '{MONTAGE}' ? [O/n] ")
+        answer = input(f"  Does this machine become '{MOUNTING}'? [Y/n] ")
     except (EOFError, KeyboardInterrupt, AttributeError, ValueError):
         print()
         return
-    if reponse.strip().lower() in ("", "o", "oui", "y", "yes"):
-        path = optics.write_local_mounting(MONTAGE)
-        print(f"  -> kept dans {path}. Plus rien a preciser ensuite.")
+    if answer.strip().lower() in ("", "y", "yes", "o", "oui"):
+        path = optics.write_local_mounting(MOUNTING)
+        print(f"  -> kept in {path}. Nothing to state from now on.")
     else:
-        print(f"  -> reglage inchange ('{optics.ACTIVE_MOUNTING}').")
+        print(f"  -> setting unchanged ('{optics.ACTIVE_MOUNTING}').")
 
 
-def calibrer(points_3d, points_2d, taille_image):
-    """Calcule les params de la camera et l'error de reprojection."""
-    erreur_rms, K, dist, rvecs, tvecs = cv2.calibrateCamera(
-        points_3d, points_2d, taille_image, None, None)
+def calibrate(points_3d, points_2d, image_size):
+    """Computes the camera parameters and the reprojection error."""
+    rms_error, K, dist, rvecs, tvecs = cv2.calibrateCamera(
+        points_3d, points_2d, image_size, None, None)
 
-    # Sauvegarde immediate : on ne veut pas perdre le result en cas de souci
+    # Saved at once: the result must not be lost if anything goes wrong next.
     optics.MOUNTINGS_FOLDER.mkdir(parents=True, exist_ok=True)
-    path = optics.MOUNTINGS_FOLDER / f"{MONTAGE}.npz"
+    path = optics.MOUNTINGS_FOLDER / f"{MOUNTING}.npz"
     np.savez(path, K=K, dist=dist,
-             width=taille_image[0], height=taille_image[1])
+             width=image_size[0], height=image_size[1])
     np.savez("calibration_camera.npz", K=K, dist=dist,
-             width=taille_image[0], height=taille_image[1])
+             width=image_size[0], height=image_size[1])
 
-    # Erreur de reprojection mean, vue par vue (check qualite).
-    # On compare avec numpy : les formes renvoyees par projectPoints varient
-    # selon les versions d'OpenCV, donc on aplatit tout en (N, 2).
+    # Mean reprojection error, view by view (a quality check).
+    # Compared with numpy: the shapes projectPoints returns vary between
+    # OpenCV versions, so everything is flattened to (N, 2).
     total = 0.0
     for i in range(len(points_3d)):
         proj, _ = cv2.projectPoints(points_3d[i], rvecs[i], tvecs[i], K, dist)
-        measurement = np.asarray(points_2d[i], dtype=np.float64).reshape(-1, 2)
-        attendu = np.asarray(proj, dtype=np.float64).reshape(-1, 2)
-        total += np.linalg.norm(measurement - attendu) / len(attendu)
-    erreur_moyenne = total / len(points_3d)
+        measured = np.asarray(points_2d[i], dtype=np.float64).reshape(-1, 2)
+        expected = np.asarray(proj, dtype=np.float64).reshape(-1, 2)
+        total += np.linalg.norm(measured - expected) / len(expected)
+    mean_error = total / len(points_3d)
 
     print("\n" + "=" * 58)
-    print("RESULTAT DE LA CALIBRATION")
+    print("CALIBRATION RESULT")
     print("=" * 58)
-    print(f"Vues utilisees        : {len(points_3d)}")
-    print(f"Erreur RMS            : {erreur_rms:.4f} px")
-    print(f"Erreur de reprojection: {erreur_moyenne:.4f} px")
-    print("  (< 0.5 px = tres bon | 0.5-1 px = correct | > 1 px = a refaire)")
+    print(f"Views used         : {len(points_3d)}")
+    print(f"RMS error          : {rms_error:.4f} px")
+    print(f"Reprojection error : {mean_error:.4f} px")
+    print("  (< 0.5 px = very good | 0.5-1 px = fine | > 1 px = redo it)")
     print(f"\nfx = {K[0,0]:.2f}    fy = {K[1,1]:.2f}")
     print(f"cx = {K[0,2]:.2f}    cy = {K[1,2]:.2f}")
     print(f"distortion = {dist.ravel()}")
 
-    print(f"\nParametres sauves dans {path}")
-    retenir_le_montage_de_la_machine()
-    relire_le_montage(K, erreur_rms)
+    print(f"\nParameters saved in {path}")
+    offer_to_remember_the_mounting()
+    read_back_the_mounting(K, rms_error)
 
-    # Export au format YAML standard ROS (camera_calibration_parsers).
-    # Ce path est directement utilisable par un node ROS pour publier
-    # sensor_msgs/CameraInfo : aucune recalibration sous ROS n'est necessaire.
+    # Export in the standard ROS YAML format (camera_calibration_parsers).
+    # This file is directly usable by a ROS node to publish
+    # sensor_msgs/CameraInfo: no recalibration under ROS is needed.
     #
-    # UN FICHIER PAR MONTAGE. Ecrire toujours au meme name serait un piege :
-    # calibrer tube_air ecraserait le tube_eau, et le node ROS publierait
-    # tranquillement les intrinseques de l'air pendant un trial en pool,
-    # sans que rien ne le signale.
-    largeur_img, hauteur_img = taille_image
-    lignes_yaml = [
-        f"# mounting : {MONTAGE}  (genere par calibrate.py)",
-        f"image_width: {largeur_img}",
-        f"image_height: {hauteur_img}",
+    # ONE FILE PER MOUNTING. Always writing to the same name would be a trap:
+    # calibrating tube_air would overwrite tube_water, and the ROS node would
+    # quietly publish the air intrinsics during a pool trial, with nothing
+    # flagging it.
+    img_width, img_height = image_size
+    yaml_lines = [
+        f"# mounting: {MOUNTING}  (generated by calibrate.py)",
+        f"image_width: {img_width}",
+        f"image_height: {img_height}",
         "camera_name: realsense_color",
         "camera_matrix:",
         "  rows: 3",
@@ -349,15 +363,15 @@ def calibrer(points_3d, points_2d, taille_image):
         "  data: [" + ", ".join(
             f"{v:.8f}" for v in np.hstack([K, np.zeros((3, 1))]).flatten()) + "]",
     ]
-    yaml_montage = optics.MOUNTINGS_FOLDER / f"{MONTAGE}_ros.yaml"
-    with open(yaml_montage, "w") as f:
-        f.write("\n".join(lignes_yaml) + "\n")
-    print(f"Fichier ROS ecrit : {yaml_montage}")
+    yaml_path = optics.MOUNTINGS_FOLDER / f"{MOUNTING}_ros.yaml"
+    with open(yaml_path, "w") as f:
+        f.write("\n".join(yaml_lines) + "\n")
+    print(f"ROS file written: {yaml_path}")
     print("  ros2 run <pkg> camera_info_relay --ros-args \\")
-    print(f"      -p calibration_file:={yaml_montage}")
+    print(f"      -p calibration_file:={yaml_path}")
 
-    # Version copiable directement dans les autres programmes
-    print("\n--- A copier dans tes programmes ---")
+    # A version to paste straight into other programs
+    print("\n--- To copy into your programs ---")
     print("K = np.array([")
     for row in K:
         print(f"    [{row[0]:.4f}, {row[1]:.4f}, {row[2]:.4f}],")
@@ -367,63 +381,64 @@ def calibrer(points_3d, points_2d, taille_image):
     return K, dist
 
 
-cam, L, H = ouvrir_camera()
+cam, L, H = open_camera()
 if cam is None:
-    print("ERROR: aucune camera ouverte.")
+    print("ERROR: no camera opened.")
     raise SystemExit
 
-points_3d, points_2d = [], []   # correspondances world <-> image
+points_3d, points_2d = [], []   # world <-> image correspondences
 K_final = dist_final = None
 
 print("=" * 58)
-print("CALIBRATION PAR DAMIER")
-print(f"  checkerboard : {COINS[0]}x{COINS[1]} corners interieurs, carreaux {TAILLE_CARREAU*1000:.0f} mm")
-print(f"  objectif : au moins {CAPTURES_MINI} vues variees")
-print("  'c' = capturer | 'k' = calibrer | 'z' = annuler | 'q' = quitter")
+print("CHECKERBOARD CALIBRATION")
+print(f"  board: {CORNERS[0]}x{CORNERS[1]} inner corners, "
+      f"{SQUARE_SIZE*1000:.0f} mm squares")
+print(f"  target: at least {MIN_CAPTURES} varied views")
+print("  'c' = capture | 'k' = calibrate | 'z' = undo | 'q' = quit")
 print("=" * 58)
 
 while True:
     ok, image = cam.read()
     if not ok:
         continue
-    gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    trouve, coins_2d, forme = trouver_checkerboard(gris)
+    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    found, corners_2d, shape = find_board(grey)
 
     display = image.copy()
-    if trouve:
-        cv2.drawChessboardCorners(display, forme, coins_2d, True)
-        cv2.putText(display, "DAMIER DETECTE - 'c' pour capturer", (10, 30),
+    if found:
+        cv2.drawChessboardCorners(display, shape, corners_2d, True)
+        cv2.putText(display, "BOARD DETECTED - 'c' to capture", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
     else:
-        cv2.putText(display, "Damier non detecte", (10, 30),
+        cv2.putText(display, "Board not detected", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
-    colour = (0, 255, 0) if len(points_3d) >= CAPTURES_MINI else (0, 200, 255)
-    cv2.putText(display, f"Captures : {len(points_3d)} / {CAPTURES_MINI}", (10, 58),
+    colour = (0, 255, 0) if len(points_3d) >= MIN_CAPTURES else (0, 200, 255)
+    cv2.putText(display, f"Captures: {len(points_3d)} / {MIN_CAPTURES}", (10, 58),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, colour, 2)
-    if len(points_3d) >= CAPTURES_MINI:
-        cv2.putText(display, "Assez de vues : appuie sur 'k' pour calibrer", (10, 84),
+    if len(points_3d) >= MIN_CAPTURES:
+        cv2.putText(display, "Enough views: press 'k' to calibrate", (10, 84),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
-    cv2.putText(display, "c=capturer  k=calibrer  z=annuler  q=quitter",
+    cv2.putText(display, "c=capture  k=calibrate  z=undo  q=quit",
                 (10, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
-    cv2.imshow("Calibration checkerboard (q pour quitter)", display)
+    cv2.imshow("Checkerboard calibration (q to quit)", display)
 
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):
         break
-    if key == ord("c") and trouve:
-        points_3d.append(grille_3d(forme, TAILLE_CARREAU))
-        points_2d.append(coins_2d)
-        print(f"Vue {len(points_3d)} capturee.")
+    if key == ord("c") and found:
+        points_3d.append(grid_3d(shape, SQUARE_SIZE))
+        points_2d.append(corners_2d)
+        print(f"View {len(points_3d)} captured.")
     if key == ord("z") and points_3d:
         points_3d.pop(); points_2d.pop()
-        print(f"Derniere vue annulee. Restant : {len(points_3d)}")
+        print(f"Last view undone. Remaining: {len(points_3d)}")
     if key == ord("k"):
         if len(points_3d) < 5:
-            print("Pas assez de vues (5 minimum, 15+ recommande).")
+            print("Not enough views (5 minimum, 15+ recommended).")
         else:
-            K_final, dist_final = calibrer(points_3d, points_2d, (L, H))
+            K_final, dist_final = calibrate(points_3d, points_2d, (L, H))
 
 cam.release()
 cv2.destroyAllWindows()
