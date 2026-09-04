@@ -10,8 +10,9 @@
 #
 # The filter actually runs inside other scripts:
 #
-#     python localization/world_frame_check.py --plots
+#     python localization/world_frame_check.py
 #                                  real camera, real tags, live plots
+#                                  (the plots open by themselves)
 #     python demos/demo_kalman.py  simulated pool, produces a figure
 #     python kalman/kalman_reference_check.py
 #                                  proves this is the reference document's

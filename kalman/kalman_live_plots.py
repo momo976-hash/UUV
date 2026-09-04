@@ -3,14 +3,17 @@
 ===========================================================================
 HOW TO USE IT
 ===========================================================================
-This module does not run on its own. It opens from a real measurement run:
+This module does not run on its own. It opens from a real measurement run,
+by itself, with nothing to type:
 
-    python localization/world_frame_check.py --plots
+    python localization/world_frame_check.py
 
 A window opens next to the video and updates every frame with what the
 camera actually measures. Closing the window does not stop the measurement;
 quitting the measurement with 'q' closes everything and saves the figure to
 kalman_live_plots_session.png.
+
+To run that measurement without the figures:  --no-plots
 
 To check the module itself without a camera:
 
@@ -477,8 +480,8 @@ def _self_check():
     print(f"  final sigma        : {plots.sigma[-1]:.1f} mm")
     if saved:
         print(f"  figure saved       : {output}")
-    print("\nTo see them LIVE on the real camera:")
-    print("    python localization/world_frame_check.py --plots")
+    print("\nTo see them LIVE on the real camera (they open by themselves):")
+    print("    python localization/world_frame_check.py")
     return 0
 
 

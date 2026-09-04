@@ -3,8 +3,12 @@
 # ===========================================================================
 # HOW TO USE IT — THIS IS THE SCRIPT FOR STEPS 5 AND 6 OF THE PROTOCOL
 # ===========================================================================
-#     python localization/world_frame_check.py
-#     python localization/world_frame_check.py --plots     with live figures
+#     python localization/world_frame_check.py             live figures included
+#     python localization/world_frame_check.py --no-plots  measurement only
+#
+# The 6 course figures open BY THEMSELVES in their own window, next to the
+# video: nothing to remember, nothing to type. Use --no-plots only to be rid
+# of them (a slow machine, or a screen too small for two windows).
 #
 # Keys:  o = set the reference tag (origin)   m = distance/rotation mode
 #        f = filter on/off                    r = reset everything
@@ -391,9 +395,6 @@ print("  1. look at the reference tag, press 'o'")
 print("  2. move towards the 2nd tag: linking happens BY ITSELF on the way")
 print("     (the 2 tags only need to be visible together for a moment)")
 print("  'm' mode | 'r' reset | 's' record | 'q' quit")
-if "--plots" not in sys.argv:
-    print("  To SEE the filter working (6 course figures, live):")
-    print("      re-run with  --plots")
 print("=" * 66)
 
 # The reminder is shown BEFORE the session, not only after: now is when the
@@ -401,23 +402,32 @@ print("=" * 66)
 # over would force them to start all over again.
 remind_missing_measurements(with_imu=cam.with_imu)
 
-# --- the course figures, live (option --plots) -----------------------------
+# --- the course figures, live (on by default, --no-plots to skip) ----------
+# They used to need an explicit --plots, and that is exactly how they went
+# unseen: whoever runs the measurement is watching the video window and the
+# vehicle, not reading the terminal. A reminder printed there is missed. So
+# the figures now open BY THEMSELVES, and the flag only serves to switch them
+# off.
+#
 # Optional and of no consequence if matplotlib is missing: at the poolside, a
 # measurement is not redone because a display library is not installed.
 plots = None
 session_start = time.time()
-if "--plots" in sys.argv:
+# --plots is still accepted: it is what the older instructions say, and it now
+# asks for what already happens.
+if "--no-plots" not in sys.argv:
     try:
         from kalman_live_plots import KalmanLivePlots, available
         if available():
             plots = KalmanLivePlots(axis=0)
             print("Filter plots: window open (6 course figures).")
+            print("  (--no-plots to run the measurement without them)")
         else:
-            print("--plots was requested but matplotlib is not installed:")
+            print("Filter plots unavailable: matplotlib is not installed.")
             print("    python -m pip install matplotlib")
             print("The measurement continues without plots.")
     except Exception as problem:
-        print(f"--plots unavailable ({problem}) — "
+        print(f"Filter plots unavailable ({problem}) — "
               "the measurement continues without it.")
 
 while True:

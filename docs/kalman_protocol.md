@@ -276,13 +276,15 @@ This is the more important question, and it cannot be seen on screen.
 ### Watching it work while it runs
 
 ```
-python localization/world_frame_check.py --plots
+python localization/world_frame_check.py
 ```
 
 Six live figures, on the real measurements: the Bayesian update (prior,
 likelihood, posterior), estimate vs raw measurement with the ±1σ band, the
 uncertainty over time, the Kalman gain, each tag's quality, and the outlier
-test. Requires `matplotlib`; without it the measurement runs anyway.
+test. They open in their own window BY THEMSELVES, alongside the video —
+there is no flag to remember. Add `--no-plots` to run the measurement
+without them. Requires `matplotlib`; without it the measurement runs anyway.
 
 None of those figures says whether the position is CORRECT — there is no
 ground truth in a real run. They say whether the filter behaves the way a
