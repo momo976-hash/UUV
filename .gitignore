@@ -13,6 +13,7 @@ logs/
 # Images produced by the scripts (--png, or written to the working directory
 # where the script is run from): regenerated on demand
 pool_layout_3d.png
+watertight_assembly_3d.png
 demo_kalman.png
 kalman_live_plots_demo.png
 kalman_live_plots_session.png

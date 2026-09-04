@@ -72,6 +72,7 @@ off once the measurement is made. There is nothing to disable by hand.
 |---|---|
 | prove the IMU and filter work is done | `python kalman/proof_imu_kalman.py` |
 | **see the filter working, as a figure** | `python demos/demo_kalman.py` |
+| see the watertight assembly in 3D, plug and unplug it | `python demos/watertight_assembly_3d.py` |
 | **the course figures LIVE, on real measurements** | `python localization/world_frame_check.py` (they open by themselves) |
 | show the calibration gives the right distance | `python calibration/demo_distance.py --mounting tube_water` |
 | check a known distance, against a tape measure | `python calibration/check_distance.py --real 1.5 --tag 0.22389` |
