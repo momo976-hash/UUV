@@ -5,6 +5,10 @@ through the wall of a sealed tube, underwater.
 
 ---
 
+> **Taking this over?** Read **[docs/handover.md](docs/handover.md)** first:
+> the three commands, the two things that will surprise you, and which
+> numbers are still assumed.
+
 ## Start here — one command
 
 ```
