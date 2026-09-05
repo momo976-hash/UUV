@@ -1,0 +1,251 @@
+{
+  "document_request": {
+    "goal": "One consolidated document covering the whole UUV localisation project, written so Claude Design has full context to draft it without asking follow-up questions.",
+    "audience": "Mixed: a handover for whoever continues the work (Thein), plus a record of what was proven for an academic supervisor.",
+    "tone": "Direct, evidence-first. Every number below was produced by actually running the code, not recalled from memory or estimated. State assumptions as assumptions, not as facts.",
+    "suggested_sections": [
+      "1. What the project is, in one paragraph",
+      "2. What is proven, with the evidence (table)",
+      "3. What is still open (table): assumed values, and what would close them",
+      "4. How the system works: the optics (why underwater changes the focal length), the Kalman filter (the model, and why a tag's error is not isotropic), the IMU fusion",
+      "5. The physical assembly (watertight housing, option B)",
+      "6. Handover: the three commands, the two things that surprise a newcomer, which file is a library vs a program",
+      "7. Repository map"
+    ]
+  },
+
+  "project_identity": {
+    "name": "UUV — localisation with AprilTags, an IMU and a Kalman filter",
+    "one_line": "Locating an underwater vehicle with a RealSense D435i that looks at AprilTags through the wall of a sealed acrylic tube, underwater.",
+    "the_two_original_requests": [
+      "Extract IMU data from the Intel camera SDK using a library, then apply maths to it to extract position and orientation.",
+      "A Kalman filter based on a kinematic model."
+    ],
+    "why_they_are_one_system_not_two": "Position cannot come from the IMU alone: a MEMS accelerometer bias double-integrates into 2.5 cm of error after 1 s, but 1 m after 10 s. What the IMU is actually good for is carrying the position estimate through a brief tag dropout (measured: 9 mm of error over a 1.5 s dropout, against 377 mm without the IMU). The AprilTags remain the only drift-free source of position. The Kalman filter is what combines the two."
+  },
+
+  "what_is_proven": {
+    "note": "Each row's number was reproduced live while preparing this context, by running the named script.",
+    "rows": [
+      {
+        "claim": "Underwater calibration, verified in the field",
+        "evidence": "calibration/optics.py + calibration/montages/tube_water.npz",
+        "numbers": {
+          "focal_length_px": {"fx": 838.45, "fy": 652.10},
+          "principal_point_px": {"cx": 320.76, "cy": 267.37},
+          "distortion_plumb_bob": [0.25503774, 0.43545221, 0.01411297, -0.01478373, -2.02963755],
+          "rms_reprojection_error_px": 0.7793,
+          "views_used": 15,
+          "resolution": [640, 480]
+        },
+        "for_comparison_bare_camera_in_air": {
+          "focal_length_px": {"fx": 604.19, "fy": 602.37},
+          "principal_point_px": {"cx": 326.20, "cy": 242.89},
+          "distortion_plumb_bob": [0.013835, 0.733706, -0.002333, 0.001136, -2.707687]
+        },
+        "so_what": "Immersion multiplies the focal length by roughly 1.33 (the water refraction index) along the tube's axis. Using the bare-air calibration underwater would put distances off by about a quarter."
+      },
+      {
+        "claim": "IMU read directly from Intel's SDK, with the maths applied to it",
+        "evidence": "kalman/imu_realsense.py",
+        "numbers": {
+          "gyro_noise_deg_s": 0.106,
+          "accel_noise_m_s2": 0.015,
+          "measurement_condition": "vehicle at rest, 400 Hz, 3963 samples over 5 s",
+          "orientation_test": "camera turned exactly 90 deg by hand: read 90.03 deg, i.e. 0.03 deg of error",
+          "roll_pitch_behaviour": "held indefinitely by the accelerometer (gravity reference), observed drift 0.54/0.46 deg over a 3 s test",
+          "yaw_behaviour": "drifts freely without a magnetometer: 9.04 deg observed over the same 3 s test, since gravity says nothing about heading"
+        },
+        "so_what": "The gyro-to-quaternion integration is correct to within measurement noise. Yaw is the one axis the IMU cannot hold on its own — only the tags anchor it."
+      },
+      {
+        "claim": "The Kalman filter IS the reference document's filter, not merely inspired by it",
+        "evidence": "kalman/kalman_reference_check.py",
+        "numbers": {
+          "reference": "Alex Becker, \"Kalman Filter Explained Through Examples\", kalmanfilter.net",
+          "result": "the worked 1D radar example is reproduced to the 4th decimal, using the exact class (kalman_filter.LinearKalman) that runs on the vehicle",
+          "published_values_recovered": 9
+        }
+      },
+      {
+        "claim": "The filter measurably improves the raw tag positions, on a realistic simulated pool run",
+        "evidence": "demos/demo_kalman.py",
+        "numbers": {
+          "raw_position_error_mm": {"median": 1.7, "p95": 22.1, "rms": 50.4, "max": 698.3},
+          "filtered_position_error_mm": {"median": 1.2, "p95": 21.9, "rms": 23.8, "max": 381.2},
+          "improvement": "1.4x better on the median, 2.1x on the RMS overall; orientation improves 1.9x on the median and 24.2x on the RMS thanks to outlier rejection",
+          "outliers_rejected": {"position": 68, "orientation": 29},
+          "blind_dropout_test": {"duration_s": 3, "drift_mm": 416, "reported_1sigma_uncertainty_mm": 225},
+          "known_limitation_observed": "one tag's physical mount shifted by 22 mm mid-run; the filter follows that as a bias once it has settled there, since a Kalman filter smooths noise, not a persistent bias — mechanical stability of the tag mounts matters as much as the maths"
+        }
+      },
+      {
+        "claim": "The assumed dynamics settings do not matter while the IMU is connected",
+        "evidence": "kalman/settings_sensitivity.py",
+        "numbers": {
+          "test": "SIGMA_ACCELERATION varied by a factor of 4572",
+          "result": "position RMS with the IMU connected: spread of 0.0000 mm — no measurable effect"
+        },
+        "so_what": "The two still-assumed settings (see 'what is still open') only govern the day the filter runs WITHOUT the IMU."
+      },
+      {
+        "claim": "AprilTag detection limits, both measured and independently simulated",
+        "evidence": "calibration/measure_tag_limits.py (real camera) and calibration/simulate_tag_limits.py (ray-traced simulation using the real cv2.aruco detector on manufactured frames)",
+        "numbers": {
+          "MIN_PIXELS": 20,
+          "MAX_INCIDENCE_deg": 65.0,
+          "real_measurements_used_as_ground_truth": "100% detection at 58 px apparent size; still detected at 20 px",
+          "single_real_criterion": "apparent_size_px * cos(incidence) >= MIN_PIXELS — incidence up to 65 deg does nothing but compress the tag; beyond that the detection collapses faster than the cosine predicts, which is where MAX_INCIDENCE becomes a hard ceiling in its own right"
+        }
+      },
+      {
+        "claim": "Pool tag layout, dimensioned and quantitatively justified",
+        "evidence": "localization/pool_layout_3d.py",
+        "numbers": {
+          "pool_dimensions_m": {"length": 3.80, "width": 1.67, "depth": 1.00},
+          "pool_volume_m3": 6.35,
+          "tags": 10,
+          "tag_side_m": 0.224,
+          "tag_spacing_m": 0.95,
+          "why_0_95_and_not_1_50": "underwater the field of view narrows by the 1.33 water-index factor; at 1.50 m of tag spacing the required back-off distance (2.2 m) would not fit in a 1.67 m-wide pool. At 0.95 m spacing the two tags enter the frame together from 1.48 m back, leaving 19 cm of margin against the far wall.",
+          "underwater_field_of_view_deg": {"horizontal": 41.9, "vertical": 42.4}
+        }
+      }
+    ]
+  },
+
+  "what_is_still_open": {
+    "note": "These are stated as assumptions in the code itself, and the scripts print a reminder until someone measures them.",
+    "rows": [
+      {
+        "setting": "SIGMA_ACCELERATION",
+        "current_value": "0.4 m/s2",
+        "status": "ASSUMED",
+        "how_to_close_it": "python localization/world_frame_check.py — drive the vehicle for ~30 s like a real mission (protocol step 5); the script prints a ready-made replacement line.",
+        "blocking": "No, while the IMU is connected (see the 4572-factor test above). Governs everything the day the filter runs without the IMU."
+      },
+      {
+        "setting": "GYRO_DRIFT_DEG_S",
+        "current_value": "10 deg/s",
+        "status": "ASSUMED",
+        "how_to_close_it": "Same run as above, same script.",
+        "blocking": "No, same reason: GYRO_NOISE_DEG_S (measured, 0.106) governs instead as soon as the gyro is connected."
+      },
+      {
+        "setting": "SIGMA_PIXEL",
+        "current_value": "0.215 px",
+        "status": "measured, but IN AIR only",
+        "how_to_close_it": "python calibration/measure_tag_noise.py, redone underwater — murkier water and lower contrast are expected to degrade this number.",
+        "blocking": "Not urgent; it is a real measurement, just not from the final medium."
+      },
+      {
+        "setting": "Vehicle's real dynamics under way",
+        "status": "not yet observed",
+        "how_to_close_it": "Needs the vehicle actually moving in the water (protocol step 5) — no calculation or datasheet can supply it, since it depends on the vehicle's mass, thrusters and the water's drag."
+      },
+      {
+        "setting": "End-to-end live test",
+        "status": "not yet run",
+        "detail": "Every check above was run against replayed/simulated data or the real camera in isolation. The full pipeline (real camera + real tags + Kalman fusion + live plots, i.e. world_frame_check.py) has not yet been run start-to-finish with hardware in the water at the time this context was written."
+      }
+    ]
+  },
+
+  "how_the_optics_work": {
+    "core_idea": "The camera is sealed dry inside a cylindrical acrylic tube and looks out through its curved wall into the water. That wall is a refracting interface, and it changes the geometry differently along two different directions.",
+    "the_tube": {
+      "part_number": "Blue Robotics BR-100230-151",
+      "material": "cast acrylic",
+      "outer_diameter_mm": 58.0,
+      "inner_diameter_mm": 49.5,
+      "length_mm": 150,
+      "orientation": "the D435i is 90 mm wide and only fits lying down inside a 49.5 mm bore, so it looks out RADIALLY through the cylindrical wall rather than axially through an end cap",
+      "max_depth_rating_m": 130
+    },
+    "why_two_different_directions_behave_differently": {
+      "along_the_tube_axis": "the wall is locally a flat, plane-parallel slab (a plane containing the axis cuts the cylinder in two parallel straight lines). Underwater this multiplies the focal length by the water index, n = 1.33, almost independently of object distance (confirmed by ray-tracing to within 1.24%).",
+      "around_the_circumference": "the wall acts as a meniscus lens, whose effect depends on how far the camera's pupil sits from the tube's axis (not zero here, by design/manufacturing tolerance) — this is where the anamorphic (non-square-pixel) behaviour underwater comes from.",
+      "consequence": "the two image axes underwater are NOT magnified equally: the system is anamorphic. fx and fy must be treated and calibrated separately."
+    },
+    "the_open_question_the_project_states_honestly": "The focal lengths measured underwater (fx=838.45, fy=652.10) come out 12.7% (fx) and 6.6% (fy) below what the plane-slab/meniscus theory predicts from the in-air numbers. Multiple candidate explanations were checked by measurement (camera position in the tube, checkerboard tilt, corner coverage, resolution, the in-air reference) and ruled out. This gap is flagged in the code as NOT explained, rather than papered over.",
+    "reference": "calibration/cylindrical_wall_model.py reproduces the ray-tracing that justifies the AXIAL_MAGNIFICATION table used elsewhere; calibration/optics.py is the single source of truth every other script reads from."
+  },
+
+  "how_the_kalman_filter_works": {
+    "one_sentence": "It combines two imperfect sources of position — where the vehicle SHOULD be from its last known state and velocity (drifts long-term, but smooth), and where the TAGS say it is (no drift, but noisy) — weighting each by its own uncertainty.",
+    "state_model": {
+      "type": "constant-velocity kinematic model",
+      "state_vector": "[px, py, pz, vx, vy, vz] — 6 components",
+      "process_noise_Q": "derived from a single assumed quantity, the vehicle's plausible random acceleration sigma_a, rather than tuned by trial and error: Q = sigma_a^2 * G.G^T, where G maps an assumed acceleration to its effect on position and velocity over one time step."
+    },
+    "measurement_model": "The tags give a position only (H = [I3, 0]); the filter has to infer velocity itself from consecutive positions.",
+    "why_R_the_trust_in_the_measurement_is_not_isotropic": "A single AprilTag's pose estimate is much more precise sideways (lateral pixel position) than along the line of sight (depth, inferred from the tag's apparent size, which is far less sensitive to small distance changes). R is derived per-axis from this geometry rather than assumed to be a single uniform number.",
+    "outlier_rejection": "A tag seen too obliquely, or affected by AprilTag's known planar pose ambiguity (the 'flip', where a nearly head-on square admits two almost-identical projections), can return a wildly wrong pose. Rejected via a Mahalanobis distance test (y' S^-1 y, S already computed for the Kalman gain) rather than a fixed distance threshold.",
+    "orientation_handling": "Rotations do not add linearly, so the standard linear Kalman filter is not applied directly to orientation. A scalar filter runs on the angle, interpolated through slerp on quaternions — treated as a separate, nonlinear problem from position.",
+    "validated_against_the_reference": "kalman/kalman_reference_check.py reproduces Alex Becker's published worked example (kalmanfilter.net) to the 4th decimal using the project's own LinearKalman class — this is not a filter merely inspired by the reference, the numbers match exactly."
+  },
+
+  "the_physical_assembly": {
+    "decision": "Option B — the underwater-mateable connector sits IN THE WATER, not the camera tube's seal.",
+    "why": "Removing the camera for any reason means unplugging underwater instead of reopening the camera tube's o-ring seal each time. Trade-off: two more sealing interfaces are introduced (the connector's two halves), but they are never opened as long as nobody unplugs.",
+    "electrical_note": "The D435i needs USB 3 for its full modes, which a small 8-contact underwater connector and a metre of cable cannot carry reliably. Not needed here: this project only uses the 640x480 colour stream plus the IMU, both served over the D435i's own USB 2.0 fallback mode.",
+    "operating_rule": "The underwater connector must be mated and unmated DE-ENERGISED — mating live in water causes electrolysis on the contacts, degrading them over weeks. Cut the 5V first, grease the contacts, cap the unused half with its dummy plug.",
+    "two_variants": {
+      "pigtail": "one wall penetrator on each side (camera tube, electronics housing), with the connector hanging free in the water between them — the original sketch",
+      "bulkhead": "on the camera side, the connector's fixed half screws directly into the end cap in place of a separate penetrator: one fitting fewer, one seal fewer, one failure point fewer"
+    },
+    "interactive_model": "demos/watertight_assembly_3d.py — a true-dimension, interactive 3D model (matplotlib) of the whole assembly: plug/unplug animation, section view, exploded view, o-ring highlighting, part labels, and a full bill of materials (--parts flag)."
+  },
+
+  "handover_for_whoever_continues": {
+    "the_three_commands": [
+      {
+        "purpose": "Understand what exists, no hardware needed",
+        "command": "python kalman/proof_imu_kalman.py",
+        "detail": "Re-runs the underlying checks as sub-processes and recomputes every number live, in about two minutes."
+      },
+      {
+        "purpose": "Actually work: camera, tags, filter, live figures",
+        "command": "python localization/world_frame_check.py",
+        "detail": "The one script that matters day to day. Opens the camera, detects tags, runs the Kalman filter, and opens six live diagnostic figures automatically in their own window (no flag needed; --no-plots to suppress them). Keys: o = set reference tag, m = mode, f = filter on/off, s = record, q = quit."
+      },
+      {
+        "purpose": "Check the IMU in isolation",
+        "command": "python kalman/imu_realsense.py  (add --simulation for no camera)",
+        "detail": "5 s at rest, a sanity check (9.81 m/s2 at rest), then live orientation — turn the camera 90 deg and check the readout."
+      }
+    ],
+    "two_things_that_surprise_a_newcomer": [
+      {
+        "surprise": "The very first run on a new machine asks a question: which physical mounting is this (bare camera in air / camera in the tube in air / camera in the tube underwater)? This is expected — asked once per computer, answer written to a machine-local, git-ignored file so two machines never fight over each other's setting.",
+        "consequence_if_ignored": "Wrong mounting silently produces distances off by about a quarter underwater."
+      },
+      {
+        "surprise": "The underwater calibration file never arrives via git pull — it is deliberately git-ignored, machine-local data, same reasoning as above.",
+        "consequence_if_ignored": "A fresh machine only has the bare-air calibration until the tube_water.npz file is manually copied onto it before working in the pool."
+      }
+    ],
+    "library_vs_program": {
+      "libraries_not_meant_to_be_run": ["calibration/optics.py", "kalman/kalman_filter.py (imported by 6 other files; run directly it only executes 17 self-tests)", "kalman/kalman_live_plots.py"],
+      "programs_meant_to_be_run": ["localization/world_frame_check.py", "kalman/imu_realsense.py", "kalman/proof_imu_kalman.py", "kalman/kalman_reference_check.py", "demos/demo_kalman.py", "calibration/set_mounting.py (once per machine)"]
+    }
+  },
+
+  "repository_map": {
+    "calibration/": "camera calibration per physical mounting, optics.py (the single source of truth for all dimensions/focal lengths), detection-limit measurement and simulation",
+    "demos/": "self-contained demonstrations needing no pool (simulated Kalman run, single-image AprilTag detection, the 3D watertight-assembly model), plus live-webcam demos",
+    "docs/": "the full step-by-step protocol (kalman_protocol.md), this handover, legacy notes",
+    "kalman/": "the Kalman filter library and everything that proves/exercises it: IMU reading, reference-document reproduction, sensitivity analysis, live plotting",
+    "localization/": "the actual pool scripts: single/multi-tag localisation, world-frame tracking (the main program), 3D pool layout planning",
+    "ros/": "ROS 2 nodes bridging this project's calibration into Josiah's apriltag_ros pipeline",
+    "src/": "the underlying AprilTag pose-estimation primitive (solvePnP wrapper)",
+    "tools/": "small utilities: listing cameras, listing RealSense devices, printing a tag to scale"
+  },
+
+  "honesty_notes_for_the_writer": [
+    "State the 12.7%/6.6% underwater focal-length gap as an open, acknowledged discrepancy — do not imply it has been resolved.",
+    "The full hardware-in-water end-to-end run (world_frame_check.py with a real camera) had not been performed at the time this context was generated — say so if the document claims the system 'works end to end'.",
+    "SIGMA_ACCELERATION and GYRO_DRIFT_DEG_S are explicitly assumed values, not measurements — the code itself prints a reminder about this until someone measures them.",
+    "SIGMA_PIXEL was measured in air, not underwater; murkier water is expected to change it."
+  ]
+}
